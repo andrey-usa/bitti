@@ -674,6 +674,32 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
 }
 
 #[test]
+fn check_waits_for_a_late_commit() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let dir = std::env::temp_dir().join(format!("pv-latecheck-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // A controlled checkbox: the click's default is cancelled, the state
+    // commits 300 ms later (React's forecast-toggle shape).
+    let pv = dir.join("late.pv");
+    std::fs::write(
+        &pv,
+        "scenario \"A late commit\"\n  goto /login\n  \
+         eval \"(() => { document.body.innerHTML = '<input type=checkbox id=c>'; document.getElementById('c').addEventListener('click', e => { e.preventDefault(); setTimeout(() => { document.getElementById('c').checked = true; }, 300); }); return 1; })()\"\n  \
+         check --selector \"#c\"\n  \
+         expect js \"document.getElementById('c').checked === true\"\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &dir.join("ev").display().to_string()])
+        .args(["--timeout-ms", "3000"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let dir = std::env::temp_dir().join(format!("pv-shots-el-{}", std::process::id()));
