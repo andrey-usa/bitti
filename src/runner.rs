@@ -1073,11 +1073,23 @@ impl Runner {
                 let cmp = |actual: &str| format!("__pvCmp(({actual}), {m:?}, {value_j})");
                 let holds = match prop {
                     Prop::State(state) if state == "visible" => {
-                        format!("{WAKE_DEEP} __pvVisible(__pvFirst({sel}))")
+                        format!("__pvVisible(__pvFirst({sel}))")
                     }
                     // A missing element is hidden, as `is hidden` answers.
                     Prop::State(state) if state == "hidden" => {
-                        format!("{WAKE_DEEP} !__pvVisible(__pvFirst({sel}))")
+                        format!("!__pvVisible(__pvFirst({sel}))")
+                    }
+                    Prop::State(state) if state == "enabled" => {
+                        format!("__pvEnabled(__pvFirst({sel}))")
+                    }
+                    Prop::State(state) if state == "disabled" => {
+                        format!("__pvDisabled(__pvFirst({sel}))")
+                    }
+                    Prop::State(state) if state == "checked" => {
+                        format!("__pvChecked(__pvFirst({sel}))")
+                    }
+                    Prop::State(state) if state == "focused" => {
+                        format!("__pvFocused(__pvFirst({sel}))")
                     }
                     // A bare `expect <target> <prop>` (no matcher) is a
                     // read, not a condition: nothing to wait for.
@@ -1855,6 +1867,10 @@ const __pvRoots = () => { const out = []; for (const d of __pvDocs(document, [])
 const __pvFirst = (sel) => { for (const r of __pvRoots()) { const el = r.querySelector(sel); if (el) return el; } return null; };
 const __pvAll = (sel) => __pvRoots().flatMap((r) => Array.from(r.querySelectorAll(sel)));
 const __pvVisible = (el) => !!el && el.getClientRects().length > 0 && (el.ownerDocument.defaultView || window).getComputedStyle(el).visibility !== 'hidden';
+const __pvDisabled = (el) => !!el && !!(el.disabled || el.closest('fieldset[disabled]') || el.getAttribute('aria-disabled') === 'true');
+const __pvEnabled = (el) => !!el && !__pvDisabled(el);
+const __pvChecked = (el) => !!el && !!(el.checked || el.getAttribute('aria-checked') === 'true');
+const __pvFocused = (el) => { if (!el) return false; const a = el.getRootNode().activeElement || el.ownerDocument.activeElement; return el === a || el.contains(a); };
 "#;
 
 /// `compare()` mirrored for a wake wait's predicate: the matcher word is
