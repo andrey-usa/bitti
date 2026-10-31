@@ -18,6 +18,10 @@
 //! - A line indented under another matches somewhere inside the subtree of
 //!   the line that one matched; a line after a sibling matches after that
 //!   sibling's subtree.
+//! - Sibling `- text:` lines, in the template and in the tree, are one text:
+//!   navigera packs adjacent text into shared lines of up to 300 characters
+//!   (older versions printed a line per text), and a template written
+//!   against either matches both.
 
 use std::collections::HashMap;
 
@@ -42,7 +46,7 @@ pub fn compile(lines: &[String]) -> Result<Vec<Node>, String> {
         if t.is_empty() || t.starts_with('#') {
             continue;
         }
-        flat.push((line.len() - line.trim_start().len(), t.to_string()));
+        push_text_aware(&mut flat, line.len() - line.trim_start().len(), t.to_string());
     }
     if flat.is_empty() {
         return Err("`expect ax … matches` needs the tree it expects, indented under it".into());
@@ -77,6 +81,27 @@ fn level(flat: &[(usize, String)], i: &mut usize, indent: usize, next_id: &mut u
         *next_id += 1;
     }
     Ok(out)
+}
+
+/// The words of a `- text:` line after the role, if it is one.
+fn text_words(line: &str) -> Option<&str> {
+    let t = line.trim_start();
+    let t = t.strip_prefix("- ").unwrap_or(t);
+    t.strip_prefix("text:").map(str::trim)
+}
+
+/// Push a line, joining it to the line before when both are `- text:` at
+/// the same indent (siblings: a line between them with more indent would
+/// sit under the first).
+fn push_text_aware(lines: &mut Vec<(usize, String)>, indent: usize, line: String) {
+    if let (Some(more), Some((last_indent, last))) = (text_words(&line), lines.last_mut()) {
+        if *last_indent == indent && text_words(last).is_some() {
+            last.push(' ');
+            last.push_str(more);
+            return;
+        }
+    }
+    lines.push((indent, line));
 }
 
 fn strip_refs(line: &str) -> String {
@@ -186,13 +211,14 @@ fn pattern(content: &str) -> Result<Regex, String> {
 
 /// The tree's node lines (`- …`): indentation and text without refs.
 fn tree_lines(page: &str) -> Vec<(usize, String)> {
-    page.lines()
-        .filter_map(|l| {
-            let t = l.trim_start();
-            let content = t.strip_prefix("- ")?;
-            Some((l.len() - t.len(), strip_refs(content)))
-        })
-        .collect()
+    let mut out = Vec::new();
+    for l in page.lines() {
+        let t = l.trim_start();
+        if let Some(content) = t.strip_prefix("- ") {
+            push_text_aware(&mut out, l.len() - t.len(), strip_refs(content));
+        }
+    }
+    out
 }
 
 fn subtree_end(tree: &[(usize, String)], i: usize) -> usize {
@@ -319,6 +345,23 @@ mod tests {
         assert_eq!(words("- row: /a b/ | x"), ["-", "row:", "/a b/", "|", "x"]);
         // A path that isn't a regex still splits.
         assert_eq!(words("link url=/cart value=\"x\""), ["link", "url=/cart", "value=\"x\""]);
+    }
+
+    /// Sibling text lines are one text on both sides: a template with a
+    /// line per text matches a tree that packs them, and the other way.
+    #[test]
+    fn sibling_text_lines_are_one_text() {
+        let packed = "page \"p\" http://x.test/\n- text: Price $10 Qty 2\n- text: Total $20\n- button \"Buy\" [ref=4]";
+        let split = "page \"p\" http://x.test/\n- text: Price\n- text: $10\n- text: Qty 2\n- text: Total $20\n- button \"Buy\" [ref=4]";
+        for page in [packed, split] {
+            assert_eq!(matches(&tpl("- text: Price\n- text: $10\n- button \"Buy\""), page), Ok(()), "{page}");
+            assert_eq!(matches(&tpl("- text: Price $10\n- text: Total"), page), Ok(()), "{page}");
+            // Across the line a packed run broke at.
+            assert_eq!(matches(&tpl("- text: Qty 2 Total"), page), Ok(()), "{page}");
+            // Still in order.
+            assert!(matches(&tpl("- text: $10\n- text: Price"), page).is_err(), "{page}");
+            assert!(matches(&tpl("- button \"Buy\"\n- text: Price"), page).is_err(), "{page}");
+        }
     }
 
     #[test]

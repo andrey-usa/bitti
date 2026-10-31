@@ -183,6 +183,11 @@ Status: pre-release. Everything below works in this build.
     - button "Place order"
   ```
 
+  Each template line matches a tree line holding its words in order,
+  indented lines inside the line above's subtree. Sibling `- text:` lines
+  count as one text on both sides, so a template keeps matching however
+  navigera splits adjacent text into lines.
+
   A screenshot's baseline is beside the `.pv` file, in
   `<file>.pv.screenshots/<name>-<os>.png` (fonts differ between systems,
   so each OS keeps its own); keep it with the tests. With none yet the run
