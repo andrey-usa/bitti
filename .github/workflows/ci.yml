@@ -12,8 +12,8 @@ on:
   workflow_dispatch:
     inputs:
       navigera:
-        description: "navigera branch or commit to build against"
-        default: "master"
+        description: "navigera branch or commit to build against (empty: next, or master for main)"
+        default: ""
 
 permissions:
   contents: read
@@ -23,7 +23,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NAVIGERA_REF: ${{ inputs.navigera || 'master' }}
+  # primavera's next builds against navigera's next (its Cargo.lock follows
+  # it); main, and a pull request into main, against navigera's master.
+  NAVIGERA_REF: ${{ inputs.navigera || ((github.base_ref || github.ref_name) == 'main' && 'master' || 'next') }}
 
 jobs:
   test:

@@ -9,12 +9,12 @@ on:
         description: "Fuzz seconds per target (empty: 300, or 1800 on schedule)"
         required: false
       navigera:
-        description: "navigera branch or commit to build against"
+        description: "navigera branch or commit to build against (empty: next)"
         required: false
-        default: "session-history"
+        default: ""
 permissions: {contents: read}
 env:
-  NAVIGERA_REF: ${{ inputs.navigera || 'session-history' }}
+  NAVIGERA_REF: ${{ inputs.navigera || 'next' }}
 jobs:
   fuzz:
     runs-on: ubuntu-latest
