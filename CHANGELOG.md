@@ -10,6 +10,13 @@ The first release, still to be named.
 
 ### Added
 
+- `primavera run --watch` runs the scenario files, then runs again each
+  one that changes, until Ctrl-C.
+- `primavera merge <dir|file.jsonl>...` joins the `--reporter jsonl`
+  output of shards into one console summary, one `--junit` and one
+  `--html`.
+- A `set permissions grant|deny|reset <name>…` step (navigera's) is
+  documented, and `set device` knows 55 devices.
 - `--trace` keeps each step's page: an ax tree and a JPEG of the viewport
   per step beside `trace.jsonl`, shown by `primavera trace <dir> <line>`,
   and `--html` shows a traced scenario's steps as a timeline that opens

@@ -1385,3 +1385,118 @@ fn routes_replay_a_har_and_change_real_responses() {
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
+
+#[test]
+fn a_permissions_step_grants_denies_and_resets() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let (code, out) = primavera(&["run", "tests/fixtures/permissions.pv", "--base-url", &site.1]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+}
+
+/// Reads a child's stdout and stderr as lines on one channel.
+fn lines_of(child: &mut Child) -> std::sync::mpsc::Receiver<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let out = child.stdout.take().unwrap();
+    let err = child.stderr.take().unwrap();
+    let tx2 = tx.clone();
+    std::thread::spawn(move || BufReader::new(out).lines().map_while(Result::ok).for_each(|l| drop(tx.send(l))));
+    std::thread::spawn(move || BufReader::new(err).lines().map_while(Result::ok).for_each(|l| drop(tx2.send(l))));
+    rx
+}
+
+/// Waits for a line holding `needle`, up to `secs`; the lines seen so far on a miss.
+fn wait_for(rx: &std::sync::mpsc::Receiver<String>, seen: &mut Vec<String>, needle: &str, secs: u64) -> bool {
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+    while let Some(left) = end.checked_duration_since(std::time::Instant::now()) {
+        match rx.recv_timeout(left) {
+            Ok(l) => {
+                seen.push(l.clone());
+                if l.contains(needle) {
+                    return true;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    false
+}
+
+#[test]
+fn watch_runs_again_only_the_file_that_changed() {
+    let Some(_turn) = chrome() else { return };
+    let dir = std::env::temp_dir().join(format!("primavera-watch-run-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let py = if cfg!(windows) { "python" } else { "python3" };
+    let scenario = |name: &str| format!("scenario \"{name}\"\n  exec {py} -c \"print(1)\"\n    expect exit 0\n");
+    std::fs::write(dir.join("a.pv"), scenario("alpha")).unwrap();
+    std::fs::write(dir.join("b.pv"), scenario("beta")).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        .args(["run", "a.pv", "b.pv", "--watch", "--evidence", &tempfile_dir()])
+        .current_dir(&dir)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("run primavera --watch");
+    let rx = lines_of(&mut child);
+    let mut seen = Vec::new();
+    let first = wait_for(&rx, &mut seen, "watching 2 files", 60);
+    assert!(first, "{seen:#?}");
+    assert!(seen.iter().any(|l| l.contains("PASS") && l.contains("alpha")), "{seen:#?}");
+    assert!(seen.iter().any(|l| l.contains("PASS") && l.contains("beta")), "{seen:#?}");
+    seen.clear();
+    // The size changes too, so a coarse file clock cannot hide the edit.
+    std::fs::write(dir.join("b.pv"), scenario("beta again")).unwrap();
+    let second = wait_for(&rx, &mut seen, "watching 2 files", 60);
+    let _ = child.kill();
+    let _ = child.wait();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(second, "{seen:#?}");
+    assert!(seen.iter().any(|l| l.starts_with("changed: ") && l.contains("b.pv") && !l.contains("a.pv")), "{seen:#?}");
+    assert!(seen.iter().any(|l| l.contains("PASS") && l.contains("beta again")), "{seen:#?}");
+    assert!(!seen.iter().any(|l| l.contains("alpha")), "the untouched file ran again: {seen:#?}");
+}
+
+#[test]
+fn merge_joins_the_jsonl_of_shards_into_one_report() {
+    let Some(_turn) = chrome() else { return };
+    let Some(site) = own_site() else { return };
+    let dir = std::env::temp_dir().join(format!("primavera-merge-run-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut total = 0;
+    for i in 1..=2 {
+        let shard = format!("{i}/2");
+        let (_, out) = primavera(&[
+            "run",
+            "tests/fixtures/failing.pv",
+            "tests/fixtures/if.pv",
+            "--base-url",
+            &site.1,
+            "--shard",
+            &shard,
+            "--reporter",
+            "jsonl",
+        ]);
+        let jsonl: String = out.lines().filter(|l| l.starts_with('{')).map(|l| format!("{l}\n")).collect();
+        total += jsonl.matches("\"event\":\"scenario\"").count();
+        std::fs::write(dir.join(format!("shard-{i}.jsonl")), jsonl).unwrap();
+    }
+    assert!(total >= 2, "{total}");
+    let junit = dir.join("merged.xml");
+    let html = dir.join("merged.html");
+    let merged = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        .args(["merge", dir.to_str().unwrap(), "--junit", junit.to_str().unwrap(), "--html", html.to_str().unwrap()])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("run primavera merge");
+    let code = merged.status.code().unwrap_or(-1);
+    let out = String::from_utf8_lossy(&merged.stdout).to_string() + &String::from_utf8_lossy(&merged.stderr);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("failed in"), "{out}");
+    let xml = std::fs::read_to_string(&junit).unwrap();
+    assert_eq!(xml.matches("<testcase").count(), total, "{xml}");
+    assert!(std::fs::read_to_string(&html).unwrap().contains("<html"), "no html");
+    let _ = std::fs::remove_dir_all(&dir);
+}

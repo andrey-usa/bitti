@@ -43,6 +43,12 @@ Status: pre-release. Everything below works in this build.
   change between runs. `check --label Terms` ticks a box; `check
   "<question>"` with no locator asks navigera a yes/no question about
   the page (a model call).
+- `set` steps are navigera's: `set viewport 390 844`, `set device "iPhone 16 Pro"`
+  (55 devices), `set geo 52.52 13.405`, `set locale de-DE`, and
+  `set permissions grant|deny|reset geolocation notifications camera
+  microphone clipboard` (also `midi`, `sensors`, `background-sync`), which a
+  page then sees as granted, denied or still to be asked. (A `set NAME = value` at the top of a file is
+  a variable.)
 - A relative path a step reads (`upload`, `state load`, `eval --file`, `expect js --file`,
   `init-script --file`, `route --body-file`, `route --har`) is found next to the `.pv`
   file, as `use` and `for each` files are, so a suite runs the same from
@@ -359,6 +365,22 @@ primavera --version
   in the page (the images follow the 2 MB and 10 MB limits above). Secrets
   are masked in the text files and the console as everywhere; a screenshot
   is pixels, as the failure's own is.
+- `--watch` runs the files, then waits: each scenario file that changes
+  (or appears) runs again, its own scenarios only, until Ctrl-C. The files
+  are looked at every 300 ms (no file-watching dependency) and an edit
+  counts once it has stayed quiet for one more look. A file that no longer
+  parses is reported and the watching goes on. The files a `use` or a flow
+  brings in are not watched on their own: save the scenario file to run it.
+  `--junit` and `--html` hold the latest run.
+- `primavera merge <dir|file.jsonl>...` joins the results of shards into one
+  console summary, one `--junit` and one `--html`, as if one run had made
+  them: save each shard's `--reporter jsonl` output
+  (`primavera run --shard 1/3 --reporter jsonl > shard-1.jsonl`), put the
+  files in one place and name it. A directory is searched for `.jsonl`
+  files. The steps and traces stay with the shards, so the report has each
+  scenario's status, time and failure; the time is the longest shard's.
+  Exit 1 when a scenario failed (`--fail-on-flaky` counts a flaky one),
+  2 when there are no results.
 - `--retries n` runs a failing scenario again; one that passes then is
   reported FLAKY with how its first try failed. `--fail-on-flaky` fails
   the run on one. `--shard i/n` takes every n-th scenario, for CI matrix

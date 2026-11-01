@@ -10,6 +10,7 @@ mod from_session;
 mod gherkin;
 mod http;
 mod mcp;
+mod merge;
 mod nearest;
 mod record;
 mod report;
@@ -18,6 +19,7 @@ mod server;
 mod shot;
 mod suite;
 mod trace;
+mod watch;
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -39,6 +41,7 @@ commands:
                          under the current directory)
   lint [<file|dir>...]   check files without a browser
   list [<file|dir>...]   the scenarios a run would take
+  merge <dir|file>...    join the jsonl results of shards into one report
   trace [<dir>] [<line>] a trace a run recorded (--trace): every step, or one
   fix [<file>:<line>]    put a suggestion from the last run into a failing step
   record <url>           a browser to use by hand; what you do becomes a
@@ -107,6 +110,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
         "--evidence <dir>",
         "failure screenshots and downloads (default .primavera/runs/<time>; a directory you name is used as given, links included)",
     ),
+    ("--watch", "after the run, run again each scenario file that changes (polled every 300 ms), until Ctrl-C"),
     ("--pause-on-failure", "keep the browser at a failure, open to `navigera --attach`, until Enter (one worker)"),
 ];
 
@@ -164,6 +168,7 @@ fn help_for(cmd: &str) -> Option<String> {
                     (.primavera/runs/<time>) or one scenario's in it; by default, the\n\
                     latest run's.\n"
             .to_string(),
+        "merge" => merge::HELP.to_string(),
         "fix" => fix::HELP.to_string(),
         "from-session" => "usage: primavera from-session <navigera session> [--scenario <name>]\n\
                            \x20                             [--out <file.pv>]\n\n\
@@ -190,6 +195,7 @@ fn help_for(cmd: &str) -> Option<String> {
     Some(text)
 }
 
+#[derive(Clone)]
 struct Args {
     cmd: String,
     paths: Vec<PathBuf>,
@@ -210,6 +216,8 @@ struct Args {
     isolation: String,
     repeat: u32,
     shuffle: Option<u64>,
+    /// `--watch`: run again the files that change.
+    watch: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -258,6 +266,7 @@ fn parse_args() -> Result<Args, String> {
     let mut isolation = "context".to_string();
     let mut repeat = 1u32;
     let mut shuffle = None;
+    let mut watch = false;
     let mut it = it.peekable();
     while let Some(a) = it.next() {
         if a == "--shuffle" {
@@ -283,6 +292,7 @@ fn parse_args() -> Result<Args, String> {
                 opts.secrets = secrets_file(&text).map_err(|e| format!("--secrets {path}: {e}"))?;
             }
             "--pause-on-failure" => opts.pause = true,
+            "--watch" => watch = true,
             "--grep" => opts.grep = Some(val("--grep")?),
             "--tag" => opts.tags.push(val("--tag")?.trim_start_matches('@').to_string()),
             "--junit" => junit = Some(PathBuf::from(val("--junit")?)),
@@ -414,6 +424,7 @@ fn parse_args() -> Result<Args, String> {
         isolation,
         repeat,
         shuffle,
+        watch,
     })
 }
 
@@ -532,6 +543,20 @@ fn main() -> ExitCode {
         let stdout = std::io::stdout();
         return mcp::serve(&config, &mut stdin.lock(), &mut stdout.lock());
     }
+    // `merge` reads the jsonl results of shards.
+    if first.as_deref() == Some("merge") {
+        let words: Vec<String> = std::env::args().skip(2).collect();
+        return match merge::main(&words) {
+            Ok((text, code)) => {
+                print!("{text}");
+                ExitCode::from(code)
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                ExitCode::from(2)
+            }
+        };
+    }
     // `fix` and `from-session` take their own words.
     type Own = fn(&[String]) -> Result<String, String>;
     let own: Option<Own> = match std::env::args().nth(1).as_deref() {
@@ -638,10 +663,11 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
+        "run" if args.watch => run_watching(args),
         "run" => run(args),
         other => {
             eprintln!(
-                "unknown command {other:?}: the commands are run, lint, list, trace, fix, record, \
+                "unknown command {other:?}: the commands are run, lint, list, trace, merge, fix, record, \
                  from-session, navigera, mcp and skill (primavera --help)"
             );
             ExitCode::from(2)
@@ -690,6 +716,31 @@ impl EarlyBrowser {
 impl Drop for EarlyBrowser {
     fn drop(&mut self) {
         let _ = self.take();
+    }
+}
+
+/// `run --watch`: the run, then each change to a scenario file runs that
+/// file again, until Ctrl-C. A run that cannot start (a file that does not
+/// parse) is reported and the watching goes on.
+fn run_watching(args: Args) -> ExitCode {
+    let mut seen = watch::stamps(&args.paths);
+    run(args.clone());
+    loop {
+        eprintln!("watching {} (Ctrl-C to stop)", counted(seen.len(), "file"));
+        let files = watch::wait(&args.paths, &mut seen);
+        let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+        eprintln!("changed: {}", names.join(", "));
+        let mut next = args.clone();
+        next.paths = files;
+        // Each run keeps its evidence apart, as separate runs do.
+        if next.opts.evidence.starts_with(".primavera/runs") {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or_default();
+            next.opts.evidence = PathBuf::from(format!(".primavera/runs/{stamp}"));
+        }
+        run(next);
     }
 }
 
@@ -1134,7 +1185,7 @@ mod tests {
     #[test]
     fn help_fits_80_columns_and_every_command_has_its_own() {
         let mut all = vec![USAGE.to_string()];
-        for cmd in ["run", "lint", "list", "trace", "fix", "from-session", "record", "mcp", "skill"] {
+        for cmd in ["run", "lint", "list", "trace", "merge", "fix", "from-session", "record", "mcp", "skill"] {
             all.push(help_for(cmd).unwrap_or_else(|| panic!("no help for {cmd}")));
         }
         for text in &all {
