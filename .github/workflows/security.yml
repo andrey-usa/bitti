@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # As in ci.yml: primavera's next (its Cargo.lock) goes with navigera's
+  # next; main, and a pull request into main, with navigera's master.
+  NAVIGERA_REF: ${{ (github.base_ref || github.ref_name) == 'main' && 'master' || 'next' }}
+
 jobs:
   zizmor:
     runs-on: ubuntu-24.04
@@ -37,7 +42,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: andrey-usa/navigera
-          ref: master
+          ref: ${{ env.NAVIGERA_REF }}
           path: navigera
           persist-credentials: false
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
