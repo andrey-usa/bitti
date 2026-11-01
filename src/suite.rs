@@ -994,7 +994,7 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
 }
 
 /// Files a step reads (`upload`, `state load`, `eval --file`, `init-script
-/// --file`, `route --body-file`) are found next to the `.pv` file, as `use`
+/// --file`, `route --body-file`, `route --har`) are found next to the `.pv` file, as `use`
 /// and `for each` are, so a suite runs the same from any directory. Absolute
 /// paths, `-` (stdin) and paths that start with a variable are left alone.
 fn anchor_inputs(action: &mut Action, dir: &Path) {
@@ -1094,7 +1094,10 @@ fn anchor_inputs(action: &mut Action, dir: &Path) {
             }
         }
         Some("eval" | "evaluate" | "init-script" | "addinitscript") => flag_value(words, "--file"),
-        Some("route") => flag_value(words, "--body-file"),
+        Some("route") => {
+            flag_value(words, "--body-file");
+            flag_value(words, "--har");
+        }
         _ => {}
     }
 }
@@ -1459,7 +1462,7 @@ mod tests {
             "scenario \"Files\"\n  upload --selector \"#f\" a.txt --file b.txt /abs/c.txt\n  upload #g d.txt\n  \
                     upload --frame iframe e.txt\n  optional state load s.json\n  eval --file x.js\n  \
                     route **/api --body-file body.json\n  upload --file ${download.path}\n  eval -\n  \
-                    fill --selector a.txt b.txt\n";
+                    fill --selector a.txt b.txt\n  route **/api/* --har api.har --not-found continue\n";
         let suite = parse(&dir.join("t.pv"), text).unwrap();
         let at = |p: &str| dir.join(p).to_string_lossy().into_owned();
         let words: Vec<Vec<String>> = suite.scenarios[0]
@@ -1484,6 +1487,7 @@ mod tests {
         assert_eq!(words[6], ["upload", "--file", "${download.path}"]);
         assert_eq!(words[7], ["eval", "-"]);
         assert_eq!(words[8], ["fill", "--selector", "a.txt", "b.txt"]);
+        assert_eq!(words[9], ["route", "**/api/*", "--har", &at("api.har"), "--not-found", "continue"]);
         // The step's text stays as written, for messages.
         assert!(suite.scenarios[0].steps[0].text.contains(" a.txt "));
     }

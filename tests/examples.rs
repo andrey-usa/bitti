@@ -1377,3 +1377,11 @@ fn a_browser_that_never_starts_is_an_exit_code_not_a_pass() {
     assert!(text.contains("the browser didn't start") && text.contains("2 scenarios not run"), "{text}");
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn routes_replay_a_har_and_change_real_responses() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let (code, out) = primavera(&["run", "tests/fixtures/har.pv", "--base-url", &site.1]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}

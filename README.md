@@ -44,10 +44,16 @@ Status: pre-release. Everything below works in this build.
   "<question>"` with no locator asks navigera a yes/no question about
   the page (a model call).
 - A relative path a step reads (`upload`, `state load`, `eval --file`, `expect js --file`,
-  `init-script --file`, `route --body-file`) is found next to the `.pv`
+  `init-script --file`, `route --body-file`, `route --har`) is found next to the `.pv`
   file, as `use` and `for each` files are, so a suite runs the same from
   any directory. Files a step writes (`screenshot`, `state save`) land in
   the current directory.
+- Network: `route "*/api/*" --body '{…}'` answers in the server's place,
+  `route --har api.har` replays a recorded HAR (navigera's `network --har`
+  writes one; requests it has no entry for fail, or reach the network with
+  `--not-found continue`), and `route "*/api/me" --modify --replace free
+  pro` changes the real response (`--set-header 'Name: value'` too).
+  `tests/fixtures/har.pv` has both.
 - Words split like a shell's, with no expansion; inside double quotes
   `\"` and `\\` stand for themselves and `\n`, `\r` for a line break
   (a textarea's value). `${NAME}` and
