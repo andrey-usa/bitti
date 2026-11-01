@@ -335,8 +335,16 @@ primavera --version
   `trace.jsonl` beside the scenario's screenshot, with the page's ax tree
   at a failure in `ax.txt`. `primavera trace <dir>` prints it (a run's
   directory lists its traces); `primavera trace <dir> <line>` shows one
-  step in full, with the tree when it is the one that failed. Secrets are
-  masked in it as in the console.
+  step in full, with the tree when it is the one that failed. Each step
+  also keeps the page as it was after it, beside `trace.jsonl`: `NNN-L<line>.ax.txt`
+  (its ax tree) and `NNN-L<line>.jpg` (the viewport, JPEG quality 60, about
+  10 to 50 kB), both named in the step's line (`ax`, `shot`); `trace <dir> <line>`
+  shows them. In `--html` a traced scenario's steps are a timeline: a row
+  per step (line, step, time, a bar against the slowest) that opens to its
+  screenshot, ax tree, console messages, requests and error, with no script
+  in the page (the images follow the 2 MB and 10 MB limits above). Secrets
+  are masked in the text files and the console as everywhere; a screenshot
+  is pixels, as the failure's own is.
 - `--retries n` runs a failing scenario again; one that passes then is
   reported FLAKY with how its first try failed. `--fail-on-flaky` fails
   the run on one. `--shard i/n` takes every n-th scenario, for CI matrix

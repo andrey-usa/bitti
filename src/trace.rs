@@ -158,9 +158,19 @@ pub fn render(text: &str, only: Option<usize>, dir: &Path) -> String {
         if more > 0 {
             let _ = writeln!(out, "                    … {more} more (primavera trace {} {line})", dir.display());
         }
-        if !ok && only.is_some() {
-            if let Ok(ax) = std::fs::read_to_string(dir.join("ax.txt")) {
-                let _ = writeln!(out, "\nthe page at the failure (ax.txt):\n{ax}");
+        if only.is_some() {
+            if let Some(shot) = s["shot"].as_str() {
+                let _ = writeln!(out, "                    screenshot {}", dir.join(shot).display());
+            }
+            // A failing step shows its tree as the failure's `ax.txt` (the
+            // whole page); the others, the tree the run kept for the step.
+            let own = s["ax"].as_str().and_then(|f| Some((f, std::fs::read_to_string(dir.join(f)).ok()?)));
+            if !ok {
+                if let Ok(ax) = std::fs::read_to_string(dir.join("ax.txt")) {
+                    let _ = writeln!(out, "\nthe page at the failure (ax.txt):\n{ax}");
+                }
+            } else if let Some((file, ax)) = own {
+                let _ = writeln!(out, "\nthe page after this step ({file}):\n{ax}");
             }
         }
     }

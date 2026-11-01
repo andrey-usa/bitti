@@ -10,6 +10,11 @@ The first release, still to be named.
 
 ### Added
 
+- `--trace` keeps each step's page: an ax tree and a JPEG of the viewport
+  per step beside `trace.jsonl`, shown by `primavera trace <dir> <line>`,
+  and `--html` shows a traced scenario's steps as a timeline that opens
+  to them.
+
 - Plain-text web tests (`.pv`) and Gherkin `.feature` files that run on real
   Chrome through navigera, in one native binary with no Node.
 - `primavera run` (workers, a browser context per scenario, retries,

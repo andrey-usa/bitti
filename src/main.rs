@@ -82,7 +82,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ("--compare-report <k>", "what `expect download … compare` keeps: html, json, rows (comma-separated) or none (default html)"),
     (
         "--trace <when>",
-        "on-failure or all: each step's page, console and requests in trace.jsonl beside the screenshot (and ax.txt at a failure); read it with `primavera trace`",
+        "on-failure or all: each step's page (ax tree, JPEG), console and requests beside the screenshot in trace.jsonl; read it with `primavera trace`, or in --html",
     ),
     ("--junit <file>", "also write JUnit XML"),
     ("--cucumber <file>", "also write Cucumber JSON for the .feature files (step by step)"),
@@ -155,9 +155,10 @@ fn help_for(cmd: &str) -> Option<String> {
             .to_string(),
         "trace" => "usage: primavera trace [<dir>] [<line>]\n\n\
                     A trace that `run --trace on-failure|all` recorded: every step with its\n\
-                    page, console and requests, or the step at <line> in full. <dir> is a\n\
-                    run's directory (.primavera/runs/<time>) or one scenario's in it; by\n\
-                    default, the latest run's.\n"
+                    page, console and requests, or the step at <line> in full, with its\n\
+                    screenshot file and ax tree. <dir> is a run's directory\n\
+                    (.primavera/runs/<time>) or one scenario's in it; by default, the\n\
+                    latest run's.\n"
             .to_string(),
         "fix" => fix::HELP.to_string(),
         "from-session" => "usage: primavera from-session <navigera session> [--scenario <name>]\n\

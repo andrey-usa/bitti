@@ -154,6 +154,9 @@ pub struct ScenarioResult {
     pub rep: u32,
     /// When it started (Unix ms), for reports with a timeline.
     pub started: f64,
+    /// The directory holding this scenario's `trace.jsonl` and its per-step
+    /// files, when a trace was kept.
+    pub trace: Option<PathBuf>,
 }
 
 /// Now, in Unix milliseconds.
@@ -180,6 +183,7 @@ impl ScenarioResult {
             worker: 0,
             rep: 0,
             started: now_ms(),
+            trace: None,
         }
     }
 
@@ -349,8 +353,12 @@ impl Runner {
         let all: Vec<&Step> = suite.before_each.iter().chain(&scenario.steps).collect();
         let tracing = self.opts.trace != crate::trace::Trace::Off && failure.is_none();
         let mut trace: Vec<Value> = Vec::new();
+        // Each traced step's files (name, bytes), written when the trace is kept.
+        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
         let mut ax_at_failure = None;
         let mut seen = (0usize, 0u64);
+        // The last captured step's page fingerprint, its line and its file names.
+        let mut last: Option<(String, usize, Option<Value>, Option<Value>)> = None;
         if tracing {
             seen = (self.console_count(), self.last_request());
         }
@@ -364,6 +372,7 @@ impl Runner {
                 steps.push(StepResult { line: step.line, text: step.text.clone(), ms, ok: res.is_ok(), missed });
                 if tracing {
                     let mut tr = self.trace_step(step, ms, res.as_ref().err().map(String::as_str), &mut seen);
+                    self.step_files(trace.len(), step.line, res.is_err(), &mut last, &mut tr, &mut files);
                     if missed {
                         tr["optional_missed"] = Value::Bool(true);
                     }
@@ -416,6 +425,7 @@ impl Runner {
             worker: 0,
             rep: 0,
             started: started_ms,
+            trace: None,
         };
         let mask = scope.masker();
         if tracing && (self.opts.trace == crate::trace::Trace::All || result.failure.is_some()) {
@@ -430,6 +440,17 @@ impl Runner {
                 if let Some(ax) = ax_at_failure {
                     let _ = std::fs::write(dir.join("ax.txt"), mask(&ax));
                 }
+                // The ax tree is text and is masked like the rest; a
+                // screenshot is pixels (as with the failure's own).
+                for (name, bytes) in files {
+                    let bytes = if name.ends_with(".txt") {
+                        mask(&String::from_utf8_lossy(&bytes)).into_bytes()
+                    } else {
+                        bytes
+                    };
+                    let _ = std::fs::write(dir.join(name), bytes);
+                }
+                result.trace = Some(dir);
             }
         }
         result.saved = scope.saved.into_iter().map(|(k, v)| (k, mask(&v))).collect();
@@ -1351,6 +1372,74 @@ impl Runner {
             _ => Vec::new(),
         };
         crate::trace::step(step.line, &step.text, ms, error, page, console, network)
+    }
+
+    /// What the page looked like after a traced step: its ax tree and a
+    /// JPEG of the viewport, named `<n>-L<line>` in the scenario's directory
+    /// and noted in the step's trace line (`ax`, `shot`). Neither waits for
+    /// the page to go quiet (the step before did that), and a read that
+    /// fails leaves its key out.
+    /// A step that left the page as the last captured one was (the same
+    /// fingerprint: address, element count, text length, field values,
+    /// scroll) reuses that step's files and says so (`same_as`), unless it
+    /// failed: that one is always captured.
+    fn step_files(
+        &mut self,
+        n: usize,
+        line: usize,
+        failed: bool,
+        last: &mut Option<(String, usize, Option<Value>, Option<Value>)>,
+        tr: &mut Value,
+        files: &mut Vec<(String, Vec<u8>)>,
+    ) {
+        const FINGERPRINT: &str = "(() => { const d = document; let h = location.href + '|' + d.getElementsByTagName('*').length + '|' + (d.body ? d.body.innerText.length : 0) + '|' + scrollX + ',' + scrollY + '|' + (d.activeElement ? d.activeElement.tagName + (d.activeElement.id || '') : ''); for (const e of d.querySelectorAll('input,select,textarea,details,dialog')) h += '|' + (e.value || '') + (e.checked ? 'c' : '') + (e.open ? 'o' : ''); return h; })()";
+        let fp = match self.command(&["eval".into(), FINGERPRINT.into(), "--timeout-ms".into(), "1000".into()]) {
+            Ok(Value::String(s)) => Some(s),
+            _ => None,
+        };
+        if let (Some(fp), Some((was, from, ax, shot)), false) = (&fp, last.as_ref(), failed) {
+            if fp == was {
+                tr["same_as"] = Value::from(*from);
+                if let Some(v) = ax {
+                    tr["ax"] = v.clone();
+                }
+                if let Some(v) = shot {
+                    tr["shot"] = v.clone();
+                }
+                return;
+            }
+        }
+        let stem = format!("{:03}-L{line}", n + 1);
+        if let Ok(Value::String(ax)) = self.command(&["ax".into(), "--no-wait".into()]) {
+            let name = format!("{stem}.ax.txt");
+            tr["ax"] = Value::String(name.clone());
+            files.push((name, ax.into_bytes()));
+        }
+        // Workers are threads of one process: the name must be unique per capture.
+        static CAPTURES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let seq = CAPTURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let tmp = std::env::temp_dir().join(format!("primavera-step-{}-{seq}.jpg", std::process::id()));
+        // A capture that cannot finish (a page stuck behind a native dialog never
+        // answers) is dropped after a second, not after navigera's 35 s.
+        let words = [
+            "screenshot",
+            "--no-wait",
+            "--quality",
+            "60",
+            "--timeout-ms",
+            "1000",
+            "--path",
+            &tmp.display().to_string(),
+        ];
+        if self.command(&words.map(String::from)).is_ok() {
+            if let Ok(bytes) = std::fs::read(&tmp) {
+                let name = format!("{stem}.jpg");
+                tr["shot"] = Value::String(name.clone());
+                files.push((name, bytes));
+            }
+        }
+        let _ = std::fs::remove_file(&tmp);
+        *last = fp.map(|fp| (fp, line, tr.get("ax").cloned(), tr.get("shot").cloned()));
     }
 
     /// One look: whether the subject holds, and what was seen.

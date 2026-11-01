@@ -363,6 +363,95 @@ fn screenshot_html(out: &mut String, f: &Failure, report_dir: &Path, embedded: &
     }
 }
 
+/// An image file of a trace: in the page while the page's budget lasts,
+/// else a link relative to the report.
+fn image_html(out: &mut String, path: &Path, alt: &str, report_dir: &Path, embedded: &mut Embeds) {
+    let size = std::fs::metadata(path).map(|m| m.len()).ok();
+    match (size, std::fs::read(path)) {
+        (Some(n), Ok(bytes)) if n <= EMBED_MAX && embedded.bytes + (n as usize).div_ceil(3) * 4 <= REPORT_BUDGET => {
+            let b64 = base64(&bytes);
+            embedded.bytes += b64.len();
+            let _ = write!(out, "<img alt=\"{}\" src=\"data:image/jpeg;base64,{b64}\">", esc(alt));
+        }
+        (Some(_), _) => {
+            let _ = write!(
+                out,
+                "<div><a href=\"{}\">{}</a> <span class=dim>(not in the page: its image budget is spent)</span></div>",
+                esc(&href(path, report_dir)),
+                esc(alt)
+            );
+        }
+        (None, _) => {
+            let _ = write!(out, "<div class=dim>{} <code>{}</code> (gone)</div>", esc(alt), esc(&rel(path)));
+        }
+    }
+}
+
+/// A traced scenario's steps as a timeline: each step a row (line, step,
+/// time, a bar for its share of the slowest) that opens to the page after
+/// it (screenshot and ax tree), the console messages and requests it
+/// brought, and its error. None when the trace can't be read or doesn't
+/// match the steps.
+fn timeline_html(out: &mut String, r: &ScenarioResult, report_dir: &Path, embedded: &mut Embeds) -> bool {
+    let Some(dir) = &r.trace else { return false };
+    let Ok(text) = std::fs::read_to_string(dir.join("trace.jsonl")) else { return false };
+    let traced: Vec<serde_json::Value> = text.lines().skip(1).filter_map(|l| serde_json::from_str(l).ok()).collect();
+    if traced.len() != r.steps.len() {
+        return false;
+    }
+    let slowest = r.steps.iter().map(|s| s.ms).fold(1.0, f64::max);
+    out.push_str("<div class=timeline>");
+    for (s, t) in r.steps.iter().zip(&traced) {
+        let (class, open) = match (s.ok, s.missed) {
+            (false, _) => ("bad", " open"),
+            (_, true) => ("skip", ""),
+            _ => ("ok", ""),
+        };
+        let _ = write!(
+            out,
+            "<details class=\"step {class}\"{open}><summary><span class=ln>{}</span> <code>{}</code>{} <span class=ms>{}</span>\
+             <span class=bar style=\"width:{:.0}px\"></span></summary>",
+            s.line,
+            esc(&s.text),
+            if s.missed { " <em>optional, did not hold</em>" } else { "" },
+            secs(s.ms),
+            (s.ms / slowest * 120.0).max(1.0)
+        );
+        let url = t["url"].as_str().unwrap_or("");
+        if !url.is_empty() {
+            let _ = write!(out, "<div class=dim>{}</div>", esc(&page_at(url, t["title"].as_str().unwrap_or(""))));
+        }
+        if let Some(e) = t["error"].as_str() {
+            let _ = write!(out, "<pre class=err>{}</pre>", esc(e));
+        }
+        let same = t["same_as"].as_u64();
+        if let Some(from) = same {
+            let _ = write!(out, "<div class=dim>the page is as it was after line {from}</div>");
+        } else if let Some(f) = t["shot"].as_str() {
+            image_html(out, &dir.join(f), "page after this step", report_dir, embedded);
+        }
+        for c in t["console"].as_array().into_iter().flatten() {
+            let _ = write!(
+                out,
+                "<div class=dim>console {}: {}</div>",
+                esc(c["level"].as_str().unwrap_or("log")),
+                esc(c["text"].as_str().unwrap_or(""))
+            );
+        }
+        for n in t["network"].as_array().into_iter().flatten() {
+            let _ = write!(out, "<div class=dim>net {}</div>", esc(n.as_str().unwrap_or("")));
+        }
+        if let Some(ax) =
+            t["ax"].as_str().filter(|_| same.is_none()).and_then(|f| std::fs::read_to_string(dir.join(f)).ok())
+        {
+            let _ = write!(out, "<details><summary class=dim>ax tree</summary><pre>{}</pre></details>", esc(&ax));
+        }
+        out.push_str("</details>");
+    }
+    out.push_str("</div>");
+    true
+}
+
 /// `target` as a link from a page in `base`: a path relative to it when
 /// they share a root (a report and its evidence uploaded together), else a
 /// file URL.
@@ -470,7 +559,9 @@ pub fn html(results: &[ScenarioResult], ms: f64, report_dir: &Path) -> String {
             failure_html(&mut out, f, &format!("try {} failed at", i + 1), false);
             screenshot_html(&mut out, f, report_dir, &mut embedded);
         }
-        if !r.steps.is_empty() {
+        // The timeline carries the failing step's own screenshot: the older one is for the table.
+        let timeline = !r.steps.is_empty() && timeline_html(&mut out, r, report_dir, &mut embedded);
+        if !r.steps.is_empty() && !timeline {
             out.push_str("<table><tr><th>line</th><th>step</th><th>time</th></tr>");
             for s in &r.steps {
                 let _ = write!(
@@ -491,7 +582,7 @@ pub fn html(results: &[ScenarioResult], ms: f64, report_dir: &Path) -> String {
             }
             out.push_str("</table>");
         }
-        if let Some(f) = &r.failure {
+        if let Some(f) = r.failure.as_ref().filter(|_| !timeline) {
             screenshot_html(&mut out, f, report_dir, &mut embedded);
         }
         for n in &r.notes {
@@ -516,6 +607,11 @@ details.fail{border-left:4px solid #c62828}details.flaky{border-left:4px solid #
 summary{cursor:pointer}.dim{color:#666}.tag{color:#555;font-size:12px}code,pre{font:12px ui-monospace,monospace}\
 pre{white-space:pre-wrap;background:#f6f6f6;padding:6px}table{border-collapse:collapse;margin:6px 0}\
 td,th{border-bottom:1px solid #eee;padding:2px 8px;text-align:left;vertical-align:top}tr.bad td{background:#fdecea}tr.skip td{background:#fff6e0}\
+.timeline details.step{border:0;border-bottom:1px solid #eee;border-radius:0;margin:0;padding:2px 0}\
+.timeline .ln{display:inline-block;min-width:3em;color:#666}.timeline .ms{display:inline-block;min-width:5em;color:#666}\
+.timeline .bar{display:inline-block;height:6px;background:#4a90d9;vertical-align:middle;margin-left:4px}\
+.timeline details.bad>summary{background:#fdecea}.timeline details.skip>summary{background:#fff6e0}pre.err{color:#b71c1c}\
+.timeline details.step>*:not(summary){margin-left:2em}\
 .failure{margin:6px 0}.note{color:#555}img{max-width:min(100%,640px);border:1px solid #ccc;margin-top:6px}\
 @media (prefers-color-scheme:dark){body{color:#e6e6e6;background:#121212}pre{background:#1e1e1e}\
 details{border-color:#444}td,th{border-color:#333}tr.bad td{background:#3a1d1d}tr.skip td{background:#3a321d}.dim,.tag,.note{color:#aaa}}";
@@ -562,6 +658,7 @@ mod tests {
             worker: 0,
             rep: 0,
             started: 0.0,
+            trace: None,
         };
         let fail = ScenarioResult {
             name: "Total & tax".into(),
@@ -600,6 +697,39 @@ mod tests {
         let again = ScenarioResult { rep: 1, ..pass.clone() };
         let h = html(&[pass.clone(), again, fail], 1000.0, &dir);
         assert!(h.contains("<tr class=ok><td>2/2</td><td>/x/shop.pv  Adds &lt;one&gt;</td></tr>"), "{h}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_traced_scenario_shows_its_steps_as_a_timeline() {
+        let dir = std::env::temp_dir().join(format!("pv-timeline-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let head = r#"{"scenario":"S","file":"s.pv","line":1,"passed":false,"ms":9.0}"#;
+        let a = r##"{"line":2,"text":"goto /","ms":5.0,"ok":true,"url":"http://x/","title":"T","console":[{"level":"error","text":"boom <b>"}],"network":["#1 GET 200 Document / 1 kB 3 ms"],"ax":"001-L2.ax.txt","shot":"001-L2.jpg"}"##;
+        let b = r#"{"line":3,"text":"click --text Pay","ms":20.0,"ok":false,"error":"no element","url":"http://x/","title":"T","console":[],"network":[],"ax":"002-L3.ax.txt"}"#;
+        std::fs::write(dir.join("trace.jsonl"), [head, a, b].join("\n")).unwrap();
+        std::fs::write(dir.join("001-L2.ax.txt"), "- heading \"<Hi>\"").unwrap();
+        std::fs::write(dir.join("002-L3.ax.txt"), "- button").unwrap();
+        std::fs::write(dir.join("001-L2.jpg"), b"\xFF\xD8\xFF fake").unwrap();
+        let step =
+            |line, text: &str, ms, ok| crate::runner::StepResult { line, text: text.into(), ms, ok, missed: false };
+        let r = ScenarioResult {
+            steps: vec![step(2, "goto /", 5.0, true), step(3, "click --text Pay", 20.0, false)],
+            failure: Some(fail_case().failure.unwrap()),
+            trace: Some(dir.clone()),
+            ..fail_case()
+        };
+        let h = html(std::slice::from_ref(&r), 30.0, &dir);
+        assert_eq!(h.matches("<details class=\"step ").count(), 2, "{h}");
+        assert!(h.contains("details class=\"step ok\"") && h.contains("details class=\"step bad\" open"), "{h}");
+        assert!(h.contains("data:image/jpeg;base64,") && h.contains("page after this step"), "{h}");
+        // Text from the page is escaped; the second step has no image (none kept).
+        assert!(h.contains("&lt;Hi&gt;") && h.contains("boom &lt;b&gt;") && !h.contains("<Hi>"), "{h}");
+        assert!(h.contains("net #1 GET 200") && h.contains("no element") && !h.contains("<script"), "{h}");
+        // A trace that no longer matches the steps falls back to the plain table.
+        let odd = ScenarioResult { steps: vec![step(2, "goto /", 5.0, true)], ..r };
+        let h = html(&[odd], 30.0, &dir);
+        assert!(!h.contains("class=\"step ") && h.contains("<table><tr><th>line</th>"), "{h}");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -647,6 +777,7 @@ mod tests {
             worker: 0,
             rep: 0,
             started: 0.0,
+            trace: None,
         };
         let fail = ScenarioResult {
             name: "Total & tax".into(),
@@ -707,6 +838,7 @@ mod tests {
             worker: 0,
             rep: 0,
             started: 0.0,
+            trace: None,
         }
     }
 
@@ -730,6 +862,7 @@ mod tests {
             worker: 0,
             rep: 0,
             started: 0.0,
+            trace: None,
         };
         let out = console_line(&r);
         assert!(out.contains("\n  print, line 2:\n    49.55"), "{out}");

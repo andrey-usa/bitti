@@ -101,6 +101,48 @@ fn an_electron_app_is_tested_scenario_by_scenario() {
     assert!(out.contains("--workers 2 becomes 1"), "{out}");
 }
 
+/// Two workers tracing every step at once: each step that names a
+/// screenshot has its own file, a JPEG (their captures go through one temp
+/// name per capture, not per step index, so two threads can't trade them).
+#[test]
+fn two_workers_trace_every_step_without_trading_screenshots() {
+    let (Some(_turn), Some(site)) = (chrome(), site()) else { return };
+    let ev = std::env::temp_dir().join(format!("pv-trace2-{}", std::process::id()));
+    let child = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        .args(["run", "examples/bench-site", "--base-url", &site.1, "--workers", "2", "--trace", "all"])
+        .args(["--evidence", ev.to_str().unwrap()])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    let out = child.wait_with_output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    let (mut shots, mut scenarios) = (0, 0);
+    for dir in std::fs::read_dir(&ev).unwrap().filter_map(Result::ok).map(|e| e.path()) {
+        let Ok(trace) = std::fs::read_to_string(dir.join("trace.jsonl")) else { continue };
+        scenarios += 1;
+        for line in trace.lines() {
+            let step: serde_json::Value = serde_json::from_str(line).unwrap();
+            if let Some(shot) = step["shot"].as_str() {
+                let jpg = std::fs::read(dir.join(shot)).unwrap_or_else(|_| panic!("{} names {shot}", dir.display()));
+                assert_eq!(&jpg[..3], &[0xFF, 0xD8, 0xFF], "{shot} is a JPEG");
+                shots += 1;
+            }
+        }
+    }
+    assert!(scenarios >= 10 && shots >= scenarios, "{scenarios} scenarios, {shots} shots: {text}");
+    let leftovers = std::fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_name().to_string_lossy().starts_with(&format!("primavera-step-{pid}-")))
+        .count();
+    assert_eq!(leftovers, 0, "temp captures left behind");
+    let _ = std::fs::remove_dir_all(&ev);
+}
+
 #[test]
 fn the_examples_pass_on_the_bench_site() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else {
@@ -867,7 +909,7 @@ fn a_trace_records_each_step_and_reads_back() {
     let ev = dir.join("ev");
     let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
         .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--trace", "on-failure"])
-        .args(["--evidence", ev.to_str().unwrap()])
+        .args(["--evidence", ev.to_str().unwrap(), "--html", dir.join("r.html").to_str().unwrap()])
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
@@ -889,6 +931,30 @@ fn a_trace_records_each_step_and_reads_back() {
     let one = Command::new(env!("CARGO_BIN_EXE_primavera")).arg("trace").arg(&scenario).arg("5").output().unwrap();
     let one = String::from_utf8_lossy(&one.stdout).to_string();
     assert!(one.contains("FAIL") && one.contains("the page at the failure (ax.txt)"), "{one}");
+    // Each step also kept the page as it was after it: an ax tree and a JPEG,
+    // named in the trace, shown by `trace <dir> <line>` and in the HTML report.
+    let first = Command::new(env!("CARGO_BIN_EXE_primavera")).arg("trace").arg(&scenario).arg("2").output().unwrap();
+    let first = String::from_utf8_lossy(&first.stdout).to_string();
+    assert!(first.contains("the page after this step (001-L2.ax.txt)") && first.contains("001-L2.jpg"), "{first}");
+    let jpg = std::fs::read(scenario.join("001-L2.jpg")).unwrap();
+    assert_eq!(&jpg[..3], &[0xFF, 0xD8, 0xFF], "a JPEG");
+    let report = std::fs::read_to_string(dir.join("r.html")).unwrap();
+    assert_eq!(report.matches("<details class=\"step ").count(), 4, "a row per step: {report}");
+    assert!(report.contains("data:image/jpeg;base64,") && report.contains("ax tree"), "{report}");
+    assert!(report.contains("never there") && !report.contains("<script"), "{report}");
+    // `wait` left the page as the step before it did: it reuses that step's
+    // files and says so; the failing step is always captured.
+    let lines: Vec<serde_json::Value> = std::fs::read_to_string(scenario.join("trace.jsonl"))
+        .unwrap()
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .filter(|j: &serde_json::Value| j.get("text").is_some())
+        .collect();
+    let step = |n: u64| lines.iter().find(|j| j["line"] == n).unwrap_or_else(|| panic!("no line {n}: {lines:?}"));
+    let (wait, failing) = (step(4), step(5));
+    assert!(wait["same_as"].is_u64() && wait["shot"] == step(wait["same_as"].as_u64().unwrap())["shot"], "{wait}");
+    assert!(failing.get("same_as").is_none() && failing["shot"].is_string(), "{failing}");
+    assert!(report.contains("the page is as it was after line"), "{report}");
     std::fs::remove_dir_all(&dir).ok();
 }
 
@@ -1170,7 +1236,7 @@ fn a_script_that_never_settles_is_bounded_by_the_step_and_an_optional_miss_shows
     assert!(text.contains("never.js did not finish within 1.5 s; a Promise that never settles?"), "{text}");
     assert!(!text.contains("Runtime.evaluate") && !text.contains("35000"), "{text}");
     let html = std::fs::read_to_string(dir.join("r.html")).unwrap();
-    assert!(html.contains("<tr class=skip>") && html.contains("optional, did not hold"), "{html}");
+    assert!(html.contains("class=\"step skip\"") && html.contains("optional, did not hold"), "{html}");
     let trace = |extra: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_primavera")).arg("trace").args(extra).output().unwrap();
         (out.status.code(), String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr))

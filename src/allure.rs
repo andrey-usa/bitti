@@ -145,6 +145,7 @@ mod tests {
             worker: 2,
             rep: 0,
             started: 1_700_000_000_000.0,
+            trace: None,
         }
     }
 
