@@ -95,6 +95,11 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ("--chromium <path>", "the browser to run"),
     ("--engine lightpanda", "run on Lightpanda (no layout: a fast smoke tier; screenshots and pixel checks fail)"),
     (
+        "--electron <app>",
+        "test an Electron app: its directory or main script (Electron from its node_modules) or an executable; a fresh app per scenario, one at a time",
+    ),
+    ("--electron-arg <arg>", "an argument for the app (repeatable; --electron-arg=<arg> for one starting with -)"),
+    (
         "--evidence <dir>",
         "failure screenshots and downloads (default .primavera/runs/<time>; a directory you name is used as given, links included)",
     ),
@@ -292,6 +297,9 @@ fn parse_args() -> Result<Args, String> {
             "--trace" => opts.trace = trace::Trace::parse(&val("--trace")?)?,
             "--compare-report" => opts.compare_report = expect::report_kinds(&val("--compare-report")?)?,
             "--chromium" => opts.chromium = Some(val("--chromium")?),
+            "--electron" => opts.electron = Some(val("--electron")?),
+            "--electron-arg" => opts.electron_args.push(val("--electron-arg")?),
+            a if a.starts_with("--electron-arg=") => opts.electron_args.push(a["--electron-arg=".len()..].to_string()),
             "--engine" => {
                 let e = val("--engine")?;
                 if e != "chrome" && e != "lightpanda" {
@@ -361,6 +369,12 @@ fn parse_args() -> Result<Args, String> {
     }
     if paths.is_empty() {
         paths.push(PathBuf::from("."));
+    }
+    if opts.electron.is_some() && opts.engine == "lightpanda" {
+        return Err("--electron runs an Electron app; --engine lightpanda is a browser of its own".into());
+    }
+    if !opts.electron_args.is_empty() && opts.electron.is_none() {
+        return Err("--electron-arg passes an argument to an Electron app: add --electron <app>".into());
     }
     // Annotations alone say nothing about a passing run: the console stays
     // on unless the JSON lines take its place.
@@ -741,8 +755,12 @@ fn run(args: Args) -> ExitCode {
     let jsonl = args.reporters.iter().any(|r| r == "jsonl");
     let console = args.reporters.iter().any(|r| r == "console");
     let github = args.reporters.iter().any(|r| r == "github");
-    // A pause holds the run at one failure: one worker.
-    let workers = if opts.pause { 1 } else { args.workers.min(jobs.len()).max(1) };
+    // A pause holds the run at one failure: one worker. An Electron app
+    // runs one copy at a time (two would share its user data).
+    if opts.electron.is_some() && args.workers > 1 {
+        eprintln!("primavera: --electron runs one app at a time: --workers {} becomes 1", args.workers);
+    }
+    let workers = if opts.pause || opts.electron.is_some() { 1 } else { args.workers.min(jobs.len()).max(1) };
     let hooks = Hooks::new(&suites, &jobs);
     // One browser, a context per worker (`--isolation context`, the
     // default), or a browser per worker. The first browser is kept here

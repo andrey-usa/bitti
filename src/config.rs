@@ -55,6 +55,10 @@ pub struct Profile {
     pub trace: Option<String>,
     /// compara's reports for `expect download … compare`: html, json, rows.
     pub compare_report: Option<Vec<String>>,
+    /// An Electron app to test (`--electron`), from the file's directory.
+    pub electron: Option<String>,
+    /// Its arguments (`--electron-arg`).
+    pub electron_args: Option<Vec<String>>,
     #[serde(default)]
     pub vars: BTreeMap<String, String>,
     pub server: Option<Server>,
@@ -111,6 +115,8 @@ impl Profile {
             headed,
             trace,
             compare_report,
+            electron,
+            electron_args,
             server
         );
         self.vars.extend(over.vars);
@@ -150,6 +156,10 @@ impl Profile {
             "--compare-report",
             self.compare_report.as_ref().map(|k| if k.is_empty() { "none".into() } else { k.join(",") }),
         );
+        flag("--electron", self.electron.clone());
+        for a in self.electron_args.iter().flatten() {
+            flag("--electron-arg", Some(a.clone()));
+        }
         for r in self.reporters.iter().flatten() {
             flag("--reporter", Some(r.clone()));
         }
@@ -222,6 +232,10 @@ fn anchored(mut p: Profile, dir: &Path) -> Profile {
         at(f);
     }
     p.paths.iter_mut().flatten().for_each(at);
+    // A path to the app (not a bare command found on PATH).
+    if let Some(app) = p.electron.as_mut().filter(|a| a.starts_with('.') || a.contains('/') || a.contains('\\')) {
+        at(app);
+    }
     if let Some(s) = p.server.as_mut() {
         let mut cwd = s.cwd.clone().unwrap_or_else(|| ".".into());
         at(&mut cwd);
@@ -284,6 +298,21 @@ region = "eu"
         let c = parse("compare_report = [\"json\", \"rows\"]", None).unwrap();
         assert_eq!(c.words().join(" "), "--compare-report json,rows");
         assert_eq!(parse("compare_report = []", None).unwrap().words().join(" "), "--compare-report none");
+    }
+
+    /// An Electron app and its arguments become flags; a path to the app
+    /// is from the file's directory, a bare command name stays as it is.
+    #[test]
+    fn an_electron_app_is_a_flag_from_the_files_directory() {
+        let text = "electron = \"./app\"\nelectron_args = [\"--enable-logging\", \"x\"]\n";
+        let p = anchored(parse(text, None).unwrap(), Path::new("ci"));
+        let app = Path::new("ci").join("./app").to_string_lossy().into_owned();
+        assert_eq!(
+            p.words(),
+            ["--electron", app.as_str(), "--electron-arg", "--enable-logging", "--electron-arg", "x"]
+        );
+        let p = anchored(parse("electron = \"my-app\"", None).unwrap(), Path::new("ci"));
+        assert_eq!(p.electron.as_deref(), Some("my-app"));
     }
 
     #[test]

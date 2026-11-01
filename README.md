@@ -257,6 +257,7 @@ primavera run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--
               [--repeat <n>] [--shuffle [<seed>]]
               [--reporter console|jsonl|github] [--junit <file>] [--cucumber <file>] [--allure <dir>] [--html <file>] [--json]
               [--timeout-ms <ms>] [--wait-ms <ms>] [--headed] [--chromium <path>] [--engine chrome|lightpanda]
+              [--electron <app> [--electron-arg <arg>]...]
               [--secrets <file>] [--evidence <dir>] [--pause-on-failure] [--trace on-failure|all] [--update-screenshots]
               [--compare-report html,json,rows|none] [--config <file>] [--env <name>]
 primavera lint [<file.pv|file.feature|dir>...]
@@ -297,6 +298,18 @@ primavera --version
   pixels need Chrome. On the 40-scenario suite's 25 site scenarios it
   passes 22, and is not faster: 22 s against Chrome's 11 s at one worker
   (half of it the three failures' waits).
+- `--electron <app>` (or `electron = "./app"` and `electron_args = [...]`
+  in `primavera.toml`) tests an Electron desktop app instead of a web
+  page: the scenarios drive its windows as tabs, through navigera's
+  `start --electron`. `<app>` is the app's directory or main script (the
+  Electron in its `node_modules` runs it), a packaged app's executable or a
+  macOS `.app` bundle. Each scenario gets a fresh app, so none sees what the
+  one before left in its storage, and they run one at a time (two copies of
+  an app would share its user data): `--workers` becomes 1. A window the
+  app opens itself (Settings, a second document) becomes the scenario's
+  tab, and one that closes itself hands back to the one before. On a Linux
+  CI machine, run under `xvfb-run`. The example: `tests/fixtures/electron`,
+  run in CI on Linux, macOS and Windows against navigera's fixture app.
 - `--html report.html` writes the run as one page that needs nothing
   else to open: failed scenarios first and open, each with its steps and
   their times, the failure (message, where the page was, what came

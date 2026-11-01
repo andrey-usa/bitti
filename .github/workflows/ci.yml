@@ -230,3 +230,48 @@ jobs:
           files=$(ls bench/suite40/pv/s*.pv | grep -v -e s19- -e s20- -e s25-)
           ./target/debug/primavera run $files --base-url http://127.0.0.1:18001 --engine lightpanda --workers 4 | tee lp.log
           echo "::notice title=primavera on Lightpanda::$(tail -1 lp.log)"
+
+  electron:
+    # Electron apps: the example against navigera's fixture app (a fresh app
+    # per scenario), with the Electron its npm package downloads. Linux has
+    # no display, so xvfb-run.
+    name: "electron ${{ matrix.os }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: primavera
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: primavera
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: andrey-usa/navigera
+          ref: ${{ env.NAVIGERA_REF }}
+          path: navigera
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
+        with:
+          toolchain: stable
+          cache: false
+      - name: Electron for navigera's fixture app
+        working-directory: navigera/tests/fixtures/electron-app
+        run: |
+          npm install --no-audit --no-fund --no-package-lock
+          node node_modules/electron/install.js
+          node -e "console.log('electron', require('electron/package.json').version)"
+      - name: The Electron example
+        env:
+          PRIMAVERA_REQUIRE_ELECTRON: "1"
+        run: |
+          set -o pipefail
+          run=""
+          if [ "$RUNNER_OS" = "Linux" ]; then run="xvfb-run -a"; fi
+          $run cargo test --locked --test examples electron -- --nocapture 2>&1 | tee electron.log

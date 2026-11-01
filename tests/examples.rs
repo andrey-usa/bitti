@@ -72,6 +72,35 @@ fn tempfile_dir() -> String {
     std::env::temp_dir().join(format!("primavera-test-{}", std::process::id())).display().to_string()
 }
 
+/// An Electron app, a fresh one per scenario: navigera's fixture app, from
+/// the navigera checkout beside this one once `npm install` has run there
+/// (CI: the electron job, with `PRIMAVERA_REQUIRE_ELECTRON`).
+#[test]
+fn an_electron_app_is_tested_scenario_by_scenario() {
+    let app = concat!(env!("CARGO_MANIFEST_DIR"), "/../navigera/tests/fixtures/electron-app");
+    let binary = if cfg!(target_os = "macos") {
+        "Electron.app/Contents/MacOS/Electron"
+    } else if cfg!(windows) {
+        "electron.exe"
+    } else {
+        "electron"
+    };
+    let installed = std::path::Path::new(app).join("node_modules/electron/dist").join(binary).is_file();
+    assert!(
+        installed || std::env::var_os("PRIMAVERA_REQUIRE_ELECTRON").is_none(),
+        "PRIMAVERA_REQUIRE_ELECTRON is set but {app} has no Electron: run `npm install` there"
+    );
+    if !installed {
+        eprintln!("skipping: no Electron in {app}");
+        return;
+    }
+    let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
+    let (code, out) = primavera(&["run", "tests/fixtures/electron", "--electron", app, "--workers", "2"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("3 passed, 0 failed"), "{out}");
+    assert!(out.contains("--workers 2 becomes 1"), "{out}");
+}
+
 #[test]
 fn the_examples_pass_on_the_bench_site() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else {

@@ -63,6 +63,11 @@ pub struct Options {
     pub trace: crate::trace::Trace,
     /// `--compare-report`: what compara keeps when a step doesn't say.
     pub compare_report: Vec<String>,
+    /// `--electron <app>`: the scenarios drive this Electron app's windows,
+    /// a fresh app for each scenario.
+    pub electron: Option<String>,
+    /// `--electron-arg <arg>`: the app's own arguments.
+    pub electron_args: Vec<String>,
 }
 
 impl Options {
@@ -89,6 +94,8 @@ impl Options {
             update_shots: false,
             trace: Default::default(),
             compare_report: vec!["html".into()],
+            electron: None,
+            electron_args: Vec::new(),
         }
     }
 }
@@ -261,6 +268,8 @@ impl Runner {
             // A pause leaves the browser to another navigera session: it
             // attaches over the DevTools port.
             transport: opts.pause.then(|| "ws".to_string()),
+            electron: opts.electron.clone(),
+            electron_args: opts.electron_args.clone(),
             ..SessionConfig::default()
         };
         let driver = Driver::launch(&config)?;
@@ -299,7 +308,9 @@ impl Runner {
         if fresh {
             return Ok(());
         }
-        let clean = if navigera::browser::is_lightpanda(&self.config.engine) {
+        // Lightpanda has one context per process, and an Electron app's
+        // windows and storage are its own: a new one for each scenario.
+        let clean = if navigera::browser::is_lightpanda(&self.config.engine) || self.config.electron.is_some() {
             Driver::launch(&self.config).map(|d| {
                 std::mem::replace(&mut self.driver, d).session().close();
             })

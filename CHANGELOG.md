@@ -22,6 +22,9 @@ The first release, still to be named.
   server with navigera's browser tools and primavera's own), and
   `primavera navigera …`, navigera itself, built in.
 - A GitHub Action (`action.yml`) and a container image (`Dockerfile`).
+- `--electron <app>` (`electron` and `electron_args` in `primavera.toml`):
+  scenarios test an Electron desktop app's windows, a fresh app per
+  scenario, one at a time.
 - `help` and `--help` print the usage, as running it bare does.
 - `expect request … body` + a comparison: the last matching response's
   body as text, for a response that isn't JSON or a check on its wording.
