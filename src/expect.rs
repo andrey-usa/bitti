@@ -46,6 +46,9 @@ pub enum Subject {
     /// `expect js --file <f.js>`: a script in a file beside the `.pv` (found
     /// there as `eval --file` is), for a check too long to quote on one line.
     JsFile(String),
+    /// `expect js --main <code>`: in an Electron app's main process (a
+    /// function gets the `electron` module), with `run --electron`.
+    JsMain(String),
     /// A request the page made (since the scenario started): method (or
     /// `*`), URL glob, an optional status, and what to compare: nothing
     /// (one was made), a value in its JSON response, or how many.
@@ -507,6 +510,11 @@ fn parse_inner(words: &[String]) -> Result<Expect, String> {
             let (m, v) = optional_tail(&words[3..], "js")?;
             (Subject::JsFile(file), m, v)
         }
+        "js" | "eval" if words.get(1).map(String::as_str) == Some("--main") => {
+            let code = words.get(2).ok_or("expect js --main \"<expression or function>\": the code to run")?.clone();
+            let (m, v) = optional_tail(&words[3..], "js")?;
+            (Subject::JsMain(code), m, v)
+        }
         "js" | "eval" => {
             let code = words.get(1).ok_or("expect js \"<expression>\", or expect js --file <script.js>")?.clone();
             let (m, v) = optional_tail(&words[2..], "js")?;
@@ -897,6 +905,9 @@ mod tests {
         assert_eq!((e.subject, e.matcher), (Subject::Js("document.forms.length".into()), Matcher::Ge));
         let e = p("eval \"String(1 + 1)\" is 2").unwrap();
         assert_eq!(e.subject, Subject::Js("String(1 + 1)".into()));
+        let e = parse(&["js".into(), "--main".into(), "({ app }) => app.getName()".into(), "is".into(), "x".into()])
+            .unwrap();
+        assert_eq!((e.subject, e.matcher), (Subject::JsMain("({ app }) => app.getName()".into()), Matcher::Is));
         let e = parse(&["js".into(), "--file".into(), "totals.js".into(), "is".into(), "true".into()]).unwrap();
         assert_eq!((e.subject, e.matcher), (Subject::JsFile("totals.js".into()), Matcher::Is));
         let e = p("js \"window.ready === true\"").unwrap();

@@ -307,7 +307,10 @@ primavera --version
   one before left in its storage, and they run one at a time (two copies of
   an app would share its user data): `--workers` becomes 1. A window the
   app opens itself (Settings, a second document) becomes the scenario's
-  tab, and one that closes itself hands back to the one before. On a Linux
+  tab, and one that closes itself hands back to the one before. `expect js
+  --main "<code>"` checks the app's main process (a function gets the
+  `electron` module: `({ app }) => app.getName()`), and `eval --main` runs
+  code there as a step. On a Linux
   CI machine, run under `xvfb-run`. The example: `tests/fixtures/electron`,
   run in CI on Linux, macOS and Windows against navigera's fixture app.
 - `--html report.html` writes the run as one page that needs nothing

@@ -93,7 +93,8 @@ primavera lint cart.pv && primavera run cart.pv --base-url "$BASE_URL"
 An Electron desktop app instead of a site: `primavera run app.pv --electron
 ./my-app` (the app's directory with Electron in its `node_modules`, or the
 app's executable). No `goto`: each scenario starts in a fresh app's first
-window; a window the app opens becomes the current tab.
+window; a window the app opens becomes the current tab. `expect js --main
+"({ app }) => app.getName()" is my-app` checks the app's main process.
 
 `lint` takes milliseconds and catches a misspelled step or flag before a
 browser starts. A failure names the line, what was expected and what was

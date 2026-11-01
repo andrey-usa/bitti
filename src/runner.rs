@@ -1450,7 +1450,7 @@ impl Runner {
                     None => (false, "not measured yet".into()),
                 }
             }
-            Subject::Js(_) | Subject::JsFile(_) => {
+            Subject::Js(_) | Subject::JsFile(_) | Subject::JsMain(_) => {
                 // The step's own time bounds the script, not navigera's 35 s.
                 let limit_ms = e.timeout_ms.unwrap_or(self.opts.expect_ms);
                 let eval_ms = (left.as_millis() as u64).clamp(50, limit_ms.max(50)).to_string();
@@ -1498,6 +1498,10 @@ impl Runner {
                     Subject::Js(code) => {
                         let code = scope.word(code)?;
                         self.command(&["eval".into(), code, "--timeout-ms".into(), eval_ms.clone()])
+                    }
+                    Subject::JsMain(code) => {
+                        let code = scope.word(code)?;
+                        self.command(&["eval".into(), "--main".into(), code, "--timeout-ms".into(), eval_ms.clone()])
                     }
                     _ => unreachable!("matched above"),
                 };
@@ -1884,6 +1888,7 @@ fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
         Subject::Var(v) => v.clone(),
         Subject::Errors => "no page errors".to_string(),
         Subject::Js(c) => format!("js {c:?}"),
+        Subject::JsMain(c) => format!("js --main {c:?}"),
         Subject::JsFile(f) => format!("js --file {f}"),
         Subject::Request { method, url, status, read } => {
             let read = match read {

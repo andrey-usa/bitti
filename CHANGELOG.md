@@ -24,7 +24,8 @@ The first release, still to be named.
 - A GitHub Action (`action.yml`) and a container image (`Dockerfile`).
 - `--electron <app>` (`electron` and `electron_args` in `primavera.toml`):
   scenarios test an Electron desktop app's windows, a fresh app per
-  scenario, one at a time.
+  scenario, one at a time. `expect js --main "<code>"` checks the app's main
+  process; `eval --main` runs code there as a step.
 - `help` and `--help` print the usage, as running it bare does.
 - `expect request … body` + a comparison: the last matching response's
   body as text, for a response that isn't JSON or a check on its wording.

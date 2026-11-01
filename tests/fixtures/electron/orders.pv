@@ -5,6 +5,7 @@
 
 scenario "Saves an order through the main process"
   expect title is Orders
+  expect js --main "({ app }) => app.getName()" is navigera-electron-fixture
   fill --label Customer Ada
   fill --label Quantity 3
   click --role button --name "Save order"
@@ -18,6 +19,7 @@ scenario "Starts from a fresh app"
 scenario "Opens Settings in a window of its own"
   click --role button --name Settings
   expect title is Settings
+  expect js --main "({ BrowserWindow }) => BrowserWindow.getAllWindows().length" is 2
   click --label "Compact rows"
   expect --label "Compact rows" checked
   click --role button --name Close
