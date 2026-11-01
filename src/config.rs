@@ -59,6 +59,8 @@ pub struct Profile {
     pub electron: Option<String>,
     /// Its arguments (`--electron-arg`).
     pub electron_args: Option<Vec<String>>,
+    /// A browser or app already running with a DevTools port (`--attach`).
+    pub attach: Option<String>,
     #[serde(default)]
     pub vars: BTreeMap<String, String>,
     pub server: Option<Server>,
@@ -117,6 +119,7 @@ impl Profile {
             compare_report,
             electron,
             electron_args,
+            attach,
             server
         );
         self.vars.extend(over.vars);
@@ -160,6 +163,7 @@ impl Profile {
         for a in self.electron_args.iter().flatten() {
             flag("--electron-arg", Some(a.clone()));
         }
+        flag("--attach", self.attach.clone());
         for r in self.reporters.iter().flatten() {
             flag("--reporter", Some(r.clone()));
         }

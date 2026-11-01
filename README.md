@@ -257,7 +257,7 @@ primavera run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--
               [--repeat <n>] [--shuffle [<seed>]]
               [--reporter console|jsonl|github] [--junit <file>] [--cucumber <file>] [--allure <dir>] [--html <file>] [--json]
               [--timeout-ms <ms>] [--wait-ms <ms>] [--headed] [--chromium <path>] [--engine chrome|lightpanda]
-              [--electron <app> [--electron-arg <arg>]...]
+              [--electron <app> [--electron-arg <arg>]...] [--attach <port|ws://…>]
               [--secrets <file>] [--evidence <dir>] [--pause-on-failure] [--trace on-failure|all] [--update-screenshots]
               [--compare-report html,json,rows|none] [--config <file>] [--env <name>]
 primavera lint [<file.pv|file.feature|dir>...]
@@ -313,6 +313,14 @@ primavera --version
   code there as a step. On a Linux
   CI machine, run under `xvfb-run`. The example: `tests/fixtures/electron`,
   run in CI on Linux, macOS and Windows against navigera's fixture app.
+- `--attach <port|ws://…>` (or `attach = "9222"` in `primavera.toml`) runs
+  against a browser or an Electron app that is already running with a
+  DevTools port: the build a developer has open (`npm start --
+  --remote-debugging-port=9222`), or a Chrome they started. In an app, the
+  scenarios run one after the other in the one app, each going on where
+  the one before left it, and the app keeps running after the run; in a
+  browser, each scenario gets a clean context of its own. One worker. The
+  example: `tests/fixtures/electron-attached`.
 - `--html report.html` writes the run as one page that needs nothing
   else to open: failed scenarios first and open, each with its steps and
   their times, the failure (message, where the page was, what came

@@ -100,6 +100,10 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ),
     ("--electron-arg <arg>", "an argument for the app (repeatable; --electron-arg=<arg> for one starting with -)"),
     (
+        "--attach <port|ws://…>",
+        "run against a browser or an Electron app already running with a DevTools port (one worker; an app attached to goes on from one scenario to the next)",
+    ),
+    (
         "--evidence <dir>",
         "failure screenshots and downloads (default .primavera/runs/<time>; a directory you name is used as given, links included)",
     ),
@@ -299,6 +303,7 @@ fn parse_args() -> Result<Args, String> {
             "--compare-report" => opts.compare_report = expect::report_kinds(&val("--compare-report")?)?,
             "--chromium" => opts.chromium = Some(val("--chromium")?),
             "--electron" => opts.electron = Some(val("--electron")?),
+            "--attach" => opts.attach = Some(val("--attach")?),
             "--electron-arg" => opts.electron_args.push(val("--electron-arg")?),
             a if a.starts_with("--electron-arg=") => opts.electron_args.push(a["--electron-arg=".len()..].to_string()),
             "--engine" => {
@@ -376,6 +381,12 @@ fn parse_args() -> Result<Args, String> {
     }
     if !opts.electron_args.is_empty() && opts.electron.is_none() {
         return Err("--electron-arg passes an argument to an Electron app: add --electron <app>".into());
+    }
+    if opts.attach.is_some() && opts.electron.is_some() {
+        return Err("--attach drives an app that is already running; --electron launches one: pick one".into());
+    }
+    if opts.attach.is_some() && opts.engine == "lightpanda" {
+        return Err("--attach connects to a running browser; --engine lightpanda launches one of its own".into());
     }
     // Annotations alone say nothing about a passing run: the console stays
     // on unless the JSON lines take its place.
@@ -761,7 +772,11 @@ fn run(args: Args) -> ExitCode {
     if opts.electron.is_some() && args.workers > 1 {
         eprintln!("primavera: --electron runs one app at a time: --workers {} becomes 1", args.workers);
     }
-    let workers = if opts.pause || opts.electron.is_some() { 1 } else { args.workers.min(jobs.len()).max(1) };
+    if opts.attach.is_some() && args.workers > 1 {
+        eprintln!("primavera: --attach runs in the one browser it attached to: --workers {} becomes 1", args.workers);
+    }
+    let one = opts.pause || opts.electron.is_some() || opts.attach.is_some();
+    let workers = if one { 1 } else { args.workers.min(jobs.len()).max(1) };
     let hooks = Hooks::new(&suites, &jobs);
     // One browser, a context per worker (`--isolation context`, the
     // default), or a browser per worker. The first browser is kept here

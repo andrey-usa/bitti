@@ -68,6 +68,9 @@ pub struct Options {
     pub electron: Option<String>,
     /// `--electron-arg <arg>`: the app's own arguments.
     pub electron_args: Vec<String>,
+    /// `--attach <port|ws://…>`: a browser or an Electron app that is
+    /// already running with a DevTools port, instead of one launched here.
+    pub attach: Option<String>,
 }
 
 impl Options {
@@ -96,6 +99,7 @@ impl Options {
             compare_report: vec!["html".into()],
             electron: None,
             electron_args: Vec::new(),
+            attach: None,
         }
     }
 }
@@ -274,6 +278,7 @@ impl Runner {
             transport: opts.pause.then(|| "ws".to_string()),
             electron: opts.electron.clone(),
             electron_args: opts.electron_args.clone(),
+            attach: opts.attach.clone(),
             ..SessionConfig::default()
         };
         let driver = Driver::launch(&config)?;
@@ -310,6 +315,12 @@ impl Runner {
     fn clean(&mut self, line: usize) -> Result<(), Box<Failure>> {
         let fresh = std::mem::replace(&mut self.fresh, false);
         if fresh {
+            return Ok(());
+        }
+        // An Electron app attached to (`--attach`) is the developer's own:
+        // it can't be started again, so the scenarios go on where the one
+        // before left it.
+        if self.config.attach.is_some() && self.driver.session().is_electron() {
             return Ok(());
         }
         // Lightpanda has one context per process, and an Electron app's

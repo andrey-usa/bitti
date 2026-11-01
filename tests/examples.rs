@@ -101,6 +101,68 @@ fn an_electron_app_is_tested_scenario_by_scenario() {
     assert!(out.contains("--workers 2 becomes 1"), "{out}");
 }
 
+/// An Electron app already running with a DevTools port: `--attach` runs
+/// the scenarios in it, one after the other, and leaves it running.
+#[test]
+fn an_electron_app_already_running_is_tested_by_attaching() {
+    use std::io::{BufRead, BufReader};
+    let app = concat!(env!("CARGO_MANIFEST_DIR"), "/../navigera/tests/fixtures/electron-app");
+    let binary = if cfg!(target_os = "macos") {
+        "Electron.app/Contents/MacOS/Electron"
+    } else if cfg!(windows) {
+        "electron.exe"
+    } else {
+        "electron"
+    };
+    let electron = std::path::Path::new(app).join("node_modules/electron/dist").join(binary);
+    assert!(
+        electron.is_file() || std::env::var_os("PRIMAVERA_REQUIRE_ELECTRON").is_none(),
+        "PRIMAVERA_REQUIRE_ELECTRON is set but {app} has no Electron: run `npm install` there"
+    );
+    if !electron.is_file() {
+        eprintln!("skipping: no Electron in {app}");
+        return;
+    }
+    let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
+    let mut command = Command::new(&electron);
+    command.arg("--remote-debugging-port=0");
+    if cfg!(target_os = "linux") {
+        // The CI runner can't give Chromium its sandbox.
+        command.arg("--no-sandbox");
+    }
+    let mut child = command
+        .arg(app)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn the fixture app");
+    struct Kill(std::process::Child);
+    impl Drop for Kill {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let stderr = BufReader::new(child.stderr.take().unwrap());
+    let mut app_process = Kill(child);
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in stderr.lines().map_while(Result::ok) {
+            if let Some(at) = line.find("ws://") {
+                let _ = tx.send(line[at..].trim().to_string());
+            }
+        }
+    });
+    let ws = rx.recv_timeout(std::time::Duration::from_secs(30)).expect("the app's DevTools URL");
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let (code, out) = primavera(&["run", "tests/fixtures/electron-attached", "--attach", &ws, "--workers", "2"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("3 passed, 0 failed"), "{out}");
+    assert!(out.contains("--workers 2 becomes 1"), "{out}");
+    assert!(app_process.0.try_wait().unwrap().is_none(), "the app still runs after the run");
+}
+
 /// Two workers tracing every step at once: each step that names a
 /// screenshot has its own file, a JPEG (their captures go through one temp
 /// name per capture, not per step index, so two threads can't trade them).

@@ -31,6 +31,10 @@ The first release, still to be named.
   scenarios test an Electron desktop app's windows, a fresh app per
   scenario, one at a time. `expect js --main "<code>"` checks the app's main
   process; `eval --main` runs code there as a step.
+- `--attach <port|ws://…>` (`attach` in `primavera.toml`): run against a
+  browser or an Electron app already running with a DevTools port. An app
+  attached to isn't restarted between scenarios (they go on where the one
+  before left it) and keeps running after the run; one worker.
 - `help` and `--help` print the usage, as running it bare does.
 - `expect request … body` + a comparison: the last matching response's
   body as text, for a response that isn't JSON or a check on its wording.
