@@ -642,6 +642,8 @@ fn a_navigera_session_becomes_a_scenario_that_passes() {
     let name = dir.join("work.sock").display().to_string();
     let nv = |args: &[&str]| -> serde_json::Value {
         let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+            // This reads navigera's JSON line (its default is compact text).
+            .env("NAVIGERA_OUTPUT", "json")
             .args(["navigera", "--session", &name])
             .args(args)
             .stdin(Stdio::null())
