@@ -1405,21 +1405,18 @@ fn lines_of(child: &mut Child) -> std::sync::mpsc::Receiver<String> {
     rx
 }
 
-/// Waits for a line holding `needle`, up to `secs`; the lines seen so far on a miss.
-fn wait_for(rx: &std::sync::mpsc::Receiver<String>, seen: &mut Vec<String>, needle: &str, secs: u64) -> bool {
+/// Waits until every needle has been in a line, up to `secs`; stdout and
+/// stderr come on two pipes, so their lines can arrive in either order.
+fn wait_all(rx: &std::sync::mpsc::Receiver<String>, seen: &mut Vec<String>, needles: &[&str], secs: u64) -> bool {
     let end = std::time::Instant::now() + std::time::Duration::from_secs(secs);
-    while let Some(left) = end.checked_duration_since(std::time::Instant::now()) {
+    while !needles.iter().all(|n| seen.iter().any(|l| l.contains(n))) {
+        let Some(left) = end.checked_duration_since(std::time::Instant::now()) else { return false };
         match rx.recv_timeout(left) {
-            Ok(l) => {
-                seen.push(l.clone());
-                if l.contains(needle) {
-                    return true;
-                }
-            }
-            Err(_) => break,
+            Ok(l) => seen.push(l),
+            Err(_) => return false,
         }
     }
-    false
+    true
 }
 
 #[test]
@@ -1441,14 +1438,18 @@ fn watch_runs_again_only_the_file_that_changed() {
         .expect("run primavera --watch");
     let rx = lines_of(&mut child);
     let mut seen = Vec::new();
-    let first = wait_for(&rx, &mut seen, "watching 2 files", 60);
+    let first = wait_all(&rx, &mut seen, &["watching 2 files", "2 passed"], 60);
     assert!(first, "{seen:#?}");
     assert!(seen.iter().any(|l| l.contains("PASS") && l.contains("alpha")), "{seen:#?}");
     assert!(seen.iter().any(|l| l.contains("PASS") && l.contains("beta")), "{seen:#?}");
     seen.clear();
     // The size changes too, so a coarse file clock cannot hide the edit.
     std::fs::write(dir.join("b.pv"), scenario("beta again")).unwrap();
-    let second = wait_for(&rx, &mut seen, "watching 2 files", 60);
+    let second = wait_all(&rx, &mut seen, &["changed: ", "beta again", "1 passed", "watching 2 files"], 60);
+    // Anything else the rerun printed (an alpha would be a wrong rerun).
+    while let Ok(l) = rx.recv_timeout(std::time::Duration::from_millis(300)) {
+        seen.push(l);
+    }
     let _ = child.kill();
     let _ = child.wait();
     let _ = std::fs::remove_dir_all(&dir);
