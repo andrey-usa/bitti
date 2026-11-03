@@ -584,6 +584,96 @@ fn press_understands_control_or_meta() {
 }
 
 #[test]
+fn screenshots_wait_for_a_stable_render() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let dir = std::env::temp_dir().join(format!("pv-stable-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // The box is there from load; its paint lands ${delay} ms later.
+    let pv = dir.join("late.pv");
+    std::fs::write(
+        &pv,
+        "scenario \"A late paint\"\n  goto /login\n  \
+         eval \"(() => { document.body.innerHTML = '<div id=c style=width:80px;height:40px></div>'; setTimeout(() => { document.getElementById('c').style.background = 'rgb(0,0,255)'; }, ${delay}); return 1; })()\"\n  \
+         expect screenshot box --selector \"#c\"\n",
+    )
+    .unwrap();
+    let evidence = dir.join("ev").display().to_string();
+    let run = |extra: &[&str]| {
+        let mut args =
+            vec!["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "3000"];
+        args.extend_from_slice(extra);
+        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).args(&args).output().expect("run primavera");
+        let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+        (out.status.code().unwrap_or(-1), text)
+    };
+    // Baseline from the settled page, then a compare where the paint is late.
+    let (code, out) = run(&["--var", "delay=0", "--update-screenshots"]);
+    assert_eq!(code, 0, "{out}");
+    let (code, out) = run(&["--var", "delay=300"]);
+    assert_eq!(code, 0, "the compare must not see the blank state: {out}");
+    // A baseline written while the paint is late waits for it too.
+    std::fs::remove_dir_all(dir.join("late.pv.screenshots")).ok();
+    let (code, out) = run(&["--var", "delay=300", "--update-screenshots"]);
+    assert_eq!(code, 0, "{out}");
+    let baseline =
+        std::fs::read(dir.join("late.pv.screenshots").join(format!("box-{}.png", std::env::consts::OS))).unwrap();
+    let mut reader = png::Decoder::new(&baseline[..]).read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size()];
+    reader.next_frame(&mut buf).unwrap();
+    let blue = buf.chunks(4).any(|p| p[0] == 0 && p[1] == 0 && p[2] == 255);
+    assert!(blue, "the baseline caught the blank shell, not the painted box");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let dir = std::env::temp_dir().join(format!("pv-unstable-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let pv = dir.join("busy.pv");
+    std::fs::write(
+        &pv,
+        "scenario \"Never stops\"\n  goto /login\n  \
+         eval \"(() => { document.body.innerHTML = '<div id=c style=width:80px;height:40px;background:rgb(0,0,255)></div>'; let n = 0; const tick = () => { document.getElementById('c').style.background = 'hsl(' + (n++ * 7 % 360) + ',80%,50%)'; requestAnimationFrame(tick); }; tick(); return 1; })()\"\n  \
+         expect screenshot box --selector \"#c\"\n",
+    )
+    .unwrap();
+    let evidence = dir.join("ev").display().to_string();
+    let run = |extra: &[&str]| {
+        let mut args =
+            vec!["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "1500"];
+        args.extend_from_slice(extra);
+        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).args(&args).output().expect("run primavera");
+        let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+        (out.status.code().unwrap_or(-1), text)
+    };
+    // Baseline: a still red box, written by a second file and kept under
+    // the busy file's screenshots name.
+    let still = dir.join("still.pv");
+    std::fs::write(
+        &still,
+        "scenario \"Still\"\n  goto /login\n  \
+         eval \"(() => { document.body.innerHTML = '<div id=c style=width:80px;height:40px;background:rgb(255,0,0)></div>'; return 1; })()\"\n  \
+         expect screenshot box --selector \"#c\"\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        .args(["run", still.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "1500"])
+        .args(["--update-screenshots"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+    std::fs::rename(dir.join("still.pv.screenshots"), dir.join("busy.pv.screenshots")).unwrap();
+    // The busy page against the still red baseline fails at the timeout, no hang.
+    let began = std::time::Instant::now();
+    let (code, out) = run(&[]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("never settled"), "{out}");
+    assert!(began.elapsed() < std::time::Duration::from_secs(30), "the run hung");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let dir = std::env::temp_dir().join(format!("pv-shots-el-{}", std::process::id()));

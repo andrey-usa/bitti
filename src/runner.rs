@@ -360,6 +360,9 @@ impl Runner {
         let mut scope = Scope::new(suite, &scenario.name, scenario.vars.clone(), &self.opts, file_vars);
         let mut steps = Vec::new();
         let mut failure = self.clean(scenario.line).err().map(|f| *f);
+        // `expect screenshot`'s page-quiet clock, before the first goto:
+        // the per-scenario clean context dropped the one before.
+        let _ = self.command(&["init-script".into(), QUIET_CLOCK.into()]);
         let downloads = if failure.is_none() { self.own_downloads(suite, &scenario.name) } else { None };
         let all: Vec<&Step> = suite.before_each.iter().chain(&scenario.steps).collect();
         let tracing = self.opts.trace != crate::trace::Trace::Off && failure.is_none();
@@ -1160,7 +1163,12 @@ impl Runner {
     /// crop it to its target, and compare it with the baseline beside the
     /// `.pv` file (`<file>.screenshots/<name>-<os>.png`). No baseline yet:
     /// it is written, and the step fails so a person looks at it first.
-    fn screenshot(&mut self, shot: &Shot, scope: &Scope) -> Result<(bool, String), String> {
+    /// The shot waits for a settled page first: two captures a frame
+    /// apart must agree and the page's quiet clock (QUIET_CLOCK) must
+    /// show no DOM change for half a second; the expectation's own time
+    /// caps the wait, the last capture stands, and a failed compare says
+    /// the page never settled.
+    fn screenshot(&mut self, shot: &Shot, scope: &Scope, left: Duration) -> Result<(bool, String), String> {
         let stem = scope.pv.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let dir = scope.pv.parent().unwrap_or(Path::new(".")).join(format!("{stem}.screenshots"));
         let baseline = dir.join(format!("{}-{}.png", shot.name, std::env::consts::OS));
@@ -1215,17 +1223,104 @@ impl Runner {
         if shot.full_page || !flags.is_empty() {
             words.push("--full-page".into());
         }
-        let took = self.command(&words);
-        let _ = self.command(&["eval".into(), unfreeze.into()]);
-        took?;
-        let bytes = std::fs::read(&tmp).map_err(|e| format!("screenshot {}: {e}", tmp.display()))?;
-        let _ = std::fs::remove_file(&tmp);
-        let mut img = crate::shot::decode(&bytes)?;
-        if let Some(b) = target {
-            let f = |k: &str| b.get(k).and_then(Value::as_f64).unwrap_or(0.0);
-            let px = |v: f64| (v * dpr).round().max(0.0) as u32;
-            img = crate::shot::crop(&img, px(f("x") + sx), px(f("y") + sy), px(f("width")), px(f("height")));
+        let crop = |img: crate::shot::Image| -> crate::shot::Image {
+            match &target {
+                None => img,
+                Some(b) => {
+                    let f = |k: &str| b.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+                    let px = |v: f64| (v * dpr).round().max(0.0) as u32;
+                    crate::shot::crop(&img, px(f("x") + sx), px(f("y") + sy), px(f("width")), px(f("height")))
+                }
+            }
+        };
+        // Match-first, as Playwright's toHaveScreenshot: with a baseline
+        // to meet (not one being written or updated), the first capture
+        // is cropped and compared at once and a match passes - one
+        // capture, no quiet clock. Only a mismatch runs the stability
+        // loop below before the final compare.
+        if !self.opts.update_shots {
+            if let Ok(base_bytes) = std::fs::read(&baseline) {
+                let first = (|| -> Result<crate::shot::Image, String> {
+                    self.command(&words).map(|_| ())?;
+                    let bytes = std::fs::read(&tmp).map_err(|e| format!("screenshot {}: {e}", tmp.display()))?;
+                    crate::shot::decode(&bytes)
+                })();
+                match first {
+                    Ok(img) => {
+                        let img = crop(img);
+                        let base =
+                            crate::shot::decode(&base_bytes).map_err(|e| format!("{}: {e}", baseline.display()))?;
+                        let ok = match crate::shot::compare(&base, &img, shot.threshold) {
+                            Ok(d) => shot.allows(d.pixels, d.total),
+                            Err(_) => false,
+                        };
+                        if ok {
+                            let _ = self.command(&["eval".into(), unfreeze.into()]);
+                            let _ = std::fs::remove_file(&tmp);
+                            return Ok((true, "it matches".into()));
+                        }
+                        // A mismatch is what makes it wait: the stability
+                        // loop decides the final compare.
+                    }
+                    Err(e) => {
+                        let _ = self.command(&["eval".into(), unfreeze.into()]);
+                        let _ = std::fs::remove_file(&tmp);
+                        return Err(e);
+                    }
+                }
+            }
         }
+        // The init script registered before this scenario's first goto
+        // has the clock on every document since; a page that predates
+        // it gets the clock now, its quiet timed from here (a no-op
+        // once the clock runs).
+        let _ = self.command(&["eval".into(), QUIET_CLOCK.into()]);
+        // Keep room after the last capture for the crop and the compare.
+        let deadline = Instant::now() + left;
+        let reserve = Duration::from_millis(250);
+        let budget_ms = left.as_millis();
+        // A fixed beat between captures, then how quiet the page is in
+        // milliseconds (-1: the clock is not on this document - it
+        // predates both the init script and the direct install, as
+        // mid-navigation can). A timer, not rAF: headless Chrome can
+        // starve animation frames between captures.
+        let frame = "new Promise(r=>setTimeout(()=>r(window.__pvQuiet === undefined ? -1 : performance.now() - window.__pvQuiet), 50))";
+        let started = Instant::now();
+        let mut prev: Option<crate::shot::Image> = None;
+        let (img, stable) = loop {
+            let took = self.command(&words);
+            if let Err(e) = took {
+                let _ = self.command(&["eval".into(), unfreeze.into()]);
+                return Err(e);
+            }
+            let bytes = match std::fs::read(&tmp) {
+                Ok(b) => b,
+                Err(e) => {
+                    let _ = self.command(&["eval".into(), unfreeze.into()]);
+                    return Err(format!("screenshot {}: {e}", tmp.display()));
+                }
+            };
+            let this = match crate::shot::decode(&bytes) {
+                Ok(i) => i,
+                Err(e) => {
+                    let _ = self.command(&["eval".into(), unfreeze.into()]);
+                    return Err(e);
+                }
+            };
+            let agreed = prev.as_ref() == Some(&this);
+            let quiet = self.command(&["eval".into(), frame.into()]).ok().and_then(|v| v.as_f64()).unwrap_or(-1.0);
+            // Without the clock, half a second of looking stands in.
+            if agreed && (quiet >= 500.0 || (quiet < 0.0 && started.elapsed() >= Duration::from_millis(500))) {
+                break (this, true);
+            }
+            if deadline.saturating_duration_since(Instant::now()) <= reserve {
+                break (this, false);
+            }
+            prev = Some(this);
+        };
+        let _ = self.command(&["eval".into(), unfreeze.into()]);
+        let _ = std::fs::remove_file(&tmp);
+        let img = crop(img);
         let write = |path: &Path, img: &crate::shot::Image| -> Result<(), String> {
             if let Some(d) = path.parent() {
                 std::fs::create_dir_all(d).map_err(|e| format!("{}: {e}", d.display()))?;
@@ -1243,6 +1338,11 @@ impl Runner {
             ));
         };
         let base = crate::shot::decode(&base_bytes).map_err(|e| format!("{}: {e}", baseline.display()))?;
+        let unsettled = if stable {
+            String::new()
+        } else {
+            format!("; the page never settled: still changing after {budget_ms} ms")
+        };
         let verdict = crate::shot::compare(&base, &img, shot.threshold);
         let ok = match &verdict {
             Ok(d) => shot.allows(d.pixels, d.total),
@@ -1264,7 +1364,7 @@ impl Runner {
                     let diff = self.opts.evidence.join(format!("{stem}-{}-diff.png", shot.name));
                     write(&diff, &d.image)?;
                     format!(
-                        "{} of {} pixels differ ({:.2}%), {} allowed; this run {}, the differences {}",
+                        "{} of {} pixels differ ({:.2}%), {} allowed{unsettled}; this run {}, the differences {}",
                         d.pixels,
                         d.total,
                         100.0 * d.pixels as f64 / d.total.max(1) as f64,
@@ -1273,7 +1373,7 @@ impl Runner {
                         diff.display()
                     )
                 }
-                Err(why) => format!("{why}; this run {}", actual.display()),
+                Err(why) => format!("{why}{unsettled}; this run {}", actual.display()),
             },
         ))
     }
@@ -1752,7 +1852,7 @@ impl Runner {
                     Err(err) => (false, err),
                 }
             }
-            Subject::Screenshot(shot) => self.screenshot(shot, scope)?,
+            Subject::Screenshot(shot) => self.screenshot(shot, scope, left)?,
             Subject::Http(read) => match http_read(read, scope)? {
                 Some(actual) if e.matcher == Matcher::Holds => (actual != "null", actual),
                 Some(actual) => (compare(&actual, e.matcher, value), actual),
@@ -1885,6 +1985,28 @@ const __pvCmp = (actual, m, expected) => { actual = String(actual); switch (m) {
   default: return false;
 } };
 "#;
+
+/// `expect screenshot`'s page-quiet clock: from document start in every
+/// tab, the time of the page's own last DOM change. primavera's freeze
+/// style and mask divs (`__pv_freeze`, `__pv_mask`) do not count. It
+/// installs once a document (the init script runs it first; a direct
+/// eval is the fallback for pages that predate the registration).
+const QUIET_CLOCK: &str = r#"(() => {
+  if (window.__pvQuiet !== undefined) return;
+  const mark = () => { window.__pvQuiet = performance.now(); };
+  mark();
+  const own = (n) => n.nodeType === 1 && (n.id === '__pv_freeze' || (n.classList && n.classList.contains('__pv_mask')));
+  new MutationObserver((ms) => {
+    for (const m of ms) {
+      if (m.type === 'childList') {
+        const ns = [...m.addedNodes, ...m.removedNodes];
+        if (ns.length && ns.every(own)) continue;
+      }
+      mark();
+      return;
+    }
+  }).observe(document, { childList: true, subtree: true, attributes: true, characterData: true });
+})()"#;
 
 /// axe-core (vendor/axe-core), put in the page by `expect accessible`.
 const AXE: &str = include_str!("../vendor/axe-core/axe.min.js");
