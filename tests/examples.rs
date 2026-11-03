@@ -264,9 +264,10 @@ fn an_expect_is_woken_by_the_pages_change() {
     };
     // Text that arrives 200 ms in, text that goes 300 ms in (a negated
     // expect), a target's text that changes 200 ms in, plus a button
-    // that enables, a box that checks, a target that appears, and a
-    // negated state expect: the page wakes each wait, well inside the
-    // timeout.
+    // that enables, a box that checks (via the 25 ms poll: checked
+    // changes by property, which no observer sees), a target that
+    // appears, and a negated state expect: the waits resolve, well
+    // inside the timeout.
     let (code, out) = primavera(&["run", "tests/fixtures/wake.pv", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("7 passed, 0 failed"), "{out}");

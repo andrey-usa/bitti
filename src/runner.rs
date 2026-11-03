@@ -1085,12 +1085,6 @@ impl Runner {
                     Prop::State(state) if state == "disabled" => {
                         format!("__pvDisabled(__pvFirst({sel}))")
                     }
-                    Prop::State(state) if state == "checked" => {
-                        format!("__pvChecked(__pvFirst({sel}))")
-                    }
-                    Prop::State(state) if state == "focused" => {
-                        format!("__pvFocused(__pvFirst({sel}))")
-                    }
                     // A bare `expect <target> <prop>` (no matcher) is a
                     // read, not a condition: nothing to wait for.
                     Prop::Count | Prop::Text | Prop::Value | Prop::Attr(_) | Prop::Style(_)
@@ -1869,8 +1863,6 @@ const __pvAll = (sel) => __pvRoots().flatMap((r) => Array.from(r.querySelectorAl
 const __pvVisible = (el) => !!el && el.getClientRects().length > 0 && (el.ownerDocument.defaultView || window).getComputedStyle(el).visibility !== 'hidden';
 const __pvDisabled = (el) => !!el && !!(el.disabled || el.closest('fieldset[disabled]') || el.getAttribute('aria-disabled') === 'true');
 const __pvEnabled = (el) => !!el && !__pvDisabled(el);
-const __pvChecked = (el) => !!el && !!(el.checked || el.getAttribute('aria-checked') === 'true');
-const __pvFocused = (el) => { if (!el) return false; const a = el.getRootNode().activeElement || el.ownerDocument.activeElement; return el === a || el.contains(a); };
 "#;
 
 /// `compare()` mirrored for a wake wait's predicate: the matcher word is
