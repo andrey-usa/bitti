@@ -1235,8 +1235,8 @@ impl Runner {
         };
         // Match-first, as Playwright's toHaveScreenshot: with a baseline
         // to meet (not one being written or updated), the first capture
-        // is cropped and compared at once and a match passes - one
-        // capture, no quiet clock. Only a mismatch runs the stability
+        // is cropped and compared at once, and a match passes on that one
+        // capture, with no quiet clock. Only a mismatch runs the stability
         // loop below before the final compare.
         if !self.opts.update_shots {
             if let Ok(base_bytes) = std::fs::read(&baseline) {
@@ -1280,9 +1280,9 @@ impl Runner {
         let reserve = Duration::from_millis(250);
         let budget_ms = left.as_millis();
         // A fixed beat between captures, then how quiet the page is in
-        // milliseconds (-1: the clock is not on this document - it
-        // predates both the init script and the direct install, as
-        // mid-navigation can). A timer, not rAF: headless Chrome can
+        // milliseconds (-1: the clock is not on this document, which
+        // predates both the init script and the direct install, as a
+        // document can mid-navigation). A timer, not rAF: headless Chrome can
         // starve animation frames between captures.
         let frame = "new Promise(r=>setTimeout(()=>r(window.__pvQuiet === undefined ? -1 : performance.now() - window.__pvQuiet), 50))";
         let started = Instant::now();
