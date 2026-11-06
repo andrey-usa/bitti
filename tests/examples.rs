@@ -664,7 +664,7 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
         .unwrap();
     assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
     std::fs::rename(dir.join("still.pv.screenshots"), dir.join("busy.pv.screenshots")).unwrap();
-    // The busy page against the still red baseline fails at the timeout, no hang.
+    // The busy page against the still red baseline fails at the timeout instead of hanging.
     let began = std::time::Instant::now();
     let (code, out) = run(&[]);
     assert_eq!(code, 1, "{out}");
