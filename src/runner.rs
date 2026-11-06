@@ -1163,11 +1163,12 @@ impl Runner {
     /// crop it to its target, and compare it with the baseline beside the
     /// `.pv` file (`<file>.screenshots/<name>-<os>.png`). No baseline yet:
     /// it is written, and the step fails so a person looks at it first.
-    /// The shot waits for a settled page first: two captures a frame
-    /// apart must agree and the page's quiet clock (QUIET_CLOCK) must
-    /// show no DOM change for half a second; the expectation's own time
-    /// caps the wait, the last capture stands, and a failed compare says
-    /// the page never settled.
+    /// With a baseline to meet, the first capture is compared at once and
+    /// a match passes. A mismatch, or a baseline being written or updated,
+    /// waits for a settled page: two captures a frame apart must agree and
+    /// the page's quiet clock (QUIET_CLOCK) must show no DOM change for
+    /// half a second; the expectation's own time caps the wait, the last
+    /// capture stands, and a failed compare says the page never settled.
     fn screenshot(&mut self, shot: &Shot, scope: &Scope, left: Duration) -> Result<(bool, String), String> {
         let stem = scope.pv.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let dir = scope.pv.parent().unwrap_or(Path::new(".")).join(format!("{stem}.screenshots"));
