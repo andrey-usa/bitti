@@ -100,7 +100,7 @@ pub fn from_tree(text: &str) -> Vec<Value> {
 pub fn rank(ax: &Value, want: &Wanted, n: usize) -> Vec<(String, String, f64)> {
     let mut out: Vec<(String, String, f64)> = Vec::new();
     // Each locator once, in one hash lookup: a long page has thousands of
-    // close names, and a scan of what is already kept per node was quadratic.
+    // close names, and scanning what is already kept for each node would be quadratic.
     let mut seen = std::collections::HashSet::new();
     for node in ax.as_array().into_iter().flatten() {
         let role = node.get("role").and_then(Value::as_str).unwrap_or("");

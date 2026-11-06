@@ -76,7 +76,7 @@ pub fn console_line(r: &ScenarioResult) -> String {
     for n in r.notes.iter().filter_map(|n| n.strip_prefix(crate::runner::PRINTED)) {
         let (line, text) = n.split_once(": ").unwrap_or(("?", n));
         // Shallow indents: an agent reads every byte, and a page tree is
-        // tens of lines (8 spaces each was ~600 bytes of a whole-page print).
+        // tens of lines (8 spaces each would be ~600 bytes of a whole-page print).
         let _ = writeln!(out, "  print, line {line}:");
         for l in text.lines() {
             let _ = writeln!(out, "    {l}");

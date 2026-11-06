@@ -1564,8 +1564,8 @@ impl Runner {
         // Each read waits for its element at most this long, so an
         // expectation keeps being re-read until its own deadline. When the
         // element's absence is an answer (`hidden`, any `not …`), a read
-        // doesn't wait for it to appear: that held every such look up by a
-        // second (a dismissed banner took 2 s to be seen gone).
+        // doesn't wait for it to appear: waiting would hold every such look up
+        // by a second (a dismissed banner would take 2 s to be seen gone).
         let absence_answers =
             e.negate || matches!(&e.subject, Subject::Target { prop: Prop::State(s), .. } if s == "hidden");
         let poll_ms = if absence_answers { "0".to_string() } else { left.as_millis().clamp(50, 1000).to_string() };
@@ -2163,7 +2163,7 @@ fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
         (actual.to_string(), 0)
     };
     // Text looked for on the page has no value to show: "saw \"absent\""
-    // read as if the page showed the word.
+    // would read as if the page showed the word.
     let seen = match (&e.subject, seen.as_str()) {
         (Subject::Text { .. }, "absent") => "it isn't on the page".to_string(),
         (Subject::Text { .. }, "present") => "it is still on the page".to_string(),

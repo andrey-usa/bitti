@@ -371,7 +371,7 @@ fn parse_args() -> Result<Args, String> {
                 }
             }
             "-h" | "--help" => return Err(USAGE.to_string()),
-            // One line: the whole usage under it scrolled the error away.
+            // One line: the whole usage under it would scroll the error away.
             f if f.starts_with('-') => return Err(format!("unknown option {f} (primavera {cmd} --help lists them)")),
             p => paths.push(PathBuf::from(p)),
         }
@@ -768,7 +768,7 @@ fn run(args: Args) -> ExitCode {
     // The browser starts while the app does (a `[server]` can take seconds to
     // answer; the browser needs about one): the same browser, launched sooner.
     // Without a `[server]` there is nothing to overlap, and the worker
-    // launches it as before.
+    // launches it itself.
     let mut early = EarlyBrowser((args.server.is_some() && args.opts.engine != "lightpanda").then(|| {
         let opts = args.opts.clone();
         std::thread::spawn(move || {
