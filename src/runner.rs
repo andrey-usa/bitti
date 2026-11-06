@@ -2011,9 +2011,6 @@ const QUIET_CLOCK: &str = r#"(() => {
 /// axe-core (vendor/axe-core), put in the page by `expect accessible`.
 const AXE: &str = include_str!("../vendor/axe-core/axe.min.js");
 
-/// `expect lcp|fcp|ttfb|load|cls`: what the browser measured for the
-/// current document (ms from its navigation start; `cls`: the largest
-/// session window of layout shifts not caused by input), or null.
 /// What to click in the element a click hit instead of its own (by
 /// navigera's description's selector): the buttons and links of the
 /// fixed or sticky box around it, else of an open dialog; the ones that
@@ -2039,6 +2036,9 @@ const UNCOVER_JS: &str = r#"(sel) => {
     .sort((a, b) => b.p - a.p).slice(0, 3);
 }"#;
 
+/// `expect lcp|fcp|ttfb|load|cls`: what the browser measured for the
+/// current document (ms from its navigation start; `cls`: the largest
+/// session window of layout shifts not caused by input), or null.
 const METRIC_JS: &str = r#"async (name) => {
   const nav = performance.getEntriesByType('navigation')[0];
   const seen = (type) => new Promise((done) => {
