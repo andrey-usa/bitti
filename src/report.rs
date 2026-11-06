@@ -297,7 +297,7 @@ fn base64(bytes: &[u8]) -> String {
 /// linked, so a run with many failures still opens quickly.
 const EMBED_MAX: u64 = 2 * 1024 * 1024;
 /// The most a report embeds in all (as base64); the screenshots after that
-/// are links, so a run of many failures still opens fast.
+/// are links too.
 const REPORT_BUDGET: usize = 10 * 1024 * 1024;
 
 /// What a report has embedded: which screenshots, and how many bytes.
