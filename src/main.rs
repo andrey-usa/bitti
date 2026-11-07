@@ -27,7 +27,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::{mpsc, Condvar, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// The agent skill: the format and the commands, for an agent writing tests.
 const SKILL_MD: &str = include_str!("../skills/primavera/SKILL.md");
@@ -105,6 +105,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ("--json", "print what the scenarios saved, as one JSON object, at the end"),
     ("--timeout-ms <ms>", "how long an expect retries (default 5000)"),
     ("--scenario-timeout-ms <ms>", "the most one scenario may take (its steps; hooks around it aside); @slow triples it"),
+    ("--global-timeout-ms <ms>", "the most the whole run may take: no scenario starts after it, running ones stop there, and the run fails"),
     ("--wait-ms <ms>", "how long a step waits for its element (default 5000)"),
     ("--headed", "show the browser"),
     ("--slowmo <ms>", "wait this long before each step that acts on the page (to watch a --headed run)"),
@@ -347,6 +348,11 @@ fn parse_args() -> Result<Args, String> {
             "--timeout-ms" => {
                 let v = val("--timeout-ms")?;
                 opts.expect_ms = v.parse().map_err(|_| format!("--timeout-ms takes milliseconds, not {v:?}"))?;
+            }
+            "--global-timeout-ms" => {
+                let v = val("--global-timeout-ms")?;
+                let ms: u64 = v.parse().map_err(|_| format!("--global-timeout-ms takes milliseconds, not {v:?}"))?;
+                opts.global_ms = (ms > 0).then_some(ms);
             }
             "--scenario-timeout-ms" => {
                 let v = val("--scenario-timeout-ms")?;
@@ -879,6 +885,7 @@ fn run(args: Args) -> ExitCode {
     };
     phase("server up");
     let mut opts = args.opts.clone();
+    opts.deadline = opts.global_ms.map(|ms| started + Duration::from_millis(ms));
     // The first file's `base` serves when the run names none.
     if opts.base.is_none() {
         opts.base = suites.iter().find_map(|s| s.base.clone());
@@ -962,7 +969,7 @@ fn run(args: Args) -> ExitCode {
         for (w, fork) in forks.into_iter().enumerate() {
             let tx = tx.clone();
             let (queue, suites, opts, hooks) = (&queue, &suites, &opts, &hooks);
-            let stop = Stop { max: args.max_failures, failed: &failed };
+            let stop = Stop { max: args.max_failures, failed: &failed, until: opts.deadline };
             let retries = args.retries;
             scope.spawn(move || worker(w, fork, queue, suites, opts, hooks, retries, stop, tx));
         }
@@ -998,7 +1005,15 @@ fn run(args: Args) -> ExitCode {
     drop(owner);
     let left = queue.lock().map(|q| q.len()).unwrap_or(0);
     let stopped = args.max_failures.is_some_and(|m| failed.load(std::sync::atomic::Ordering::Relaxed) >= m);
-    if left > 0 && stopped && launch_errors.is_empty() {
+    let late = opts.deadline.is_some_and(|u| Instant::now() >= u);
+    if left > 0 && late && !stopped && launch_errors.is_empty() {
+        let ms = opts.global_ms.unwrap_or(0);
+        eprintln!(
+            "{} not run: the run's {} s ran out (--global-timeout-ms {ms})",
+            counted(left, "scenario"),
+            ms as f64 / 1000.0
+        );
+    } else if left > 0 && stopped && launch_errors.is_empty() {
         let m = args.max_failures.unwrap_or(1);
         eprintln!("{} not run: {} failed (--max-failures {m})", counted(left, "scenario"), counted(m, "scenario"));
     } else if left > 0 {
@@ -1136,11 +1151,14 @@ fn planned(suites: &[suite::Suite], args: &Args) -> Result<Vec<runner::Job>, Str
 struct Stop<'a> {
     max: Option<usize>,
     failed: &'a std::sync::atomic::AtomicUsize,
+    /// `--global-timeout-ms`: when the run is out of time.
+    until: Option<Instant>,
 }
 
 impl Stop<'_> {
     fn reached(&self) -> bool {
         self.max.is_some_and(|m| self.failed.load(std::sync::atomic::Ordering::Relaxed) >= m)
+            || self.until.is_some_and(|u| Instant::now() >= u)
     }
 }
 

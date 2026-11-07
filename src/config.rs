@@ -65,6 +65,8 @@ pub struct Profile {
     pub slowmo: Option<u64>,
     /// `--scenario-timeout-ms <ms>`: the most one scenario may take.
     pub scenario_timeout_ms: Option<u64>,
+    /// `--global-timeout-ms <ms>`: the most the whole run may take.
+    pub global_timeout_ms: Option<u64>,
     /// `--max-failures <n>`: no scenario starts once n have failed.
     pub max_failures: Option<u64>,
     /// `--forbid-only` (true) or `--allow-only` (false; under CI too).
@@ -130,6 +132,7 @@ impl Profile {
             attach,
             slowmo,
             scenario_timeout_ms,
+            global_timeout_ms,
             max_failures,
             forbid_only,
             server
@@ -178,6 +181,7 @@ impl Profile {
         flag("--attach", self.attach.clone());
         flag("--slowmo", self.slowmo.map(|n| n.to_string()));
         flag("--scenario-timeout-ms", self.scenario_timeout_ms.map(|n| n.to_string()));
+        flag("--global-timeout-ms", self.global_timeout_ms.map(|n| n.to_string()));
         flag("--max-failures", self.max_failures.map(|n| n.to_string()));
         for r in self.reporters.iter().flatten() {
             flag("--reporter", Some(r.clone()));

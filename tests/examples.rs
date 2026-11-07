@@ -1855,7 +1855,23 @@ fn a_scenario_stops_when_its_time_is_up() {
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("2 passed, 1 failed"), "{out}");
     assert!(out.contains("FAIL  tests/fixtures/timeout.pv:1  Waits longer than its scenario may"), "{out}");
-    assert!(out.contains("(the scenario's 1.5 s ran out in this step: --scenario-timeout-ms 1500)"), "{out}");
+    assert!(out.contains("(the scenario's 1.5 s (--scenario-timeout-ms 1500) ran out in this step)"), "{out}");
     assert!(out.contains("PASS  tests/fixtures/timeout.pv:10  Slow, so three times the time"), "{out}");
     assert!(started.elapsed() < std::time::Duration::from_secs(15), "{:?}", started.elapsed());
+    // `--global-timeout-ms`: the scenario running then stops, the rest don't start, the run fails.
+    let started = std::time::Instant::now();
+    let (code, out) = primavera(&[
+        "run",
+        "tests/fixtures/timeout.pv",
+        "--base-url",
+        &site.1,
+        "--global-timeout-ms",
+        "1000",
+        "--workers",
+        "1",
+    ]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("(the run's 1 s (--global-timeout-ms 1000) ran out in this step)"), "{out}");
+    assert!(out.contains("not run: the run's 1 s ran out (--global-timeout-ms 1000)"), "{out}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
 }

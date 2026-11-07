@@ -438,7 +438,10 @@ primavera --version
   is the most one scenario's steps may take: no step starts once it is
   up, and a step's wait (an `expect`, a `retry`, an `http` or `exec`, its
   own `--timeout-ms` too) stops there, the failure saying so. `@slow`
-  triples it. Off by default.
+  triples it. Off by default. `--global-timeout-ms <ms>`
+  (`global_timeout_ms`) does the same for the whole run: no scenario
+  starts after it, those running stop there, and the run fails with the
+  count of scenarios it never ran.
 - `--slowmo <ms>` waits that long before each step that acts on the page
   (`goto`, `click`, `fill` …), to follow a `--headed` run by eye; checks
   and `http` steps aren't slowed.

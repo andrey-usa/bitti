@@ -80,6 +80,11 @@ pub struct Options {
     /// `--scenario-timeout-ms`: the most a scenario's steps may take. A
     /// step starts only with time left, and waits no longer than what is.
     pub scenario_ms: Option<u64>,
+    /// `--global-timeout-ms`: the most the whole run may take, and when
+    /// that is (set as the run starts). No scenario starts after it, and a
+    /// running one's steps are cut there.
+    pub global_ms: Option<u64>,
+    pub deadline: Option<Instant>,
     /// A `pause` step is in the run: the browser listens on a DevTools
     /// port, for another navigera session to look at it.
     pub pause_step: bool,
@@ -115,6 +120,8 @@ impl Options {
             attach: None,
             slowmo: None,
             scenario_ms: None,
+            global_ms: None,
+            deadline: None,
             pause_step: false,
         }
     }
@@ -563,32 +570,37 @@ impl Runner {
             seen = (self.console_count(), self.last_request());
         }
         if failure.is_none() {
-            let budget = self.opts.scenario_ms.map(Duration::from_millis);
+            // `--scenario-timeout-ms` and `--global-timeout-ms`: no step
+            // starts after the time is up, and none waits past it.
+            let own = self.opts.scenario_ms.map(|ms| started + Duration::from_millis(ms));
+            let until = match (own, self.opts.deadline) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+            let (scenario_ms, global_ms) = (self.opts.scenario_ms, self.opts.global_ms.unwrap_or(0));
+            let limit = move |at: Instant| match (own, scenario_ms) {
+                (Some(o), Some(ms)) if o == at => {
+                    format!("the scenario's {} s (--scenario-timeout-ms {ms})", secs(Duration::from_millis(ms)))
+                }
+                _ => {
+                    format!("the run's {} s (--global-timeout-ms {global_ms})", secs(Duration::from_millis(global_ms)))
+                }
+            };
             for step in all {
                 let t = Instant::now();
                 scope.optional_missed = false;
-                // `--scenario-timeout-ms`: no step starts after the time is
-                // up, and none waits past it.
-                if let Some(b) = budget {
-                    if started.elapsed() >= b {
-                        let message = format!(
-                            "the scenario ran out of time before this step: {} s (--scenario-timeout-ms {})",
-                            secs(b),
-                            b.as_millis()
-                        );
-                        failure = Some(self.failure(step, message, &scope, suite, &scenario.name));
-                        break;
-                    }
+                if let Some(u) = until.filter(|u| Instant::now() >= *u) {
+                    let message = format!("out of time before this step: {} ran out", limit(u));
+                    failure = Some(self.failure(step, message, &scope, suite, &scenario.name));
+                    break;
                 }
-                self.cap = budget.map(|b| started + b);
+                self.cap = until;
                 let res = self.step(step, &mut scope, suite);
                 self.cap = None;
-                let res = match (res, budget) {
-                    (Err(m), Some(b)) if started.elapsed() >= b => Err(format!(
-                        "{m}\n(the scenario's {} s ran out in this step: --scenario-timeout-ms {})",
-                        secs(b),
-                        b.as_millis()
-                    )),
+                let res = match (res, until) {
+                    (Err(m), Some(u)) if Instant::now() >= u => {
+                        Err(format!("{m}\n({} ran out in this step)", limit(u)))
+                    }
                     (res, _) => res,
                 };
                 let ms = t.elapsed().as_secs_f64() * 1000.0;
