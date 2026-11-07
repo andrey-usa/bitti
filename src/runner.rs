@@ -1067,6 +1067,7 @@ impl Runner {
                 form,
                 multipart,
                 query,
+                auth,
                 steps,
             } => {
                 let mut url = scope.word(url)?;
@@ -1094,6 +1095,15 @@ impl Runner {
                     }
                     (None, None) => None,
                 };
+                if let Some((kind, v)) = auth {
+                    if !crate::http::has_header(&headers, "authorization") {
+                        let v = scope.word(v)?;
+                        headers.push(match kind.as_str() {
+                            "user" => format!("Authorization: Basic {}", crate::report::base64(v.as_bytes())),
+                            _ => format!("Authorization: Bearer {v}"),
+                        });
+                    }
+                }
                 if *json && !crate::http::has_header(&headers, "content-type") {
                     headers.push("Content-Type: application/json".into());
                 }
@@ -1514,6 +1524,56 @@ impl Runner {
             }
             std::thread::sleep(POLL);
         }
+    }
+
+    /// `expect json … snapshot <name>`: the answer (its `--ignore`d values
+    /// left out) against `<file>.pv.snapshots/<name>.json`. No baseline
+    /// yet: it is written and the check fails, so a person reads it first;
+    /// `--update-snapshots` writes or replaces it and passes.
+    fn json_snapshot(
+        &self,
+        path: &str,
+        name: &str,
+        ignore: &[String],
+        scope: &Scope,
+    ) -> Result<(bool, String), String> {
+        let body = scope.saved.get("http.body").ok_or("no `http` answer yet: an `http` step goes first")?;
+        let doc: Value = serde_json::from_str(body).map_err(|e| format!("the answer isn't JSON ({e})"))?;
+        let Some(at) = crate::expect::json_value_at(&doc, &crate::expect::json_path(&scope.word(path)?)?) else {
+            return Ok((false, format!("nothing at {path}")));
+        };
+        let now = crate::schema::without(at, ignore);
+        let stem = scope.pv.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let dir = scope.pv.parent().unwrap_or(Path::new(".")).join(format!("{stem}.snapshots"));
+        let baseline = dir.join(format!("{name}.json"));
+        let write = |why: &str| -> Result<(bool, String), String> {
+            std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            let text = serde_json::to_string_pretty(&now).unwrap_or_default() + "\n";
+            std::fs::write(&baseline, text).map_err(|e| format!("{}: {e}", baseline.display()))?;
+            Ok((self.opts.update_shots, format!("{why} {}", baseline.display())))
+        };
+        let was = match std::fs::read_to_string(&baseline) {
+            Ok(t) => {
+                serde_json::from_str::<Value>(&t).map_err(|e| format!("{} isn't JSON ({e})", baseline.display()))?
+            }
+            Err(_) => {
+                return write(if self.opts.update_shots {
+                    "wrote the baseline"
+                } else {
+                    "no baseline yet: wrote it, read it and run again:"
+                })
+            }
+        };
+        // The baseline as kept, its own ignored values left out too.
+        let was = crate::schema::without(&was, ignore);
+        let diff = crate::schema::differences(&was, &now);
+        if diff.is_empty() {
+            return Ok((true, "the same".into()));
+        }
+        if self.opts.update_shots {
+            return write("updated the baseline");
+        }
+        Ok((false, format!("{} differs: {}", baseline.display(), diff.join("; "))))
     }
 
     /// `expect screenshot`: take it (masks painted, animations stopped),
@@ -2226,6 +2286,7 @@ impl Runner {
                 Some(actual) => (compare(&actual, e.matcher, value), actual),
                 None => (false, "absent".into()),
             },
+            Subject::JsonSnapshot { path, name, ignore } => self.json_snapshot(path, name, ignore, scope)?,
             Subject::JsonSchema { path, file } => {
                 let body = scope.saved.get("http.body").ok_or("no `http` answer yet: an `http` step goes first")?;
                 let doc: Value = serde_json::from_str(body).map_err(|e| format!("the answer isn't JSON ({e})"))?;
@@ -2471,6 +2532,9 @@ pub(crate) fn parse(words: &[String]) -> Result<Command, String> {
 
 fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
     let not = if e.negate { "not " } else { "" };
+    if let Subject::JsonSnapshot { path, name, .. } = &e.subject {
+        return format!("expected json {path} {not}to match snapshot {name}: {actual} (--update-snapshots takes it as the baseline)");
+    }
     if let Subject::JsonSchema { path, file } = &e.subject {
         let name = Path::new(file).file_name().map_or(file.clone(), |n| n.to_string_lossy().into_owned());
         return if e.negate {
@@ -2546,6 +2610,8 @@ fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
             let name = Path::new(file).file_name().map_or(file.clone(), |n| n.to_string_lossy().into_owned());
             format!("json {path} to match schema {name}")
         }
+        // Said above.
+        Subject::JsonSnapshot { .. } => String::new(),
         Subject::Target { flags, prop } => {
             let p = match prop {
                 Prop::State(s) => s.clone(),
@@ -2793,7 +2859,7 @@ fn reads_answer(action: &Action) -> bool {
         Action::Http { .. } | Action::Retry { .. } => true,
         Action::Save { command, .. } => matches!(command.first().map(String::as_str), Some("json" | "header")),
         Action::Expect(e) => match &e.subject {
-            Subject::Http(_) | Subject::JsonSchema { .. } => true,
+            Subject::Http(_) | Subject::JsonSchema { .. } | Subject::JsonSnapshot { .. } => true,
             Subject::Var(v) => v.starts_with("${http."),
             _ => false,
         },

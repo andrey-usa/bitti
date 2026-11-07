@@ -106,14 +106,17 @@ Status: pre-release. Everything below works in this build.
   ```
 - `http <METHOD> <url> [--json <text> | --body <text> | --json-file <f> |
   --body-file <f> | --form name=value… | --multipart name=value|name=@file…]
-  [--query name=value]… [--header "Name: value"]… [--no-follow] [--insecure]
-  [--timeout-ms <ms>]` makes a
+  [--query name=value]… [--user name:password | --bearer <token>]
+  [--header "Name: value"]… [--no-follow] [--insecure] [--timeout-ms <ms>]`
+  makes a
   request outside the page (an API to set up or check what the UI did, or
   an API test of its own: see [API tests](#api-tests-without-a-browser); a
   relative URL takes the base URL). `--form` sends an urlencoded form,
   `--multipart` a `multipart/form-data` one (`@file` uploads the file beside
   the `.pv`, `;type=image/png` after it sets its type), `--query` adds an
-  encoded `name=value` to the URL. The scenario's cookies go with it and
+  encoded `name=value` to the URL, and `--user ada:${secret:PW}` or
+  `--bearer ${secret:TOKEN}` sets the `Authorization` header (Basic or
+  Bearer). The scenario's cookies go with it and
   the cookies it sets come back to the browser, so an API sign-in signs
   the page in. Its answer is `${http.status}`, `${http.body}` and
   `${http.ms}` (how long it took); `expect
@@ -213,6 +216,7 @@ Status: pre-release. Everything below works in this build.
 | `status` [`is`] `<n>`, `body` + a comparison, `json <$.path>` [+ a comparison], `header <name>` [+ a comparison] | the last `http` answer; a JSON object or array compared with `is` is compared as JSON (key order and `1` vs `1.0` don't matter), with `contains` as a part of it (`json $ contains '{"role": "shopper"}'`: the keys it names, at any depth; for an array, items that some item matches) |
 | `json <$.path> count` + a comparison | how many items the array (or keys the object) at the path has |
 | `json [<$.path>] schema <file.json>` | the answer (or the value at the path) is valid against a JSON Schema beside the `.pv`; a failure lists where it isn't (`$[1].price: expected number, got string "5"`). See [API tests](#api-tests-without-a-browser) for what it reads |
+| `json [<$.path>] snapshot <name>` [`--ignore <$.path>,…`] | the answer (or the value at the path) is what its baseline beside the `.pv` holds, `<file>.pv.snapshots/<name>.json`, compared as JSON; `--ignore $.id,$.items[*].created` leaves out what changes from run to run. With no baseline yet the run writes it and the step fails, so a person reads it first; `--update-snapshots` writes or replaces it. A difference names each path (`$.total: 38, was 36`) |
 | `time` `<`, `<=`, `>`, `>=` `<time>` (`300ms`, `1.5s`) | how long the last `http` exchange took, as curl timed it |
 | `ax [<target>] matches` + the tree indented under it | the page's (or the target's) accessibility tree, as `navigera ax` prints it, holds those lines: partially (`button` matches `button "Place order"`) and in order, a line indented under another inside what that one matched, refs ignored, `/regex/` (spaces allowed) for a name or a value |
 | `screenshot <name> [<target>]` [`--full-page`] [`--threshold 0.2`] [`--max-diff-pixels <n>` \| `--max-diff-ratio <r>`] [`--mask <css>`]… | the viewport (or the element, or the whole page) as its baseline shows it, pixel by pixel; see below |
@@ -239,7 +243,8 @@ Status: pre-release. Everything below works in this build.
   `<file>.pv.screenshots/<name>-<os>.png` (fonts differ between systems,
   so each OS keeps its own); keep it with the tests. With none yet the run
   writes it and the step fails, so a person looks at it first;
-  `--update-screenshots` writes or replaces baselines and passes. While it
+  `--update-snapshots` (or `--update-screenshots`) writes or replaces
+  baselines and passes. While it
   is taken, animations and transitions stop, the caret hides and each
   `--mask` element is painted over in magenta (a mask that matches nothing
   fails the step). An element is scrolled into view first, inside its
@@ -369,7 +374,7 @@ primavera run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--
               [--reporter console|jsonl|github] [--junit <file>] [--cucumber <file>] [--allure <dir>] [--html <file>] [--json]
               [--timeout-ms <ms>] [--wait-ms <ms>] [--headed] [--chromium <path>] [--engine chrome|lightpanda]
               [--electron <app> [--electron-arg <arg>]...] [--attach <port|ws://…>]
-              [--secrets <file>] [--evidence <dir>] [--pause-on-failure] [--trace on-failure|all] [--update-screenshots]
+              [--secrets <file>] [--evidence <dir>] [--pause-on-failure] [--trace on-failure|all] [--update-snapshots]
               [--compare-report html,json,rows|none] [--config <file>] [--env <name>]
 primavera lint [<file.pv|file.feature|dir>...]
 primavera list [<file.pv|file.feature|dir>...]

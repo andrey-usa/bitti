@@ -94,6 +94,15 @@ pub enum Subject {
         path: String,
         file: String,
     },
+    /// `json [<$.path>] snapshot <name> [--ignore <$.path>,…]`: the last
+    /// `http` answer's JSON (or the value at the path), the `--ignore`d
+    /// values left out, is what its baseline beside the `.pv` holds
+    /// (`<file>.pv.snapshots/<name>.json`).
+    JsonSnapshot {
+        path: String,
+        name: String,
+        ignore: Vec<String>,
+    },
     /// `screenshot <name> [<target>]`: the page (or an element) as its
     /// baseline PNG beside the `.pv` file shows it.
     Screenshot(Shot),
@@ -468,7 +477,38 @@ fn parse_inner(words: &[String]) -> Result<Expect, String> {
             // `expect json schema f.json`: the whole answer.
             let (what, rest) =
                 if first == "json" && what == "schema" { ("$".to_string(), &words[1..]) } else { (what, &words[2..]) };
-            if first == "json" && rest.first().map(String::as_str) == Some("schema") {
+            // `expect json snapshot n`: the whole answer.
+            let (what, rest) =
+                if first == "json" && what == "snapshot" && rest.first().map(String::as_str) != Some("snapshot") {
+                    ("$".to_string(), &words[1..])
+                } else {
+                    (what, rest)
+                };
+            if first == "json" && rest.first().map(String::as_str) == Some("snapshot") {
+                json_path(&what)?;
+                let usage = "expected `expect json [<$.path>] snapshot <name> [--ignore <$.path>,…]`";
+                let name = rest.get(1).ok_or(usage)?.clone();
+                if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)) {
+                    return Err(format!(
+                        "a snapshot name is letters, digits, - _ or . (it names the file), not {name:?}"
+                    ));
+                }
+                let mut ignore = Vec::new();
+                let mut more = rest[2..].iter();
+                while let Some(flag) = more.next() {
+                    if flag != "--ignore" {
+                        return Err(format!("{usage} (got {flag:?})"));
+                    }
+                    let list = more.next().ok_or("--ignore needs a $.path (or several, comma-separated)")?;
+                    for p in list.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+                        if !crate::schema::valid_ignore(p) {
+                            return Err(format!("--ignore takes $.paths like $.id or $.items[*].id, not {p:?}"));
+                        }
+                        ignore.push(p.to_string());
+                    }
+                }
+                (Subject::JsonSnapshot { path: what, name, ignore }, Matcher::Holds, String::new())
+            } else if first == "json" && rest.first().map(String::as_str) == Some("schema") {
                 json_path(&what)?;
                 let [_, file] = rest else {
                     return Err("expected `expect json [<$.path>] schema <file.json>`".into());
@@ -1092,6 +1132,19 @@ mod tests {
         assert_eq!((e.subject, e.value.as_str(), e.timeout_ms), (Subject::Var("${http.ms}".into()), "1500", Some(0)));
         assert_eq!(parse(&w("time <= 800ms")).unwrap().value, "800");
         assert!(parse(&w("time is 5")).is_err());
+        let e = parse(&w("json snapshot me --ignore $.id,$.items[*].at --ignore $.n")).unwrap();
+        assert_eq!(
+            e.subject,
+            Subject::JsonSnapshot {
+                path: "$".into(),
+                name: "me".into(),
+                ignore: vec!["$.id".into(), "$.items[*].at".into(), "$.n".into()]
+            }
+        );
+        let e = parse(&w("json $.user snapshot user")).unwrap();
+        assert!(matches!(e.subject, Subject::JsonSnapshot { ref path, .. } if path == "$.user"));
+        assert!(parse(&w("json snapshot a/b")).is_err());
+        assert!(parse(&w("json snapshot me --ignore id")).is_err());
         assert!(parse(&w("json $.a schema")).is_err());
     }
 

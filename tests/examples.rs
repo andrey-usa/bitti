@@ -1664,7 +1664,7 @@ fn api_scenarios_run_with_no_browser() {
         "3",
     ]);
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("5 passed, 1 skipped, 0 failed"), "{out}");
+    assert!(out.contains("7 passed, 1 skipped, 0 failed"), "{out}");
     assert!(out.contains("(no browser)"), "{out}");
     assert!(out.contains("SKIP  tests/fixtures/api/api.pv:43  Not written yet  (@fixme)"), "{out}");
     // print: a part of the answer, pretty; a line with values filled in.
@@ -1677,7 +1677,11 @@ fn api_scenarios_run_with_no_browser() {
     let (code, out) =
         primavera(&["run", "tests/fixtures/api/api-fail.pv", "--base-url", &site.1, "--chromium", nothing]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("0 passed, 4 failed"), "{out}");
+    assert!(out.contains("0 passed, 5 failed"), "{out}");
+    assert!(
+        out.contains("api-fail.pv.snapshots/search.json differs: $.n: 0, was 1; $.q: \"boots\", was \"shoes\""),
+        "{out}"
+    );
     // What came back, under the check that read it.
     assert!(out.contains("expected json $.q is \"shoes\"; saw \"boots\""), "{out}");
     assert!(out.contains("last http: GET ") && out.contains("/api/search?q=boots -> 200 ("), "{out}");
@@ -1787,4 +1791,32 @@ fn slowmo_and_a_pause_step() {
     assert!(out.contains("a `pause` step waits for Enter: --workers 2 becomes 1"), "{out}");
     assert!(out.contains("PAUSED  p.pv:3  the browser stays as the steps before left it"), "{out}");
     assert!(out.contains("--attach ws://"), "{out}");
+}
+
+/// A JSON snapshot: written the first time (and the check fails, so a
+/// person reads it), the same answer then holds, a changed one fails until
+/// `--update-snapshots` takes it.
+#[test]
+fn json_snapshots_are_written_then_held() {
+    let Some(site) = own_site() else { return };
+    let dir = own_dir("snapshot");
+    let pv = "scenario \"s\"\n  http GET /api/search --query q=${q:-a} --query n=1\n  expect json snapshot search --ignore $.n\n";
+    std::fs::write(dir.join("s.pv"), pv).unwrap();
+    let run = |extra: &[&str]| {
+        let mut args = vec!["run", "s.pv", "--base-url", site.1.as_str()];
+        args.extend_from_slice(extra);
+        primavera_in(&dir, &args, &[])
+    };
+    let (code, out) = run(&[]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("no baseline yet: wrote it, read it and run again:"), "{out}");
+    let baseline = dir.join("s.pv.snapshots/search.json");
+    assert_eq!(std::fs::read_to_string(&baseline).unwrap(), "{\n  \"q\": \"a\"\n}\n");
+    assert_eq!(run(&[]).0, 0);
+    let (code, out) = run(&["--var", "q=b"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("differs: $.q: \"b\", was \"a\""), "{out}");
+    let (code, out) = run(&["--var", "q=b", "--update-snapshots"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(std::fs::read_to_string(&baseline).unwrap().contains("\"b\""));
 }

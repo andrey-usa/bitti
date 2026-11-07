@@ -15,3 +15,7 @@ scenario "A job that never finishes in time"
 
 scenario "Signed out"
   http GET /api/profile
+
+scenario "An answer that changed from its snapshot"
+  http GET /api/search --query q=boots
+  expect json snapshot search

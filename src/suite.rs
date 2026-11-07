@@ -91,6 +91,9 @@ pub enum Action {
         multipart: Vec<(String, String)>,
         /// `--query name=value`…: added to the URL, encoded.
         query: Vec<(String, String)>,
+        /// `--user name:password` (Basic) or `--bearer <token>`: the
+        /// `Authorization` header, as `Basic …` or `Bearer …`.
+        auth: Option<(String, String)>,
         steps: Vec<Step>,
     },
     /// `retry [--timeout-ms n]` and the steps indented under it: run them
@@ -505,9 +508,10 @@ pub fn unset_vars(suite: &Suite, sc: &Scenario, run_vars: &[String]) -> Vec<(usi
             Action::As(name) => vec![name.clone()],
             Action::Exec { argv, .. } => argv.clone(),
             Action::Gherkin(_) => Vec::new(),
-            Action::Http { url, headers, body, form, multipart, query, .. } => std::iter::once(url)
+            Action::Http { url, headers, body, form, multipart, query, auth, .. } => std::iter::once(url)
                 .chain(headers)
                 .chain(body)
+                .chain(auth.iter().map(|(_, v)| v))
                 .chain(form.iter().chain(multipart).chain(query).flat_map(|(k, v)| [k, v]))
                 .cloned()
                 .collect(),
@@ -565,7 +569,14 @@ pub fn print_reads_answer(words: &[String]) -> bool {
 pub fn needs_browser(suite: &Suite, steps: &[Step]) -> bool {
     fn expect(e: &Expect) -> bool {
         use crate::expect::Subject;
-        !matches!(e.subject, Subject::Var(_) | Subject::Http(_) | Subject::Cookie(_) | Subject::JsonSchema { .. })
+        !matches!(
+            e.subject,
+            Subject::Var(_)
+                | Subject::Http(_)
+                | Subject::Cookie(_)
+                | Subject::JsonSchema { .. }
+                | Subject::JsonSnapshot { .. }
+        )
     }
     fn action(a: &Action, suite: &Suite, depth: usize) -> bool {
         // A flow that runs itself fails in the run; it isn't the browser's.
@@ -1294,7 +1305,7 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
             Ok(Action::Exec { argv: rest.to_vec(), timeout_ms, dir: PathBuf::new(), steps: Vec::new() })
         }
         Some("http") => {
-            let usage = "expected `http <METHOD> <url> [--json <text> | --body <text> | --json-file <f> | --body-file <f> | --form name=value… | --multipart name=value|name=@file…] [--query name=value]… [--header \"Name: value\"]… [--no-follow] [--insecure] [--timeout-ms <ms>]`";
+            let usage = "expected `http <METHOD> <url> [--json <text> | --body <text> | --json-file <f> | --body-file <f> | --form name=value… | --multipart name=value|name=@file…] [--query name=value]… [--user name:password | --bearer <token>] [--header \"Name: value\"]… [--no-follow] [--insecure] [--timeout-ms <ms>]`";
             let method = words.get(1).ok_or(usage)?.to_uppercase();
             let url = words.get(2).ok_or(usage)?.clone();
             if method.starts_with('-') || url.starts_with("--") {
@@ -1304,6 +1315,7 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                 (Vec::new(), None, None, false, None);
             let (mut follow, mut insecure) = (true, false);
             let (mut form, mut multipart, mut query) = (Vec::new(), Vec::new(), Vec::new());
+            let mut auth: Option<(String, String)> = None;
             let pair = |flag: &str, v: &str| -> Result<(String, String), String> {
                 v.split_once('=')
                     .filter(|(k, _)| !k.is_empty())
@@ -1330,6 +1342,15 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                             return Err(format!("--header takes \"Name: value\", not {v:?}"));
                         }
                         headers.push(v);
+                    }
+                    "--user" | "--bearer" => {
+                        if auth.is_some() {
+                            return Err("one of --user and --bearer".into());
+                        }
+                        if flag == "--user" && !v.contains(':') && !v.contains("${") {
+                            return Err(format!("--user takes name:password, not {v:?}"));
+                        }
+                        auth = Some((flag.trim_start_matches("--").to_string(), v));
                     }
                     "--form" => form.push(pair(flag, &v)?),
                     "--multipart" => multipart.push(pair(flag, &v)?),
@@ -1369,6 +1390,7 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                 form,
                 multipart,
                 query,
+                auth,
                 steps: Vec::new(),
             })
         }

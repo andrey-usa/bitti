@@ -42,3 +42,15 @@ scenario "Signed in by an auth of http steps" @api
 
 scenario "Not written yet" @fixme
   http GET /api/nowhere
+
+scenario "Basic and bearer sign-ins" @api
+  http GET /api/basic --user "ada:${secret:PV_TEST_PW}"
+  expect json $.user is ada
+  http GET /api/token --bearer t0k
+  expect json $.token is ok
+
+scenario "The answer is what its snapshot holds" @api
+  as api-user
+  http GET /api/profile
+  expect json snapshot profile --ignore $.id,$.address.zip
+  expect json $.tags snapshot tags

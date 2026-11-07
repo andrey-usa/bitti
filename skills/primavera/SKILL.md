@@ -103,10 +103,12 @@ scenario "A new user can be read back" @api
   in milliseconds, and cookies an answer sets go with the next request. An
   `auth` of `http` steps signs browser scenarios in too.
 - `http` takes `--json`, `--body`, `--form name=value`, `--multipart
-  name=value|name=@file`, `--query name=value`, `--header "Name: value"`. A
+  name=value|name=@file`, `--query name=value`, `--user name:password`,
+  `--bearer <token>`, `--header "Name: value"`. A
   4xx/5xx fails the step unless a step under it checks `status`.
 - `expect status|body|header <name>|json <$.path>`, `json <$.path> count`,
-  `json [<$.path>] schema <file.json>`, `time < 2s`. `is`/`contains` with an
+  `json [<$.path>] schema <file.json>`, `json snapshot <name> [--ignore
+  $.id]` (a baseline written on the first run), `time < 2s`. `is`/`contains` with an
   object or array compare it as JSON (`contains`: the keys it names).
 - `print http` (or `body`, `json <$.path>`, `header <name>`) shows the
   answer; a failing check shows the request and the start of the body.

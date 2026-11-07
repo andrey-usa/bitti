@@ -89,7 +89,10 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ),
     ("--config <file>", "settings, a [server] and [env.<name>] profiles (default: ./primavera.toml)"),
     ("--env <name>", "the config's [env.<name>] profile on top of the rest"),
-    ("--update-screenshots", "a screenshot that differs from its baseline (or has none) becomes it"),
+    (
+        "--update-snapshots",
+        "a screenshot or JSON snapshot that differs from its baseline (or has none) becomes it (also --update-screenshots)",
+    ),
     ("--compare-report <k>", "what `expect download … compare` keeps: html, json, rows (comma-separated) or none (default html)"),
     (
         "--trace <when>",
@@ -349,7 +352,7 @@ fn parse_args() -> Result<Args, String> {
                 opts.wait_ms = Some(v.parse().map_err(|_| format!("--wait-ms takes milliseconds, not {v:?}"))?);
             }
             "--headed" => opts.headed = true,
-            "--update-screenshots" => opts.update_shots = true,
+            "--update-screenshots" | "--update-snapshots" => opts.update_shots = true,
             "--trace" => opts.trace = trace::Trace::parse(&val("--trace")?)?,
             "--compare-report" => opts.compare_report = expect::report_kinds(&val("--compare-report")?)?,
             "--chromium" => opts.chromium = Some(val("--chromium")?),

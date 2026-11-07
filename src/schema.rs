@@ -455,3 +455,138 @@ mod tests {
         assert_eq!(errs.last().unwrap(), "… 2 more");
     }
 }
+
+/// `--ignore` paths of `expect json … snapshot`: `$.id`, `$.items[*].id`,
+/// `$.meta.*` (`*` any key or index).
+fn ignore_path(path: &str) -> Option<Vec<Option<String>>> {
+    let mut rest = path.strip_prefix('$')?;
+    let mut out = Vec::new();
+    while !rest.is_empty() {
+        if let Some(r) = rest.strip_prefix('.') {
+            let end = r.find(['.', '[']).unwrap_or(r.len());
+            out.push((&r[..end] != "*").then(|| r[..end].to_string()));
+            rest = &r[end..];
+        } else {
+            let r = rest.strip_prefix('[')?;
+            let end = r.find(']')?;
+            let inner = r[..end].trim().trim_matches(['"', '\'']);
+            out.push((inner != "*").then(|| inner.to_string()));
+            rest = &r[end + 1..];
+        }
+    }
+    Some(out)
+}
+
+/// Whether `ignore` is a valid `--ignore` path.
+pub fn valid_ignore(path: &str) -> bool {
+    ignore_path(path).is_some_and(|p| !p.is_empty())
+}
+
+/// `v` with the values at the `--ignore` paths taken out.
+pub fn without(v: &Value, ignore: &[String]) -> Value {
+    fn drop_at(v: &mut Value, path: &[Option<String>]) {
+        let Some((first, rest)) = path.split_first() else { return };
+        match v {
+            Value::Object(m) => {
+                let keys: Vec<String> = match first {
+                    Some(k) => vec![k.clone()],
+                    None => m.keys().cloned().collect(),
+                };
+                for k in keys {
+                    if rest.is_empty() {
+                        m.remove(&k);
+                    } else if let Some(child) = m.get_mut(&k) {
+                        drop_at(child, rest);
+                    }
+                }
+            }
+            Value::Array(a) => {
+                let idx: Vec<usize> = match first {
+                    Some(k) => k.parse().ok().into_iter().collect(),
+                    None => (0..a.len()).collect(),
+                };
+                // An item ignored whole stays, as null, so the rest keep their places.
+                for i in idx {
+                    if let Some(child) = a.get_mut(i) {
+                        if rest.is_empty() {
+                            *child = Value::Null;
+                        } else {
+                            drop_at(child, rest);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut v = v.clone();
+    for p in ignore.iter().filter_map(|p| ignore_path(p)) {
+        drop_at(&mut v, &p);
+    }
+    v
+}
+
+/// Where `now` differs from `was` (a snapshot's baseline), each as
+/// `<$.path>: <what>`, the first few.
+pub fn differences(was: &Value, now: &Value) -> Vec<String> {
+    fn walk(was: &Value, now: &Value, at: &str, out: &mut Vec<String>) {
+        if out.len() > MAX_ERRORS {
+            return;
+        }
+        match (was, now) {
+            (Value::Object(a), Value::Object(b)) => {
+                for (k, av) in a {
+                    match b.get(k) {
+                        Some(bv) => walk(av, bv, &key_path(at, k), out),
+                        None => out.push(format!("{}: gone (was {})", key_path(at, k), shown(av))),
+                    }
+                }
+                for (k, bv) in b.iter().filter(|(k, _)| !a.contains_key(*k)) {
+                    out.push(format!("{}: new ({})", key_path(at, k), shown(bv)));
+                }
+            }
+            (Value::Array(a), Value::Array(b)) => {
+                for (i, (av, bv)) in a.iter().zip(b).enumerate() {
+                    walk(av, bv, &format!("{at}[{i}]"), out);
+                }
+                if a.len() != b.len() {
+                    out.push(format!("{at}: {} items, was {}", b.len(), a.len()));
+                }
+            }
+            _ if equal(was, now) => {}
+            _ => out.push(format!("{at}: {}, was {}", shown(now), shown(was))),
+        }
+    }
+    let mut out = Vec::new();
+    walk(was, now, "$", &mut out);
+    if out.len() > MAX_ERRORS {
+        out.truncate(MAX_ERRORS);
+        out.push("… and more".into());
+    }
+    out
+}
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn ignored_paths_and_differences() {
+        let v = json!({"id": 7, "at": "now", "items": [{"id": 1, "sku": "a"}, {"id": 2, "sku": "b"}], "meta": {"x": 1, "y": 2}});
+        let ig = |p: &[&str]| p.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            without(&v, &ig(&["$.id", "$['at']", "$.items[*].id", "$.meta.*"])),
+            json!({"items": [{"sku": "a"}, {"sku": "b"}], "meta": {}})
+        );
+        assert_eq!(without(&v, &ig(&["$.items[0]"]))["items"], json!([null, {"id": 2, "sku": "b"}]));
+        assert!(valid_ignore("$.a[*].b") && !valid_ignore("a.b") && !valid_ignore("$"));
+        let was = json!({"name": "Ada", "n": 1, "tags": ["a"], "old": true});
+        let now = json!({"name": "Bea", "n": 1.0, "tags": ["a", "b"], "new": 1});
+        assert_eq!(
+            differences(&was, &now),
+            ["$.name: \"Bea\", was \"Ada\"", "$.old: gone (was true)", "$.tags: 2 items, was 1", "$.new: new (1)"]
+        );
+        assert!(differences(&was, &was).is_empty());
+    }
+}

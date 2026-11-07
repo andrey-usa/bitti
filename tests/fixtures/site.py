@@ -191,6 +191,12 @@ class Handler(BaseHTTPRequestHandler):
             i = int(u.path.rsplit("/", 1)[1])
             JOBS[i] += 1
             return self.answer(200, json.dumps({"id": str(i), "status": "done" if JOBS[i] >= 3 else "pending"}))
+        if u.path == "/api/basic":
+            ok = self.headers.get("Authorization") == "Basic YWRhOmh1bnRlcjIy"  # ada:hunter22
+            return self.answer(200, '{"user": "ada"}') if ok else self.answer(401, '{"error": "who?"}')
+        if u.path == "/api/token":
+            ok = self.headers.get("Authorization") == "Bearer t0k"
+            return self.answer(200, '{"token": "ok"}') if ok else self.answer(401, '{"error": "no token"}')
         if u.path == "/api/items":
             return self.answer(200, '[{"sku": "a", "price": 9.99}, {"sku": "b", "price": "5"}]')
         if u.path == "/api/me":
