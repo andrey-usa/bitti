@@ -224,6 +224,13 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/flaky":
             VISITS["flaky"] += 1
             return self.page("<p>ok</p>" if VISITS["flaky"] > 1 else "<p>not yet</p>")
+        if u.path == "/expiry":
+            # Signed out after 15 idle minutes; today's date at the top.
+            return self.page(
+                "<p id=d></p><p id=s>Signed in</p><script>"
+                "d.textContent = 'Today ' + new Date().toISOString().slice(0, 10);"
+                "setTimeout(() => s.textContent = 'Session expired', 15 * 60 * 1000)</script>"
+            )
         if u.path == "/late":
             ms = int(q.get("ms", ["300"])[0])
             return self.page(f"<p id=s>loading</p><script>setTimeout(() => s.textContent = 'ready', {ms})</script>")

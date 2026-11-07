@@ -159,6 +159,23 @@ Status: pre-release. Everything below works in this build.
   until Enter; with no terminal it waits `PRIMAVERA_PAUSE_S` seconds, and
   under CI not at all unless that is set. A run with a `pause` in it runs
   one worker.
+- `clock install [--time 2024-02-02T08:00:00] [--paused]` puts the page's
+  time under the scenario's control (navigera's `clock`): `Date`,
+  `performance.now` and timers start there, in every page the scenario
+  opens; `clock run-for 15m` (or `mm:ss`) advances it, firing the timers
+  due on the way in order; `clock fast-forward`, `clock set <time>`,
+  `clock pause-at <time>` and `clock resume` do the rest. A session
+  timeout, a countdown or a date-dependent page is tested in
+  milliseconds; the next scenario starts on real time.
+
+  ```text
+  clock install --time 2024-02-02T08:00:00 --paused
+  goto /account
+  clock run-for 14:59
+  expect text "Signed in"
+  clock run-for 1s
+  expect text "Session expired"
+  ```
 - `flow name(a, b)` at the top level holds steps; `run name x y` runs them
   with `${a}` and `${b}` set. `use other.pv` takes another file's flows
   and `set`s. A failure inside a flow names the flow's own line.

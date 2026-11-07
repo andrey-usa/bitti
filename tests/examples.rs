@@ -1822,3 +1822,15 @@ fn json_snapshots_are_written_then_held() {
     assert_eq!(code, 0, "{out}");
     assert!(std::fs::read_to_string(&baseline).unwrap().contains("\"b\""));
 }
+
+/// `clock` steps: a page's time at the scenario's command, and the next
+/// scenario on the same worker back on real time.
+#[test]
+fn a_scenario_controls_the_pages_clock() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    for workers in ["1", "2"] {
+        let (code, out) = primavera(&["run", "tests/fixtures/clock.pv", "--base-url", &site.1, "--workers", workers]);
+        assert_eq!(code, 0, "workers {workers}: {out}");
+        assert!(out.contains("2 passed, 0 failed"), "workers {workers}: {out}");
+    }
+}

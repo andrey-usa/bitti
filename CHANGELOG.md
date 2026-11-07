@@ -20,6 +20,9 @@ The first release, still to be named.
   (navigera's, over rustls), with kept-alive connections: about a
   millisecond a request to a local server, where a `curl` process took
   6-10.
+- `clock` steps (navigera's): a page's dates and timers start at a given
+  time, paused or flowing, and run forward on command, so a session
+  timeout or a countdown is tested in milliseconds.
 - `retry` blocks, a `pause` step, `--slowmo <ms>`, tag expressions,
   `--grep-invert`, `--max-failures`/`-x`, `--last-failed`, and `@skip`,
   `@fixme`, `@only` (`--forbid-only`, on under CI) and `@slow`.
