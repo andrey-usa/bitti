@@ -32,3 +32,13 @@ scenario "A negated expect wakes when the state goes"
   eval "(() => { const b = document.createElement('button'); b.id = 'n'; document.body.appendChild(b); setTimeout(() => { b.disabled = true; }, 300); return 1; })()"
   expect not --selector "#n" enabled
 
+
+scenario "A box a click checks wakes its expect"
+  goto /login
+  eval "(() => { const c = document.createElement('input'); c.type = 'checkbox'; c.id = 'k'; document.body.appendChild(c); setTimeout(() => { c.click(); }, 200); return 1; })()"
+  expect --selector "#k" checked
+
+scenario "A field that takes focus wakes its expect"
+  goto /login
+  eval "(() => { const f = document.createElement('input'); f.id = 'f'; document.body.appendChild(f); setTimeout(() => { f.focus(); }, 200); return 1; })()"
+  expect --selector "#f" focused

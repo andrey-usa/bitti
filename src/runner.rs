@@ -1088,6 +1088,21 @@ impl Runner {
                     Prop::State(state) if state == "disabled" => {
                         format!("__pvDisabled(__pvFirst({sel}))")
                     }
+                    // Checked and focused change by property, which no
+                    // observer sees: navigera's wake also ends on input,
+                    // change and focus events, and [`Runner::expect`] caps
+                    // each of these waits at the poll's 25 ms, so a silent
+                    // write is seen no later than the poll would see it.
+                    Prop::State(state) if state == "checked" => {
+                        format!("__pvChecked(__pvFirst({sel}))")
+                    }
+                    // A missing box is unchecked, as the read answers.
+                    Prop::State(state) if state == "unchecked" => {
+                        format!("!__pvChecked(__pvFirst({sel}))")
+                    }
+                    Prop::State(state) if state == "focused" => {
+                        format!("__pvFocused(__pvFirst({sel}))")
+                    }
                     // A bare `expect <target> <prop>` (no matcher) is a
                     // read, not a condition: nothing to wait for.
                     Prop::Count | Prop::Text | Prop::Value | Prop::Attr(_) | Prop::Style(_)
@@ -1144,18 +1159,28 @@ impl Runner {
             // confirmed by the loop's next read, and a wait that errors or
             // times out leaves the loop to finish as it does without it
             // (its last read gives the failure its actual). An expectation
-            // that already holds pays nothing for this.
+            // that already holds pays nothing for this. A state a property
+            // holds (checked, focused) wakes on the events that change it,
+            // not on a silent write: its wait is capped at the poll's 25 ms
+            // and taken again until it fires. A wake that fires and the read
+            // then disagrees leaves the rest to the poll.
             if !woken {
-                woken = true;
                 let left = deadline.saturating_duration_since(Instant::now());
+                let by_property = matches!(&e.subject, Subject::Target { prop: Prop::State(s), .. }
+                    if matches!(s.as_str(), "checked" | "unchecked" | "focused"));
+                woken = !by_property;
                 if !left.is_zero() {
-                    if let Some(words) = self.wake_wait(e, &value, scope, left)? {
-                        let _ = self.command(&words);
+                    let cap = if by_property { left.min(POLL) } else { left };
+                    if let Some(words) = self.wake_wait(e, &value, scope, cap)? {
+                        if self.command(&words).is_ok() {
+                            woken = true;
+                        }
                         continue;
                     }
                 }
+                woken = true;
             }
-            std::thread::sleep(Duration::from_millis(25));
+            std::thread::sleep(POLL);
         }
     }
 
@@ -1951,11 +1976,15 @@ impl Drop for Runner {
     }
 }
 
+/// The expect loop's poll between reads.
+const POLL: Duration = Duration::from_millis(25);
+
 /// The page-side helpers an `expect` wake wait's predicate resolves and
 /// reads elements with: the same deep search navigera's own reads use
 /// (the documents of the same-origin frame tree, plus open shadow roots;
-/// first match in that order), and its `is visible` rule. The `__pv`
-/// prefix keeps clear of navigera's own `__nv` names.
+/// first match in that order), and its `is` rules (visible, disabled,
+/// checked, focused). The `__pv` prefix keeps clear of navigera's own
+/// `__nv` names.
 const WAKE_DEEP: &str = r#"const __pvDocs = (d, out) => { out.push(d); for (const f of d.querySelectorAll('iframe, frame')) { let cd = null; try { cd = f.contentDocument; } catch (_) {} if (cd && cd.documentElement) __pvDocs(cd, out); } return out; };
 const __pvShadows = (root, out) => { const tw = (root.ownerDocument || root).createTreeWalker(root, NodeFilter.SHOW_ELEMENT); for (let n = tw.nextNode(); n; n = tw.nextNode()) { if (n.shadowRoot) { out.push(n.shadowRoot); __pvShadows(n.shadowRoot, out); } } return out; };
 const __pvRoots = () => { const out = []; for (const d of __pvDocs(document, [])) { out.push(d); __pvShadows(d, out); } return out; };
@@ -1964,6 +1993,8 @@ const __pvAll = (sel) => __pvRoots().flatMap((r) => Array.from(r.querySelectorAl
 const __pvVisible = (el) => !!el && el.getClientRects().length > 0 && (el.ownerDocument.defaultView || window).getComputedStyle(el).visibility !== 'hidden';
 const __pvDisabled = (el) => !!el && !!(el.disabled || el.closest('fieldset[disabled]') || el.getAttribute('aria-disabled') === 'true');
 const __pvEnabled = (el) => !!el && !__pvDisabled(el);
+const __pvChecked = (el) => !!el && !!(el.checked || el.getAttribute('aria-checked') === 'true');
+const __pvFocused = (el) => { if (!el) return false; const a = el.getRootNode().activeElement || el.ownerDocument.activeElement; return el === a || el.contains(a); };
 "#;
 
 /// `compare()` mirrored for a wake wait's predicate: the matcher word is
