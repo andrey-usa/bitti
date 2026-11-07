@@ -79,6 +79,39 @@ expect not --selector .toast visible
   compares like the rest.
 - Comments are whole lines starting with `#`.
 
+## An API test (no browser)
+
+```text
+auth api
+  http POST /api/login --form user=ada --form "password=${secret:PW}"
+
+scenario "A new user can be read back" @api
+  as api
+  http POST /api/users --json '{"email": "a@b.co", "role": "shopper"}'
+    expect status 201
+  save id = json $.id
+  http GET /api/users/${id}
+    expect json $ contains '{"role": "shopper"}'
+    expect json $ schema user.schema.json
+    expect time < 500ms
+  retry --timeout-ms 10000
+    http GET /api/users/${id}/welcome-mail
+      expect json $.sent is true
+```
+
+- A scenario of `http`, `exec` and their checks starts no browser: it runs
+  in milliseconds, and cookies an answer sets go with the next request. An
+  `auth` of `http` steps signs browser scenarios in too.
+- `http` takes `--json`, `--body`, `--form name=value`, `--multipart
+  name=value|name=@file`, `--query name=value`, `--header "Name: value"`. A
+  4xx/5xx fails the step unless a step under it checks `status`.
+- `expect status|body|header <name>|json <$.path>`, `json <$.path> count`,
+  `json [<$.path>] schema <file.json>`, `time < 2s`. `is`/`contains` with an
+  object or array compare it as JSON (`contains`: the keys it names).
+- `print http` (or `body`, `json <$.path>`, `header <name>`) shows the
+  answer; a failing check shows the request and the start of the body.
+- `retry [--timeout-ms n]` runs the steps under it again until all pass.
+
 ## Run, read, fix
 
 Write the file and run it in one command:
@@ -131,6 +164,13 @@ primavera navigera -s look --raw eval "document.querySelector('#total').textCont
 --name "Pay"`. After clicking through by ref (`--raw click 12`), `primavera
 from-session look --out shop.pv` writes what the session did as a scenario,
 refs turned into locators; add the expects the test is for.
+
+Tags pick and mark scenarios: `--tag "smoke and not slow"`; `@skip` and
+`@fixme` aren't run, `@only` runs just those (an error under CI), `@slow`
+triples the checks' time. `-x` stops at the first failure, `--last-failed`
+runs what failed last time. `--headed --slowmo 500` shows a run step by
+step; a `pause` step stops there until Enter, the browser open to `navigera
+--attach` (the command is printed).
 
 Exit codes of a run: 0 passed, 1 a scenario failed, 2 a file or argument is
 wrong, 3 the browser or the app server didn't start. More (flows, sign-in

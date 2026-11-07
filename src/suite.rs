@@ -85,8 +85,25 @@ pub enum Action {
         /// `--insecure`: accept a certificate nothing vouches for (a local
         /// test server's own).
         insecure: bool,
+        /// `--form name=value`…: an urlencoded form body.
+        form: Vec<(String, String)>,
+        /// `--multipart name=value` or `name=@file`…: a multipart body.
+        multipart: Vec<(String, String)>,
+        /// `--query name=value`…: added to the URL, encoded.
+        query: Vec<(String, String)>,
         steps: Vec<Step>,
     },
+    /// `retry [--timeout-ms n]` and the steps indented under it: run them
+    /// again, a little later each time, until all of them pass (a job that
+    /// finishes in the background, an order that ships). Each `expect` in
+    /// it looks once, unless it says how long.
+    Retry {
+        timeout_ms: Option<u64>,
+        steps: Vec<Step>,
+    },
+    /// `pause`: stop here, the browser as it is (open to another navigera
+    /// session), until Enter.
+    Pause,
     /// A `.feature` step as written, until [`resolve`] finds what it does.
     Gherkin(String),
 }
@@ -114,21 +131,28 @@ fn nest(flat: Vec<Step>) -> Result<Vec<Step>, (usize, String)> {
             if st.indent > indent {
                 return Err((
                     st.line,
-                    "indented more than the step before it (only the steps of an `if`, `exec` or `http` are)".into(),
+                    "indented more than the step before it (only the steps of an `if`, `retry`, `exec` or `http` are)"
+                        .into(),
                 ));
             }
             *i += 1;
             let mut st = st.clone();
             let line = st.line;
             let kids = match &mut st.action {
-                Action::If { steps, .. } => Some((steps, true)),
-                Action::Exec { steps, .. } | Action::Http { steps, .. } => Some((steps, false)),
+                Action::If { steps, .. } => Some((steps, "if")),
+                Action::Retry { steps, .. } => Some((steps, "retry")),
+                Action::Exec { steps, .. } | Action::Http { steps, .. } => Some((steps, "")),
                 _ => None,
             };
             if let Some((steps, needed)) = kids {
                 match items.get(*i) {
                     Some(next) if next.indent > indent => *steps = level(items, i, next.indent)?,
-                    _ if needed => return Err((line, "`if` needs the steps it guards indented under it".into())),
+                    _ if needed == "if" => {
+                        return Err((line, "`if` needs the steps it guards indented under it".into()))
+                    }
+                    _ if needed == "retry" => {
+                        return Err((line, "`retry` needs the steps it runs again indented under it".into()))
+                    }
                     _ => {}
                 }
             }
@@ -481,10 +505,15 @@ pub fn unset_vars(suite: &Suite, sc: &Scenario, run_vars: &[String]) -> Vec<(usi
             Action::As(name) => vec![name.clone()],
             Action::Exec { argv, .. } => argv.clone(),
             Action::Gherkin(_) => Vec::new(),
-            Action::Http { url, headers, body, .. } => {
-                std::iter::once(url).chain(headers).chain(body).cloned().collect()
+            Action::Http { url, headers, body, form, multipart, query, .. } => std::iter::once(url)
+                .chain(headers)
+                .chain(body)
+                .chain(form.iter().chain(multipart).chain(query).flat_map(|(k, v)| [k, v]))
+                .cloned()
+                .collect(),
+            Action::Expect(_) | Action::If { .. } | Action::Handoff(_) | Action::Retry { .. } | Action::Pause => {
+                Vec::new()
             }
-            Action::Expect(_) | Action::If { .. } | Action::Handoff(_) => Vec::new(),
         }
     }
     for st in suite.before_each.iter().chain(&sc.steps) {
@@ -519,6 +548,80 @@ pub fn unset_vars(suite: &Suite, sc: &Scenario, run_vars: &[String]) -> Vec<(usi
         }
     }
     out
+}
+
+/// `print http`, `print body`, `print json [<$.path>]`, `print header
+/// <name>`: what the last `http` answer said, no browser needed.
+pub fn print_reads_answer(words: &[String]) -> bool {
+    matches!(words.first().map(String::as_str), Some("http" | "body" | "json" | "header"))
+}
+
+/// Whether these steps need a browser. Everything does except `http` and
+/// `exec` with the checks of their answers, checks of saved values and of
+/// the cookies `http` collected, `save … = json|header`, `print` of an
+/// answer, `wait --ms`, `retry` and `pause` over such steps, a flow made
+/// of them, and `as` an auth that needs none itself. A scenario that needs
+/// none runs with no browser at all.
+pub fn needs_browser(suite: &Suite, steps: &[Step]) -> bool {
+    fn expect(e: &Expect) -> bool {
+        use crate::expect::Subject;
+        !matches!(e.subject, Subject::Var(_) | Subject::Http(_) | Subject::Cookie(_) | Subject::JsonSchema { .. })
+    }
+    fn action(a: &Action, suite: &Suite, depth: usize) -> bool {
+        // A flow that runs itself fails in the run; it isn't the browser's.
+        if depth > 16 {
+            return false;
+        }
+        let all = |steps: &[Step]| steps.iter().any(|st| action(&st.action, suite, depth + 1));
+        match a {
+            Action::Command(w) => !matches!(w.as_slice(), [op, flag, _] if op == "wait" && flag == "--ms"),
+            Action::Save { command, .. } => !matches!(command.first().map(String::as_str), Some("json" | "header")),
+            Action::Print(w) => !print_reads_answer(w) && !w.first().is_some_and(|w| w.contains("${")),
+            Action::Expect(e) => expect(e),
+            Action::If { cond, steps } => expect(cond) || all(steps),
+            Action::Exec { steps, .. } | Action::Http { steps, .. } | Action::Retry { steps, .. } => all(steps),
+            Action::Optional(inner) => action(inner, suite, depth),
+            Action::Run { flow, .. } => suite.flows.get(flow).is_none_or(|f| all(&f.steps)),
+            Action::As(name) => suite.auths.get(name).is_none_or(|auth| all(&auth.steps)),
+            Action::Pause => false,
+            Action::Handoff(_) | Action::Gherkin(_) => true,
+        }
+    }
+    steps.iter().any(|st| action(&st.action, suite, 0))
+}
+
+impl Suite {
+    /// Whether this scenario (with the file's `before each` and `after
+    /// each`) needs a browser.
+    pub fn scenario_needs_browser(&self, sc: &Scenario) -> bool {
+        needs_browser(self, &self.before_each)
+            || needs_browser(self, &sc.steps)
+            || needs_browser(self, &self.after_each)
+    }
+
+    /// Whether running this scenario may start a browser: it, or the
+    /// file's `before all` or `after all`, needs one.
+    pub fn job_needs_browser(&self, sc: &Scenario) -> bool {
+        self.scenario_needs_browser(sc) || needs_browser(self, &self.before_all) || needs_browser(self, &self.after_all)
+    }
+
+    /// Whether a `pause` step is anywhere this scenario may reach.
+    pub fn has_pause(&self, sc: &Scenario) -> bool {
+        fn any(steps: &[Step]) -> bool {
+            steps.iter().any(|st| match &st.action {
+                Action::Pause => true,
+                Action::Optional(a) => matches!(a.as_ref(), Action::Pause),
+                Action::If { steps, .. }
+                | Action::Exec { steps, .. }
+                | Action::Http { steps, .. }
+                | Action::Retry { steps, .. } => any(steps),
+                _ => false,
+            })
+        }
+        [&self.before_all, &self.before_each, &sc.steps, &self.after_each, &self.after_all].into_iter().any(|s| any(s))
+            || self.flows.values().any(|f| any(&f.steps))
+            || self.auths.values().any(|a| any(&a.steps))
+    }
 }
 
 /// Parse one file's text.
@@ -922,9 +1025,21 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                         });
                     }
                 }
+                if let Some(Expect { subject: crate::expect::Subject::JsonSchema { file: f, .. }, .. }) = expect {
+                    if !f.contains("${") && !Path::new(f).exists() {
+                        return Err(ParseError {
+                            file: file.to_path_buf(),
+                            line: st.line,
+                            message: format!("schema {f}: no such file (a schema is found next to the .pv)"),
+                        });
+                    }
+                }
                 let action = match &st.action {
                     Action::Optional(a) => a.as_ref(),
-                    Action::If { steps, .. } | Action::Exec { steps, .. } | Action::Http { steps, .. } => {
+                    Action::If { steps, .. }
+                    | Action::Exec { steps, .. }
+                    | Action::Http { steps, .. }
+                    | Action::Retry { steps, .. } => {
                         check(steps, file, suite)?;
                         continue;
                     }
@@ -935,6 +1050,7 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                 // so `lint` catches it too. A word with a variable in it is
                 // checked with a stand-in value.
                 let words = match action {
+                    Action::Print(w) if print_reads_answer(w) => None,
                     Action::Command(w) | Action::Print(w) => Some(w),
                     Action::Save { command, .. }
                         if !matches!(command.first().map(String::as_str), Some("json" | "header")) =>
@@ -1022,15 +1138,27 @@ fn anchor_inputs(action: &mut Action, dir: &Path) {
             return;
         }
         Action::Expect(Expect { subject: crate::expect::Subject::JsFile(f), .. })
+        | Action::Expect(Expect { subject: crate::expect::Subject::JsonSchema { file: f, .. }, .. })
         | Action::If { cond: Expect { subject: crate::expect::Subject::JsFile(f), .. }, .. } => {
             if !f.starts_with("${") && Path::new(f.as_str()).is_relative() {
                 *f = dir.join(f.as_str()).to_string_lossy().into_owned();
             }
             return;
         }
-        Action::Http { body_file: Some(f), .. } => {
-            if !f.starts_with("${") && Path::new(f.as_str()).is_relative() {
-                *f = dir.join(f.as_str()).to_string_lossy().into_owned();
+        Action::Http { body_file, multipart, .. } => {
+            if let Some(f) = body_file.as_mut() {
+                if !f.starts_with("${") && Path::new(f.as_str()).is_relative() {
+                    *f = dir.join(f.as_str()).to_string_lossy().into_owned();
+                }
+            }
+            // `name=@file`: the file beside the `.pv`.
+            for (_, v) in multipart.iter_mut() {
+                if let Some(f) = v.strip_prefix('@') {
+                    let path = f.split(';').next().unwrap_or(f);
+                    if !path.starts_with("${") && Path::new(path).is_relative() {
+                        *v = format!("@{}{}", dir.join(path).to_string_lossy(), &f[path.len()..]);
+                    }
+                }
             }
             return;
         }
@@ -1166,7 +1294,7 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
             Ok(Action::Exec { argv: rest.to_vec(), timeout_ms, dir: PathBuf::new(), steps: Vec::new() })
         }
         Some("http") => {
-            let usage = "expected `http <METHOD> <url> [--json <text> | --body <text> | --json-file <f> | --body-file <f>] [--header \"Name: value\"]… [--no-follow] [--insecure] [--timeout-ms <ms>]`";
+            let usage = "expected `http <METHOD> <url> [--json <text> | --body <text> | --json-file <f> | --body-file <f> | --form name=value… | --multipart name=value|name=@file…] [--query name=value]… [--header \"Name: value\"]… [--no-follow] [--insecure] [--timeout-ms <ms>]`";
             let method = words.get(1).ok_or(usage)?.to_uppercase();
             let url = words.get(2).ok_or(usage)?.clone();
             if method.starts_with('-') || url.starts_with("--") {
@@ -1175,6 +1303,13 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
             let (mut headers, mut body, mut body_file, mut json, mut timeout_ms) =
                 (Vec::new(), None, None, false, None);
             let (mut follow, mut insecure) = (true, false);
+            let (mut form, mut multipart, mut query) = (Vec::new(), Vec::new(), Vec::new());
+            let pair = |flag: &str, v: &str| -> Result<(String, String), String> {
+                v.split_once('=')
+                    .filter(|(k, _)| !k.is_empty())
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .ok_or_else(|| format!("{flag} takes name=value, not {v:?}"))
+            };
             let mut rest = words[3..].iter();
             while let Some(flag) = rest.next() {
                 match flag.as_str() {
@@ -1196,6 +1331,9 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                         }
                         headers.push(v);
                     }
+                    "--form" => form.push(pair(flag, &v)?),
+                    "--multipart" => multipart.push(pair(flag, &v)?),
+                    "--query" => query.push(pair(flag, &v)?),
                     "--json" | "--body" | "--json-file" | "--body-file" => {
                         if body.is_some() || body_file.is_some() {
                             return Err("one body: --json, --body, --json-file or --body-file".into());
@@ -1214,6 +1352,10 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                     other => return Err(format!("{usage} (got {other:?})")),
                 }
             }
+            let kinds = [body.is_some() || body_file.is_some(), !form.is_empty(), !multipart.is_empty()];
+            if kinds.iter().filter(|k| **k).count() > 1 {
+                return Err("one kind of body: --json/--body (or their -file), --form or --multipart".into());
+            }
             Ok(Action::Http {
                 method,
                 url,
@@ -1224,9 +1366,26 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                 timeout_ms,
                 follow,
                 insecure,
+                form,
+                multipart,
+                query,
                 steps: Vec::new(),
             })
         }
+        Some("retry") => {
+            let usage = "expected `retry [--timeout-ms <ms>]`, then the steps to run again indented under it";
+            match &words[1..] {
+                [] => Ok(Action::Retry { timeout_ms: None, steps: Vec::new() }),
+                [flag, v] if flag == "--timeout-ms" => Ok(Action::Retry {
+                    timeout_ms: Some(
+                        v.parse::<u64>().map_err(|_| format!("--timeout-ms takes milliseconds, not {v:?}"))?,
+                    ),
+                    steps: Vec::new(),
+                }),
+                _ => Err(usage.into()),
+            }
+        }
+        Some("pause") if words.len() == 1 => Ok(Action::Pause),
         Some("as") => match words {
             [_, name] => Ok(Action::As(name.clone())),
             _ => Err("expected `as <auth name>`".into()),
@@ -1624,5 +1783,88 @@ mod tests {
         assert_eq!(e.line, 3);
         let e = parse(Path::new("t.pv"), "scenario \"x\"\n  if text a\n  goto /\n").unwrap_err();
         assert!(e.message.contains("needs the steps"), "{e}");
+    }
+
+    #[test]
+    fn http_takes_forms_queries_and_multipart_parts() {
+        let text = "scenario \"s\"\n  http POST /login --form user=ada --form \"pw=${secret:PW}\" --query next=/home\n  http POST /up --multipart note=hi --multipart file=@data/a.png\n";
+        let s = parse(Path::new("/t/x.pv"), text).unwrap();
+        let Action::Http { form, query, .. } = &s.scenarios[0].steps[0].action else { panic!() };
+        assert_eq!(form, &[("user".to_string(), "ada".to_string()), ("pw".into(), "${secret:PW}".into())]);
+        assert_eq!(query, &[("next".to_string(), "/home".to_string())]);
+        let Action::Http { multipart, .. } = &s.scenarios[0].steps[1].action else { panic!() };
+        // A file part is found beside the .pv.
+        assert_eq!(multipart[1].1, format!("@{}", Path::new("/t").join("data/a.png").display()));
+        assert_eq!(multipart[0].1, "hi");
+        for bad in ["http POST /a --form nope", "http POST /a --form a=1 --json '{}'", "http POST /a --multipart =x"] {
+            assert!(parse(Path::new("x.pv"), &format!("scenario \"s\"\n  {bad}\n")).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn retry_and_pause_are_steps() {
+        let text = "scenario \"s\"\n  retry --timeout-ms 9000\n    http GET /job\n      expect json $.status is done\n  pause\n";
+        let s = parse(Path::new("x.pv"), text).unwrap();
+        let steps = &s.scenarios[0].steps;
+        let Action::Retry { timeout_ms, steps: inner } = &steps[0].action else { panic!("{:?}", steps[0]) };
+        assert_eq!(*timeout_ms, Some(9000));
+        assert!(matches!(&inner[0].action, Action::Http { steps, .. } if steps.len() == 1));
+        assert_eq!(steps[1].action, Action::Pause);
+        assert!(s.has_pause(&s.scenarios[0]));
+        let e = parse(Path::new("x.pv"), "scenario \"s\"\n  retry\n  goto /\n").unwrap_err();
+        assert!(e.message.contains("`retry` needs the steps"), "{e}");
+        assert!(parse(Path::new("x.pv"), "scenario \"s\"\n  retry --every 1\n    goto /\n").is_err());
+    }
+
+    #[test]
+    fn a_scenario_of_http_and_exec_alone_needs_no_browser() {
+        let text = "\
+flow sign_in(u)
+  http POST /login --form user=${u}
+flow look()
+  goto /account
+auth api
+  http POST /login --form user=a
+auth ui
+  goto /login
+scenario \"api\"
+  run sign_in ada
+  as api
+  http GET /me
+    expect status 200
+    expect json $.id is 7
+  save id = json $.id
+  expect ${id} is 7
+  expect cookie sid
+  if json $.admin is true
+    http GET /admin
+  retry
+    exec ./check.sh
+      expect exit 0
+  print json $.id
+  print \"id ${id}\"
+  wait --ms 10
+  optional expect time < 2s
+  pause
+scenario \"ui flow\"
+  run look
+scenario \"ui auth\"
+  as ui
+scenario \"a page check\"
+  http GET /me
+  expect text Hi
+scenario \"a read\"
+  save t = get title
+scenario \"a page print\"
+  print url
+";
+        let s = parse(Path::new("x.pv"), text).unwrap();
+        let needs: Vec<bool> = s.scenarios.iter().map(|sc| s.scenario_needs_browser(sc)).collect();
+        assert_eq!(needs, [false, true, true, true, true, true]);
+        // A `before each` that opens a page puts every scenario in a browser.
+        let s = parse(Path::new("x.pv"), "before each\n  goto /\nscenario \"s\"\n  http GET /me\n").unwrap();
+        assert!(s.scenario_needs_browser(&s.scenarios[0]));
+        let s = parse(Path::new("x.pv"), "before all\n  goto /\nscenario \"s\"\n  http GET /me\n").unwrap();
+        assert!(!s.scenario_needs_browser(&s.scenarios[0]) && s.job_needs_browser(&s.scenarios[0]));
     }
 }

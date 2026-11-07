@@ -1622,3 +1622,169 @@ fn merge_joins_the_jsonl_of_shards_into_one_report() {
     assert!(std::fs::read_to_string(&html).unwrap().contains("<html"), "no html");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// primavera in `dir` (its own `.primavera/`, so its last run is its own).
+fn primavera_in(dir: &std::path::Path, args: &[&str], env: &[(&str, &str)]) -> (i32, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        .args(args)
+        .envs(env.iter().copied())
+        .current_dir(dir)
+        .output()
+        .expect("run primavera");
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    (out.status.code().unwrap_or(-1), text)
+}
+
+/// A directory of the test's own.
+fn own_dir(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("primavera-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// Scenarios of `http` steps alone never start a browser: they pass with
+/// one that can't start, in well under a second each.
+#[test]
+fn api_scenarios_run_with_no_browser() {
+    let Some(site) = own_site() else { return };
+    let secrets = secrets_file();
+    let nothing = "/nonexistent/chrome";
+    let started = std::time::Instant::now();
+    let (code, out) = primavera(&[
+        "run",
+        "tests/fixtures/api/api.pv",
+        "--base-url",
+        &site.1,
+        "--secrets",
+        &secrets,
+        "--chromium",
+        nothing,
+        "--workers",
+        "3",
+    ]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("5 passed, 1 skipped, 0 failed"), "{out}");
+    assert!(out.contains("(no browser)"), "{out}");
+    assert!(out.contains("SKIP  tests/fixtures/api/api.pv:43  Not written yet  (@fixme)"), "{out}");
+    // print: a part of the answer, pretty; a line with values filled in.
+    assert!(out.contains("\"city\": \"Oslo\""), "{out}");
+    assert!(out.contains("signed in as 200"), "{out}");
+    // The secret never shows.
+    assert!(!out.contains("hunter22"), "{out}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+
+    let (code, out) =
+        primavera(&["run", "tests/fixtures/api/api-fail.pv", "--base-url", &site.1, "--chromium", nothing]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("0 passed, 4 failed"), "{out}");
+    // What came back, under the check that read it.
+    assert!(out.contains("expected json $.q is \"shoes\"; saw \"boots\""), "{out}");
+    assert!(out.contains("last http: GET ") && out.contains("/api/search?q=boots -> 200 ("), "{out}");
+    assert!(out.contains("{\"q\": \"boots\", \"n\": 0}"), "{out}");
+    assert!(
+        out.contains("to match schema items.schema.json; it doesn't: $[1].price: expected number, got string \"5\""),
+        "{out}"
+    );
+    assert!(out.contains("retry: still failing after 2 tries"), "{out}");
+    assert!(out.contains("/api/profile answered 401: {\"error\": \"signed out\"}"), "{out}");
+}
+
+/// One file of both kinds: the page scenario starts signed in from an
+/// auth that signed in over `http` alone.
+#[test]
+fn an_api_sign_in_carries_into_the_browser() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let secrets = secrets_file();
+    let (code, out) =
+        primavera(&["run", "tests/fixtures/api/mixed.pv", "--base-url", &site.1, "--secrets", &secrets, "-j", "2"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+    assert!(!out.contains("(no browser)"), "{out}");
+}
+
+/// Tag expressions, `@only`, `--grep-invert`, `--max-failures` and
+/// `--last-failed`, on scenarios that need no browser.
+#[test]
+fn run_control_picks_and_stops() {
+    let Some(site) = own_site() else { return };
+    let dir = own_dir("control");
+    std::fs::write(
+        dir.join("t.pv"),
+        "scenario \"one\" @smoke\n  http GET /api/search --query q=1\n  expect json $.q is 1\n\
+         scenario \"two\" @smoke @slow\n  http GET /api/search --query q=2\n  expect json $.q is 3\n\
+         scenario \"three\" @wip\n  http GET /api/search --query q=3\n  expect json $.q is 4\n\
+         scenario \"four\"\n  http GET /api/search --query q=4\n  expect json $.q is 4\n",
+    )
+    .unwrap();
+    let names = |out: &str| -> Vec<String> {
+        out.lines()
+            .filter_map(|l| l.split("  ").nth(1).map(|n| n.split(" @").next().unwrap_or(n).to_string()))
+            .collect()
+    };
+    let (_, out) = primavera_in(&dir, &["list", "t.pv", "--tag", "smoke and not slow"], &[]);
+    assert_eq!(names(&out), ["one"], "{out}");
+    let (_, out) = primavera_in(&dir, &["list", "t.pv", "--tag", "not (smoke or wip)", "--tag", "wip"], &[]);
+    assert_eq!(names(&out), ["three", "four"], "{out}");
+    let (_, out) = primavera_in(&dir, &["list", "t.pv", "--grep-invert", "o"], &[]);
+    assert_eq!(names(&out), ["three"], "{out}");
+    let (code, out) = primavera_in(&dir, &["list", "t.pv", "--tag", "smoke and"], &[]);
+    assert_eq!(code, 2, "{out}");
+
+    // One failure stops the run: the rest are not started.
+    let (code, out) = primavera_in(&dir, &["run", "t.pv", "--base-url", &site.1, "-x"], &[]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("2 scenarios not run: 1 scenario failed (--max-failures 1)"), "{out}");
+    // The whole run, then only what failed in it.
+    let (code, _) = primavera_in(&dir, &["run", "t.pv", "--base-url", &site.1], &[]);
+    assert_eq!(code, 1);
+    let (code, out) = primavera_in(&dir, &["run", "t.pv", "--base-url", &site.1, "--last-failed"], &[]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("0 passed, 2 failed"), "{out}");
+    assert!(out.contains("FAIL  t.pv:4  two") && out.contains("FAIL  t.pv:7  three"), "{out}");
+    std::fs::write(dir.join("t.pv"), "scenario \"one\"\n  http GET /api/search --query q=1\n  expect json $.q is 1\n")
+        .unwrap();
+    let (code, out) = primavera_in(&dir, &["run", "t.pv", "--base-url", &site.1, "--last-failed"], &[]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("no scenario failed in the last run"), "{out}");
+
+    // @only focuses a run, unless it is forbidden (as under CI).
+    std::fs::write(dir.join("t.pv"), "scenario \"one\"\n  wait --ms 1\nscenario \"two\" @only\n  wait --ms 1\n")
+        .unwrap();
+    let (code, out) = primavera_in(&dir, &["run", "t.pv", "--allow-only"], &[]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("1 passed, 0 failed") && out.contains("two"), "{out}");
+    let (code, out) = primavera_in(&dir, &["run", "t.pv"], &[("CI", "true")]);
+    assert_eq!(code, 2, "{out}");
+    assert!(out.contains("@only is on 1 scenario") && out.contains("t.pv:3  two"), "{out}");
+}
+
+/// `--slowmo` waits before each action; a `pause` step stops the run with
+/// the browser open to a second session.
+#[test]
+fn slowmo_and_a_pause_step() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let dir = own_dir("slowmo");
+    std::fs::write(
+        dir.join("s.pv"),
+        "scenario \"three actions\"\n  goto /\n  click --text Late\n  goto /done\n  expect text Thanks\n",
+    )
+    .unwrap();
+    let ms = |out: &str| -> f64 {
+        let line = out.lines().find(|l| l.contains("\"event\":\"scenario\"")).unwrap_or_else(|| panic!("{out}"));
+        serde_json::from_str::<serde_json::Value>(line).unwrap()["ms"].as_f64().unwrap()
+    };
+    let (code, out) =
+        primavera_in(&dir, &["run", "s.pv", "--base-url", &site.1, "--slowmo", "300", "--reporter", "jsonl"], &[]);
+    assert_eq!(code, 0, "{out}");
+    assert!(ms(&out) >= 900.0, "three actions, 300 ms before each: {}", ms(&out));
+
+    std::fs::write(dir.join("p.pv"), "scenario \"stops for a look\"\n  goto /done\n  pause\n  expect text Thanks\n")
+        .unwrap();
+    let (code, out) =
+        primavera_in(&dir, &["run", "p.pv", "--base-url", &site.1, "-j", "2"], &[("PRIMAVERA_PAUSE_S", "1")]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("a `pause` step waits for Enter: --workers 2 becomes 1"), "{out}");
+    assert!(out.contains("PAUSED  p.pv:3  the browser stays as the steps before left it"), "{out}");
+    assert!(out.contains("--attach ws://"), "{out}");
+}

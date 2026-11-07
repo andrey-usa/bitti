@@ -61,6 +61,12 @@ pub struct Profile {
     pub electron_args: Option<Vec<String>>,
     /// A browser or app already running with a DevTools port (`--attach`).
     pub attach: Option<String>,
+    /// `--slowmo <ms>`: a pause before each step that acts on the page.
+    pub slowmo: Option<u64>,
+    /// `--max-failures <n>`: no scenario starts once n have failed.
+    pub max_failures: Option<u64>,
+    /// `--forbid-only` (true) or `--allow-only` (false; under CI too).
+    pub forbid_only: Option<bool>,
     #[serde(default)]
     pub vars: BTreeMap<String, String>,
     pub server: Option<Server>,
@@ -120,6 +126,9 @@ impl Profile {
             electron,
             electron_args,
             attach,
+            slowmo,
+            max_failures,
+            forbid_only,
             server
         );
         self.vars.extend(over.vars);
@@ -164,6 +173,8 @@ impl Profile {
             flag("--electron-arg", Some(a.clone()));
         }
         flag("--attach", self.attach.clone());
+        flag("--slowmo", self.slowmo.map(|n| n.to_string()));
+        flag("--max-failures", self.max_failures.map(|n| n.to_string()));
         for r in self.reporters.iter().flatten() {
             flag("--reporter", Some(r.clone()));
         }
@@ -175,6 +186,11 @@ impl Profile {
         }
         if self.headed == Some(true) {
             w.push("--headed".into());
+        }
+        match self.forbid_only {
+            Some(true) => w.push("--forbid-only".into()),
+            Some(false) => w.push("--allow-only".into()),
+            None => {}
         }
         w
     }

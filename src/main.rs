@@ -15,6 +15,7 @@ mod nearest;
 mod record;
 mod report;
 mod runner;
+mod schema;
 mod server;
 mod shot;
 mod suite;
@@ -67,7 +68,14 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ("--var <name=value>", "a variable for ${name} (repeatable)"),
     ("--secrets <file>", "NAME=value lines for ${secret:NAME} (the environment comes first); masked in output"),
     ("--grep <text>", "only scenarios whose name contains it"),
-    ("--tag <tag>", "only scenarios with this @tag (repeatable: any of them)"),
+    ("--grep-invert <text>", "leave out scenarios whose name contains it"),
+    (
+        "--tag <expr>",
+        "only scenarios with this @tag, or a tag expression: \"smoke and not slow\", \"(a or b) and not wip\" (repeatable: any of them)",
+    ),
+    ("--last-failed", "only the scenarios that failed in the last run (also --lf)"),
+    ("--max-failures <n>", "start no scenario once n have failed (-x: 1); the rest are reported as not run"),
+    ("--forbid-only", "a scenario tagged @only is an error (on by itself under CI); without it, @only runs just those"),
     ("--workers <n|auto>", "scenarios at once (default 1; auto: half the CPUs, at most 8); also -j <n>"),
     ("--isolation <how>", "context (default): one browser, a browser context per worker; browser: a browser each"),
     ("--retries <n>", "run a failing scenario again, up to n times; one that then passes is flaky"),
@@ -95,6 +103,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ("--timeout-ms <ms>", "how long an expect retries (default 5000)"),
     ("--wait-ms <ms>", "how long a step waits for its element (default 5000)"),
     ("--headed", "show the browser"),
+    ("--slowmo <ms>", "wait this long before each step that acts on the page (to watch a --headed run)"),
     ("--chromium <path>", "the browser to run"),
     ("--engine lightpanda", "run on Lightpanda (no layout: a fast smoke tier; screenshots and pixel checks fail)"),
     (
@@ -218,6 +227,13 @@ struct Args {
     shuffle: Option<u64>,
     /// `--watch`: run again the files that change.
     watch: bool,
+    /// `--max-failures <n>` (`-x`: 1): no scenario starts once n have failed.
+    max_failures: Option<usize>,
+    /// `--last-failed`: only the scenarios that failed in the last run.
+    last_failed: bool,
+    /// `--forbid-only` (on by itself under CI): a scenario tagged `@only`
+    /// is an error, not a filter.
+    forbid_only: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -267,6 +283,9 @@ fn parse_args() -> Result<Args, String> {
     let mut repeat = 1u32;
     let mut shuffle = None;
     let mut watch = false;
+    let mut max_failures = None;
+    let mut last_failed = false;
+    let mut forbid_only = runner::under_ci();
     let mut it = it.peekable();
     while let Some(a) = it.next() {
         if a == "--shuffle" {
@@ -294,7 +313,29 @@ fn parse_args() -> Result<Args, String> {
             "--pause-on-failure" => opts.pause = true,
             "--watch" => watch = true,
             "--grep" => opts.grep = Some(val("--grep")?),
-            "--tag" => opts.tags.push(val("--tag")?.trim_start_matches('@').to_string()),
+            "--grep-invert" => opts.grep_invert = Some(val("--grep-invert")?),
+            "--tag" => {
+                let t = val("--tag")?;
+                runner::tag_expr(&t, &[])?;
+                opts.tags.push(t);
+            }
+            "--last-failed" | "--lf" => last_failed = true,
+            "--forbid-only" => forbid_only = true,
+            "--allow-only" => forbid_only = false,
+            "-x" => max_failures = Some(1),
+            "--max-failures" => {
+                let v = val("--max-failures")?;
+                max_failures = Some(
+                    v.parse::<usize>()
+                        .ok()
+                        .filter(|n| *n > 0)
+                        .ok_or_else(|| format!("--max-failures takes a number above 0, not {v:?}"))?,
+                );
+            }
+            "--slowmo" => {
+                let v = val("--slowmo")?;
+                opts.slowmo = Some(v.parse().map_err(|_| format!("--slowmo takes milliseconds, not {v:?}"))?);
+            }
             "--junit" => junit = Some(PathBuf::from(val("--junit")?)),
             "--cucumber" => cucumber = Some(PathBuf::from(val("--cucumber")?)),
             "--allure" => allure = Some(PathBuf::from(val("--allure")?)),
@@ -425,6 +466,9 @@ fn parse_args() -> Result<Args, String> {
         repeat,
         shuffle,
         watch,
+        max_failures,
+        last_failed,
+        forbid_only,
     })
 }
 
@@ -649,9 +693,9 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        "list" => match load(&args.paths) {
-            Ok(suites) => {
-                for job in planned(&suites, &args) {
+        "list" => match load(&args.paths).and_then(|suites| planned(&suites, &args).map(|jobs| (suites, jobs))) {
+            Ok((suites, jobs)) => {
+                for job in jobs {
                     let (suite, sc) = job.get(&suites);
                     let tags: String = sc.tags.iter().map(|t| format!(" @{t}")).collect();
                     println!("{}:{}  {}{tags}", suite.file.display(), sc.line, sc.name);
@@ -765,11 +809,48 @@ fn run(args: Args) -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    let mut jobs = match planned(&suites, &args) {
+        Ok(j) => j,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(2);
+        }
+    };
+    if jobs.is_empty() && args.last_failed {
+        eprintln!("no scenario failed in the last run (of these files): nothing to run again");
+        return ExitCode::SUCCESS;
+    }
+    // `@skip` and `@fixme` are reported, not run.
+    let skipped: Vec<runner::ScenarioResult> = jobs
+        .iter()
+        .filter_map(|j| {
+            let (s, sc) = j.get(&suites);
+            let why = sc.tags.iter().find(|t| matches!(t.as_str(), "skip" | "fixme"))?;
+            Some(runner::ScenarioResult::skip(s, sc, &format!("@{why}")))
+        })
+        .collect();
+    jobs.retain(|j| {
+        let (_, sc) = j.get(&suites);
+        !sc.tags.iter().any(|t| matches!(t.as_str(), "skip" | "fixme"))
+    });
+    // A run of `http` and `exec` scenarios alone starts no browser.
+    let browser = jobs.iter().any(|j| {
+        let (s, sc) = j.get(&suites);
+        s.job_needs_browser(sc)
+    });
+    let mut args = args;
+    // A `pause` step stops the run for a look: one worker, and a browser a
+    // second navigera session can attach to.
+    let pausing = jobs.iter().any(|j| {
+        let (s, sc) = j.get(&suites);
+        s.has_pause(sc)
+    });
+    args.opts.pause_step = pausing;
     // The browser starts while the app does (a `[server]` can take seconds to
     // answer; the browser needs about one): the same browser, launched sooner.
     // Without a `[server]` there is nothing to overlap, and the worker
     // launches it itself.
-    let mut early = EarlyBrowser((args.server.is_some() && args.opts.engine != "lightpanda").then(|| {
+    let mut early = EarlyBrowser((browser && args.server.is_some() && args.opts.engine != "lightpanda").then(|| {
         let opts = args.opts.clone();
         std::thread::spawn(move || {
             phase("early browser: launching");
@@ -793,8 +874,7 @@ fn run(args: Args) -> ExitCode {
     if opts.base.is_none() {
         opts.base = suites.iter().find_map(|s| s.base.clone());
     }
-    let mut jobs = planned(&suites, &args);
-    if jobs.is_empty() {
+    if jobs.is_empty() && skipped.is_empty() {
         eprintln!("no scenario matches");
         return ExitCode::from(2);
     }
@@ -826,7 +906,10 @@ fn run(args: Args) -> ExitCode {
     if opts.attach.is_some() && args.workers > 1 {
         eprintln!("primavera: --attach runs in the one browser it attached to: --workers {} becomes 1", args.workers);
     }
-    let one = opts.pause || opts.electron.is_some() || opts.attach.is_some();
+    if pausing && args.workers > 1 {
+        eprintln!("primavera: a `pause` step waits for Enter: --workers {} becomes 1", args.workers);
+    }
+    let one = opts.pause || pausing || opts.electron.is_some() || opts.attach.is_some();
     let workers = if one { 1 } else { args.workers.min(jobs.len()).max(1) };
     let hooks = Hooks::new(&suites, &jobs);
     // One browser, a context per worker (`--isolation context`, the
@@ -839,7 +922,7 @@ fn run(args: Args) -> ExitCode {
         r
     });
     // (One worker needs no sharing: its own browser is the one browser.)
-    if args.isolation == "context" && workers > 1 && opts.engine != "lightpanda" {
+    if browser && args.isolation == "context" && workers > 1 && opts.engine != "lightpanda" {
         match early_runner.take().map(Ok).unwrap_or_else(|| runner::Runner::launch(opts.clone())) {
             Ok(r) => {
                 for slot in forks.iter_mut() {
@@ -862,12 +945,17 @@ fn run(args: Args) -> ExitCode {
     let (tx, rx) = mpsc::channel::<Event>();
     let mut results: Vec<runner::ScenarioResult> = Vec::new();
     let mut launch_errors = Vec::new();
+    let failed = std::sync::atomic::AtomicUsize::new(0);
+    for r in skipped {
+        let _ = tx.send(Event::Done(Box::new(r)));
+    }
     std::thread::scope(|scope| {
         for (w, fork) in forks.into_iter().enumerate() {
             let tx = tx.clone();
             let (queue, suites, opts, hooks) = (&queue, &suites, &opts, &hooks);
+            let stop = Stop { max: args.max_failures, failed: &failed };
             let retries = args.retries;
-            scope.spawn(move || worker(w, fork, queue, suites, opts, hooks, retries, tx));
+            scope.spawn(move || worker(w, fork, queue, suites, opts, hooks, retries, stop, tx));
         }
         drop(tx);
         let mut out = std::io::stdout();
@@ -900,7 +988,11 @@ fn run(args: Args) -> ExitCode {
     phase("all scenarios done");
     drop(owner);
     let left = queue.lock().map(|q| q.len()).unwrap_or(0);
-    if left > 0 {
+    let stopped = args.max_failures.is_some_and(|m| failed.load(std::sync::atomic::Ordering::Relaxed) >= m);
+    if left > 0 && stopped && launch_errors.is_empty() {
+        let m = args.max_failures.unwrap_or(1);
+        eprintln!("{} not run: {} failed (--max-failures {m})", counted(left, "scenario"), counted(m, "scenario"));
+    } else if left > 0 {
         eprintln!("{}", runner::browser_failed(launch_errors.first().map(String::as_str).unwrap_or("?")));
         eprintln!("{} not run", counted(left, "scenario"));
         if results.is_empty() {
@@ -922,7 +1014,10 @@ fn run(args: Args) -> ExitCode {
         }
     }
     if console {
-        let line = report::summary(&results, ms);
+        let mut line = report::summary(&results, ms);
+        if !browser && !results.is_empty() {
+            line.push_str(" (no browser)");
+        }
         if jsonl {
             eprintln!("{line}");
         } else {
@@ -968,6 +1063,7 @@ fn run(args: Args) -> ExitCode {
         }
     }
     let failed = results.iter().any(|r| !r.passed()) || (args.fail_on_flaky && results.iter().any(|r| r.flaky()));
+    // Scenarios a `--max-failures` stop left out fail the run with the failures.
     if failed || left > 0 {
         ExitCode::from(1)
     } else {
@@ -988,13 +1084,54 @@ fn shuffle(jobs: &mut [runner::Job], seed: u64) {
     }
 }
 
-/// The scenarios this run takes: `--grep`, `--tag`, then `--shard` (every
-/// n-th, in file order, so the slices are the same on every machine).
-fn planned(suites: &[suite::Suite], args: &Args) -> Vec<runner::Job> {
-    let jobs = runner::jobs(suites, &args.opts);
-    match args.shard {
+/// The scenarios this run takes: `--grep`, `--grep-invert`, `--tag`,
+/// `--last-failed`, `@only`, then `--shard` (every n-th, in file order, so
+/// the slices are the same on every machine).
+fn planned(suites: &[suite::Suite], args: &Args) -> Result<Vec<runner::Job>, String> {
+    let mut jobs = runner::jobs(suites, &args.opts);
+    if args.last_failed {
+        let failed = fix::last_failed();
+        jobs.retain(|j| {
+            let (s, sc) = j.get(suites);
+            let file = std::path::absolute(&s.file).unwrap_or_else(|_| s.file.clone());
+            failed.iter().any(|(f, name)| *f == file && *name == sc.name)
+        });
+    }
+    let only: Vec<&runner::Job> = jobs.iter().filter(|j| j.get(suites).1.tags.iter().any(|t| t == "only")).collect();
+    if !only.is_empty() {
+        if args.forbid_only {
+            let list: Vec<String> = only
+                .iter()
+                .map(|j| {
+                    let (s, sc) = j.get(suites);
+                    format!("  {}:{}  {}", s.file.display(), sc.line, sc.name)
+                })
+                .collect();
+            return Err(format!(
+                "@only is on {} (a focus left in by mistake?); --forbid-only, on by itself under CI, refuses it (--allow-only to run just those):\n{}",
+                counted(list.len(), "scenario"),
+                list.join("\n")
+            ));
+        }
+        jobs.retain(|j| j.get(suites).1.tags.iter().any(|t| t == "only"));
+    }
+    Ok(match args.shard {
         Some((i, n)) => jobs.into_iter().enumerate().filter(|(k, _)| k % n == i - 1).map(|(_, j)| j).collect(),
         None => jobs,
+    })
+}
+
+/// `--max-failures`: how many may fail before no scenario starts, and how
+/// many have.
+#[derive(Clone, Copy)]
+struct Stop<'a> {
+    max: Option<usize>,
+    failed: &'a std::sync::atomic::AtomicUsize,
+}
+
+impl Stop<'_> {
+    fn reached(&self) -> bool {
+        self.max.is_some_and(|m| self.failed.load(std::sync::atomic::Ordering::Relaxed) >= m)
     }
 }
 
@@ -1087,27 +1224,29 @@ fn worker(
     opts: &runner::Options,
     hooks: &Hooks,
     retries: u32,
+    stop: Stop,
     tx: mpsc::Sender<Event>,
 ) {
-    // A context on the shared browser, else a browser of its own.
+    // A context on the shared browser, else a browser of its own, started
+    // when the first scenario that needs one comes.
     let mut browser: Option<runner::Runner> = fork;
     loop {
+        if stop.reached() {
+            return;
+        }
         let Some(job) = queue.lock().ok().and_then(|mut q| q.pop_front()) else { return };
-        if browser.is_none() {
-            match runner::Runner::launch(opts.clone()) {
-                Ok(r) => browser = Some(r),
-                Err(e) => {
-                    // Give the scenario back to a worker whose browser runs.
-                    if let Ok(mut q) = queue.lock() {
-                        q.push_front(job);
-                    }
-                    let _ = tx.send(Event::LaunchFailed(format!("{e:#}")));
-                    return;
+        let (suite, sc) = job.get(suites);
+        let r = browser.get_or_insert_with(|| runner::Runner::bare(opts.clone()));
+        if suite.job_needs_browser(sc) {
+            if let Err(e) = r.ensure_browser() {
+                // Give the scenario back to a worker whose browser runs.
+                if let Ok(mut q) = queue.lock() {
+                    q.push_front(job);
                 }
+                let _ = tx.send(Event::LaunchFailed(format!("{e:#}")));
+                return;
             }
         }
-        let Some(r) = browser.as_mut() else { return };
-        let (suite, sc) = job.get(suites);
         let job_rep = job.rep;
         r.rep = job_rep;
         let before = if suite.before_all.is_empty() {
@@ -1134,6 +1273,9 @@ fn worker(
         if job_rep > 0 {
             result.rep = job_rep;
             result.name = format!("{} #{job_rep}", result.name);
+        }
+        if !result.passed() {
+            stop.failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         if tx.send(Event::Done(Box::new(result))).is_err() {
             return;
@@ -1164,7 +1306,7 @@ impl Timings {
 
     fn save(results: &[runner::ScenarioResult]) {
         let mut all = Self::load();
-        for r in results {
+        for r in results.iter().filter(|r| r.skipped.is_none()) {
             all.insert(r.key(), (r.ms * 10.0).round() / 10.0);
         }
         if std::fs::create_dir_all(".primavera").is_ok() {
@@ -1217,8 +1359,14 @@ mod tests {
         let steps: String = blocks[1].lines().map(|l| format!("  {l}\n")).collect();
         let file = format!("scenario \"x\"\n  save total = get text --testid total\n{steps}");
         lints(&file).unwrap_or_else(|e| panic!("{e}\n{file}"));
+        // The API test, its schema beside it; it needs no browser.
+        assert!(blocks[2].starts_with("auth "), "{}", blocks[2]);
+        std::fs::write(dir.join("user.schema.json"), "{}").unwrap();
+        lints(blocks[2]).unwrap_or_else(|e| panic!("{e}\n{}", blocks[2]));
+        let api = suite::parse(&dir.join("skill.pv"), blocks[2]).unwrap();
+        assert!(!api.scenario_needs_browser(&api.scenarios[0]));
         // A `#` after a step is a word of it, not a comment.
-        for line in blocks[..2].iter().flat_map(|b| b.lines()) {
+        for line in blocks[..3].iter().flat_map(|b| b.lines()) {
             assert!(line.trim_start().starts_with('#') || !line.contains(" # "), "a comment after a step: {line}");
         }
     }

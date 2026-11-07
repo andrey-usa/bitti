@@ -129,8 +129,10 @@ pub fn render(text: &str, only: Option<usize>, dir: &Path) -> String {
         );
         // As the run printed it: the page and its title, the error in a .pv
         // file's terms (the trace keeps navigera's own text).
-        let here = crate::report::page_at(s["url"].as_str().unwrap_or(""), s["title"].as_str().unwrap_or(""));
-        if here != place || only.is_some() {
+        let url = s["url"].as_str().unwrap_or("");
+        let here = crate::report::page_at(url, s["title"].as_str().unwrap_or(""));
+        // A scenario with no browser has no page to be at.
+        if !url.is_empty() && (here != place || only.is_some()) {
             let _ = writeln!(out, "                    {here}");
             place = here;
         }

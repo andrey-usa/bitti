@@ -25,6 +25,10 @@ PASS  tests/shop.pv:7  Adding a product counts it in the cart  (557 ms)
 1 passed, 0 failed in 0.9 s
 ```
 
+API tests are `.pv` files too: a scenario of `http` steps and their
+checks runs with no browser at all, in milliseconds ([API tests without a
+browser](#api-tests-without-a-browser)).
+
 Status: pre-release. Everything below works in this build.
 
 ## The format
@@ -80,7 +84,10 @@ Status: pre-release. Everything below works in this build.
 - `print <command>` shows a read command's result in the run's output
   (`print get text --testid total`, `print eval "…"`, `print ax --selector
   main`): no check and no wait, for a look at the page or a value while a
-  test is being written.
+  test is being written. `print http` shows the last `http` answer (its
+  status, headers and body), `print body`, `print json <$.path>` and `print
+  header <name>` a part of it (JSON indented), and `print "order ${id}"`
+  a line with its variables filled in.
 - `exec [--timeout-ms <ms>] <program> <args…>` runs a program (no shell:
   `sh -c "…"` or `pwsh -c "…"` for one) in the `.pv` file's directory,
   with `PRIMAVERA_BASE_URL` set, for what a browser can't reach: seed a
@@ -98,14 +105,21 @@ Status: pre-release. Everything below works in this build.
     expect stdout contains SHIPPED
   ```
 - `http <METHOD> <url> [--json <text> | --body <text> | --json-file <f> |
-  --body-file <f>] [--header "Name: value"]… [--no-follow] [--insecure]
+  --body-file <f> | --form name=value… | --multipart name=value|name=@file…]
+  [--query name=value]… [--header "Name: value"]… [--no-follow] [--insecure]
   [--timeout-ms <ms>]` makes a
-  request outside the page (an API to set up or check what the UI did; a
-  relative URL takes the base URL). The scenario's cookies go with it and
+  request outside the page (an API to set up or check what the UI did, or
+  an API test of its own: see [API tests](#api-tests-without-a-browser); a
+  relative URL takes the base URL). `--form` sends an urlencoded form,
+  `--multipart` a `multipart/form-data` one (`@file` uploads the file beside
+  the `.pv`, `;type=image/png` after it sets its type), `--query` adds an
+  encoded `name=value` to the URL. The scenario's cookies go with it and
   the cookies it sets come back to the browser, so an API sign-in signs
-  the page in. Its answer is `${http.status}` and `${http.body}`; `expect
+  the page in. Its answer is `${http.status}`, `${http.body}` and
+  `${http.ms}` (how long it took); `expect
   status 201`, `expect json $.role is shopper`, `expect header Location
-  ends-with /u/1`, `expect body contains …` check it, and `save id = json
+  ends-with /u/1`, `expect body contains …`, `expect time < 300ms` check it,
+  and `save id = json
   $.id` (or `header <name>`) keeps a value. A 4xx or 5xx fails the step,
   with the start of the body, unless a step indented under it checks
   `status`; a timeout fails it whatever is under it. Redirects are followed
@@ -121,6 +135,24 @@ Status: pre-release. Everything below works in this build.
     expect json $.role is shopper
   save user = json $.id
   ```
+- `retry [--timeout-ms <ms>]` with steps indented under it runs them
+  again until all of them pass, a little later each time (0.1, 0.25, 0.5,
+  then every 1 s), for what happens in the background: a job that
+  finishes, an order that ships, a mail that is sent. Each `expect` in it
+  looks once (unless it says `--timeout-ms`): the block is the wait. It
+  gives up after its `--timeout-ms` (the run's expect timeout, 5 s, by
+  default) with the last try's failure.
+
+  ```text
+  retry --timeout-ms 20000
+    http GET /api/orders/${order}
+      expect json $.status is SHIPPED
+  ```
+- `pause` stops the run there, the browser as the steps before left it,
+  open to a second navigera session (the command to attach is printed),
+  until Enter; with no terminal it waits `PRIMAVERA_PAUSE_S` seconds, and
+  under CI not at all unless that is set. A run with a `pause` in it runs
+  one worker.
 - `flow name(a, b)` at the top level holds steps; `run name x y` runs them
   with `${a}` and `${b}` set. `use other.pv` takes another file's flows
   and `set`s. A failure inside a flow names the flow's own line.
@@ -178,7 +210,10 @@ Status: pre-release. Everything below works in this build.
 | `accessible` [`--selector <css>`] [`--tags wcag2a,wcag2aa,…`] [`--ignore <rule>,…`] | [axe-core](https://github.com/dequelabs/axe-core) (built in) finds no violation in the page, or under the selector: WCAG 2.0 and 2.1 A and AA by default; `--tags` replaces that set (`--tags wcag2a,wcag2aa,best-practice` to add axe's best practices); a failure names each rule, its impact, the first elements and what to fix |
 | `lcp`, `fcp`, `ttfb`, `load` `<`, `<=`, `>`, `>=` `<time>` (`2.5s`, `800ms`; a bare number is ms); `cls` + a comparison and a score (`0.1`) | a performance budget for the current page, as the browser measured it: largest and first contentful paint, time to first byte, the load event (ms from the navigation's start); the layout shift score (its largest session window, shifts after input left out). Not measured yet (the load event still to come) is retried |
 | `exit` [`is`] `<n>`, `stdout`/`stderr` + a comparison | what the last `exec` gave |
-| `status` [`is`] `<n>`, `body` + a comparison, `json <$.path>` [+ a comparison], `header <name>` [+ a comparison] | the last `http` answer |
+| `status` [`is`] `<n>`, `body` + a comparison, `json <$.path>` [+ a comparison], `header <name>` [+ a comparison] | the last `http` answer; a JSON object or array compared with `is` is compared as JSON (key order and `1` vs `1.0` don't matter), with `contains` as a part of it (`json $ contains '{"role": "shopper"}'`: the keys it names, at any depth; for an array, items that some item matches) |
+| `json <$.path> count` + a comparison | how many items the array (or keys the object) at the path has |
+| `json [<$.path>] schema <file.json>` | the answer (or the value at the path) is valid against a JSON Schema beside the `.pv`; a failure lists where it isn't (`$[1].price: expected number, got string "5"`). See [API tests](#api-tests-without-a-browser) for what it reads |
+| `time` `<`, `<=`, `>`, `>=` `<time>` (`300ms`, `1.5s`) | how long the last `http` exchange took, as curl timed it |
 | `ax [<target>] matches` + the tree indented under it | the page's (or the target's) accessibility tree, as `navigera ax` prints it, holds those lines: partially (`button` matches `button "Place order"`) and in order, a line indented under another inside what that one matched, refs ignored, `/regex/` (spaces allowed) for a name or a value |
 | `screenshot <name> [<target>]` [`--full-page`] [`--threshold 0.2`] [`--max-diff-pixels <n>` \| `--max-diff-ratio <r>`] [`--mask <css>`]… | the viewport (or the element, or the whole page) as its baseline shows it, pixel by pixel; see below |
 | `not …` | any of them, negated |
@@ -222,6 +257,69 @@ Status: pre-release. Everything below works in this build.
   \`- combobox "Country" value="Canada" options: …\``, the line as `ax`
   prints it).
 
+## API tests without a browser
+
+A scenario whose steps never touch a page (`http`, `exec`, their checks,
+checks of saved values and of cookies, `save … = json|header`, `print` of
+an answer, `retry`, `wait --ms`, a `flow` or an `auth` made of those) runs
+with no browser at all, and a run of only such scenarios starts none:
+nothing to install on the machine but curl, and each request costs a few
+milliseconds.
+
+```text
+base http://127.0.0.1:8000
+
+auth api
+  http POST /api/login --form user=ada --form "password=${secret:PW}"
+
+scenario "An order can be placed and ships" @api
+  as api
+  http POST /api/orders --json '{"sku": "sku-1", "qty": 2}'
+    expect status 201
+    expect json $ schema order.schema.json
+    expect time < 500ms
+  save order = json $.id
+  retry --timeout-ms 20000
+    http GET /api/orders/${order}
+      expect json $ contains '{"status": "SHIPPED", "items": [{"sku": "sku-1"}]}'
+```
+
+```console
+$ primavera run tests/api
+PASS  tests/api/orders.pv:6  An order can be placed and ships  (412 ms)
+1 passed, 0 failed in 415 ms (no browser)
+```
+
+- Such a scenario keeps its cookies the way a browser would (domain, path,
+  `Secure`, expiry; a cookie set on a redirect goes with the next hop):
+  what its sign-in sets goes with its later requests, and `expect cookie
+  sid` checks one.
+- An `auth` of `http` steps signs in with no browser too, and saves its
+  cookies in navigera's `state save` format: a browser scenario `as` the
+  same auth starts signed in, and an API scenario `as` an auth that signed
+  in through the page takes its cookies.
+- A failure shows the request and what came back:
+
+  ```text
+  FAIL  orders.pv:6  An order can be placed and ships  (31 ms)
+        line 10: expect json $ schema order.schema.json
+        expected json $ to match schema order.schema.json; it doesn't: $.total: expected number, got string "36.00"
+        last http: POST http://127.0.0.1:8000/api/orders -> 201 (9 ms, 61 B, application/json)
+          {"id": "ORD-7", "status": "NEW", "total": "36.00", "items": [...]}
+  ```
+- `--trace` records each step with the requests it made, and `--html`,
+  `--junit`, `--allure` report these scenarios as any other.
+- The schema check reads what an API's contract uses, in drafts 4 to
+  2020-12 alike: `type` (and OpenAPI 3.0's `nullable`), `enum`, `const`,
+  `properties`, `required`, `additionalProperties`, `patternProperties`,
+  `propertyNames`, `min/maxProperties`, `dependentRequired`, `items` (or a
+  list of them), `prefixItems`, `contains`, `min/maxItems`, `uniqueItems`,
+  `min/maxLength`, `pattern`, `format` (`date-time`, `date`, `time`,
+  `email`, `uuid`, `uri`, `ipv4`, `ipv6`), `minimum`/`maximum` and their
+  exclusive forms, `multipleOf`, `allOf`, `anyOf`, `oneOf`, `not`,
+  `if`/`then`/`else`, and `$ref` within the file (`#/$defs/…`,
+  `#/definitions/…`). Other keywords are ignored, as validators do.
+
 ## Gherkin
 
 `.feature` files run as they are, beside `.pv` files (no generated code):
@@ -264,9 +362,10 @@ scenario.
 ## Running
 
 ```text
-primavera run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--tag <tag>]
+primavera run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--grep-invert <text>]
+              [--tag <tag|expression>] [--last-failed] [--max-failures <n>|-x] [--forbid-only|--allow-only]
               [--workers <n|auto>|-j <n>] [--isolation context|browser] [--retries <n>] [--fail-on-flaky] [--shard <i/n>]
-              [--repeat <n>] [--shuffle [<seed>]]
+              [--repeat <n>] [--shuffle [<seed>]] [--slowmo <ms>]
               [--reporter console|jsonl|github] [--junit <file>] [--cucumber <file>] [--allure <dir>] [--html <file>] [--json]
               [--timeout-ms <ms>] [--wait-ms <ms>] [--headed] [--chromium <path>] [--engine chrome|lightpanda]
               [--electron <app> [--electron-arg <arg>]...] [--attach <port|ws://…>]
@@ -288,6 +387,26 @@ primavera --version
 
 `--base-url` falls back to `base` in the file, then `PRIMAVERA_BASE_URL`.
 `--workers auto` is half the CPUs, at most 8.
+
+- `--tag smoke` runs the scenarios tagged `@smoke`; a tag expression picks
+  by several, as Cucumber writes them: `--tag "smoke and not slow"`,
+  `--tag "(checkout or cart) and not wip"`. Repeated, any of them.
+  `--grep-invert <text>` leaves out the names that contain it.
+- Some tags say how a scenario runs: `@skip` and `@fixme` aren't run and
+  are reported as skipped (`SKIP`, JUnit `<skipped/>`, Allure `skipped`);
+  `@slow` gives each check three times its time; `@only` runs only the
+  scenarios that have it, a focus while working on one, and is an error
+  with `--forbid-only`, which is on by itself under CI (`CI` set), so a
+  focus left in by mistake doesn't pass a build on a few scenarios
+  (`--allow-only` runs just those anyway).
+- `--max-failures <n>` starts no scenario once n have failed (`-x`: at the
+  first), and says how many were not run; the run fails.
+- `--last-failed` (`--lf`) runs only the scenarios that failed in the last
+  run in this directory (`.primavera/last-run.json`); with none, it says
+  so and exits 0.
+- `--slowmo <ms>` waits that long before each step that acts on the page
+  (`goto`, `click`, `fill` …), to follow a `--headed` run by eye; checks
+  and `http` steps aren't slowed.
 
 - A click that opens a tab or a popup (`target=_blank`, `window.open`)
   moves the scenario to it, as navigera does: the next steps read and act
@@ -523,7 +642,8 @@ answers (any status under 500); its output goes to `.primavera/server.log`,
 and it is stopped with everything it started when the run ends. One that
 exits or doesn't answer in time ends the run with exit 3 and the end of its
 log. Other keys: `timeout_ms`, `wait_ms`, `isolation`, `fail_on_flaky`,
-`headed`; an unknown key is an error.
+`headed`, `slowmo`, `max_failures`, `forbid_only`; an unknown key is an
+error.
 
 ## GitHub Actions
 

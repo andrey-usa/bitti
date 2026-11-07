@@ -45,6 +45,9 @@ pub struct Options {
     /// navigera's element wait for steps (`--wait-ms`).
     pub wait_ms: Option<f64>,
     pub grep: Option<String>,
+    /// `--grep-invert`: names that contain it are left out.
+    pub grep_invert: Option<String>,
+    /// `--tag`s: tags or tag expressions; a scenario runs when any holds.
     pub tags: Vec<String>,
     /// Where failure evidence (a screenshot) goes.
     pub evidence: PathBuf,
@@ -71,6 +74,12 @@ pub struct Options {
     /// `--attach <port|ws://…>`: a browser or an Electron app that is
     /// already running with a DevTools port, instead of one launched here.
     pub attach: Option<String>,
+    /// `--slowmo <ms>`: wait this long before each step that acts on the
+    /// page, to watch a headed run.
+    pub slowmo: Option<u64>,
+    /// A `pause` step is in the run: the browser listens on a DevTools
+    /// port, for another navigera session to look at it.
+    pub pause_step: bool,
 }
 
 impl Options {
@@ -88,6 +97,7 @@ impl Options {
             expect_ms: 5000,
             wait_ms: None,
             grep: None,
+            grep_invert: None,
             tags: Vec::new(),
             evidence: PathBuf::from(format!(".primavera/runs/{stamp}")),
             run_id: format!("{stamp}-{}", std::process::id()),
@@ -100,6 +110,8 @@ impl Options {
             electron: None,
             electron_args: Vec::new(),
             attach: None,
+            slowmo: None,
+            pause_step: false,
         }
     }
 }
@@ -161,6 +173,8 @@ pub struct ScenarioResult {
     /// The directory holding this scenario's `trace.jsonl` and its per-step
     /// files, when a trace was kept.
     pub trace: Option<PathBuf>,
+    /// Not run, and why (`@skip`, `@fixme`): it neither passed nor failed.
+    pub skipped: Option<String>,
 }
 
 /// Now, in Unix milliseconds.
@@ -188,11 +202,36 @@ impl ScenarioResult {
             rep: 0,
             started: now_ms(),
             trace: None,
+            skipped: None,
         }
     }
 
+    /// Passed, or skipped: nothing failed.
     pub fn passed(&self) -> bool {
         self.failure.is_none()
+    }
+
+    /// A scenario that was not run (`@skip`, `@fixme`), with why.
+    pub fn skip(suite: &Suite, sc: &Scenario, why: &str) -> Self {
+        let mut r = ScenarioResult::failed(
+            suite,
+            sc.name.clone(),
+            sc.line,
+            sc.tags.clone(),
+            Failure {
+                line: sc.line,
+                text: String::new(),
+                message: String::new(),
+                at: None,
+                hint: None,
+                screenshot: None,
+                nearest: Vec::new(),
+                source: None,
+            },
+        );
+        r.failure = None;
+        r.skipped = Some(why.to_string());
+        r
     }
 
     pub fn flaky(&self) -> bool {
@@ -234,17 +273,20 @@ impl Job {
     }
 }
 
-/// Which scenarios a run takes, after `--grep` and `--tag`, in file order.
+/// Which scenarios a run takes, after `--grep`, `--grep-invert` and
+/// `--tag`, in file order.
 pub fn jobs(suites: &[Suite], opts: &Options) -> Vec<Job> {
     let mut out = Vec::new();
     for (si, suite) in suites.iter().enumerate() {
         for (ci, sc) in suite.scenarios.iter().enumerate() {
-            if let Some(g) = &opts.grep {
-                if !sc.name.to_lowercase().contains(&g.to_lowercase()) {
-                    continue;
-                }
+            let name = sc.name.to_lowercase();
+            if opts.grep.as_ref().is_some_and(|g| !name.contains(&g.to_lowercase())) {
+                continue;
             }
-            if !opts.tags.is_empty() && !opts.tags.iter().any(|t| sc.tags.contains(t)) {
+            if opts.grep_invert.as_ref().is_some_and(|g| name.contains(&g.to_lowercase())) {
+                continue;
+            }
+            if !opts.tags.is_empty() && !opts.tags.iter().any(|t| tag_expr(t, &sc.tags).unwrap_or(false)) {
                 continue;
             }
             out.push(Job { suite: si, scenario: ci, rep: 0 });
@@ -253,8 +295,78 @@ pub fn jobs(suites: &[Suite], opts: &Options) -> Vec<Job> {
     out
 }
 
+/// A `--tag`: one tag (`smoke`, `@smoke`), or an expression of tags with
+/// `and`, `or`, `not` and parentheses (`smoke and not slow`), as Cucumber
+/// writes them. Whether `tags` satisfy it, or what is wrong with it.
+pub fn tag_expr(expr: &str, tags: &[String]) -> Result<bool, String> {
+    let spaced = expr.replace('(', " ( ").replace(')', " ) ");
+    let words: Vec<&str> = spaced.split_whitespace().collect();
+    if words.is_empty() {
+        return Err("--tag needs a tag or a tag expression".into());
+    }
+    struct P<'a> {
+        w: Vec<&'a str>,
+        i: usize,
+        tags: &'a [String],
+        expr: &'a str,
+    }
+    impl P<'_> {
+        fn bad(&self, why: &str) -> String {
+            format!("--tag {:?}: {why} (tags with and, or, not and parentheses: \"smoke and not slow\")", self.expr)
+        }
+        fn or(&mut self) -> Result<bool, String> {
+            let mut v = self.and()?;
+            while self.w.get(self.i) == Some(&"or") {
+                self.i += 1;
+                v |= self.and()?;
+            }
+            Ok(v)
+        }
+        fn and(&mut self) -> Result<bool, String> {
+            let mut v = self.not()?;
+            while self.w.get(self.i) == Some(&"and") {
+                self.i += 1;
+                v &= self.not()?;
+            }
+            Ok(v)
+        }
+        fn not(&mut self) -> Result<bool, String> {
+            match self.w.get(self.i).copied() {
+                Some("not") => {
+                    self.i += 1;
+                    Ok(!self.not()?)
+                }
+                Some("(") => {
+                    self.i += 1;
+                    let v = self.or()?;
+                    if self.w.get(self.i) != Some(&")") {
+                        return Err(self.bad("a ( without its )"));
+                    }
+                    self.i += 1;
+                    Ok(v)
+                }
+                Some(w) if !matches!(w, "and" | "or" | ")") => {
+                    self.i += 1;
+                    let t = w.trim_start_matches('@');
+                    Ok(self.tags.iter().any(|x| x == t))
+                }
+                Some(w) => Err(self.bad(&format!("a tag expected before {w:?}"))),
+                None => Err(self.bad("it ends where a tag is expected")),
+            }
+        }
+    }
+    let mut p = P { w: words, i: 0, tags, expr };
+    let v = p.or()?;
+    if p.i < p.w.len() {
+        return Err(p.bad(&format!("{:?} after a whole expression (and or or between tags)", p.w[p.i])));
+    }
+    Ok(v)
+}
+
 pub struct Runner {
-    driver: Driver,
+    /// None until a scenario needs a browser: one that runs only `http`
+    /// and `exec` steps never starts one.
+    driver: Option<Driver>,
     /// What launched it: Lightpanda (one context per process) is launched
     /// again for each scenario.
     config: SessionConfig,
@@ -263,26 +375,54 @@ pub struct Runner {
     attempt: u32,
     /// Which of `--repeat`'s runs is under way (0 when not repeated).
     pub rep: u32,
+    /// The cookies of what runs with no browser (a scenario, a hook, an
+    /// `auth`): what its `http` answers set.
+    jar: crate::http::Jar,
+    /// What runs now needs no browser: cookies are the jar's, and a
+    /// failure has no page to show.
+    bare: bool,
 }
 
 impl Runner {
-    /// Start the browser. An error here is infrastructure, not a test result.
-    pub fn launch(opts: Options) -> anyhow::Result<Self> {
-        let config = SessionConfig {
+    fn session_config(opts: &Options) -> SessionConfig {
+        SessionConfig {
             headed: opts.headed,
             chromium: opts.chromium.clone(),
             engine: opts.engine.clone(),
             wait_ms: opts.wait_ms,
             // A pause leaves the browser to another navigera session: it
             // attaches over the DevTools port.
-            transport: opts.pause.then(|| "ws".to_string()),
+            transport: (opts.pause || opts.pause_step).then(|| "ws".to_string()),
             electron: opts.electron.clone(),
             electron_args: opts.electron_args.clone(),
             attach: opts.attach.clone(),
             ..SessionConfig::default()
-        };
-        let driver = Driver::launch(&config)?;
-        Ok(Runner { driver, config, opts, fresh: true, attempt: 1, rep: 0 })
+        }
+    }
+
+    /// Start the browser. An error here is infrastructure, not a test result.
+    pub fn launch(opts: Options) -> anyhow::Result<Self> {
+        let mut r = Runner::bare(opts);
+        r.driver = Some(Driver::launch(&r.config)?);
+        Ok(r)
+    }
+
+    /// A runner with no browser yet: the scenarios that need none never
+    /// start one, and the first that does starts it ([`Runner::ensure_browser`]).
+    pub fn bare(opts: Options) -> Self {
+        let config = Self::session_config(&opts);
+        Runner { driver: None, config, opts, fresh: true, attempt: 1, rep: 0, jar: Default::default(), bare: false }
+    }
+
+    /// The browser, started now if there is none yet. An error here is
+    /// infrastructure, as [`Runner::launch`]'s is.
+    pub fn ensure_browser(&mut self) -> anyhow::Result<()> {
+        if self.driver.is_none() {
+            self.driver = Some(Driver::launch(&self.config)?);
+            // A new browser is clean already.
+            self.fresh = true;
+        }
+        Ok(())
     }
 
     /// This run's settings, for a browser launched before they were final
@@ -291,47 +431,48 @@ impl Runner {
         self.opts = opts;
     }
 
-    /// The browser, as the last scenario left it.
-    pub fn driver(&mut self) -> &mut Driver {
-        &mut self.driver
+    /// The browser, as the last scenario left it (started now if there is
+    /// none yet).
+    pub fn driver(&mut self) -> anyhow::Result<&mut Driver> {
+        self.ensure_browser()?;
+        self.driver.as_mut().ok_or_else(|| anyhow::anyhow!("no browser"))
     }
 
     /// Another runner on this one's browser, in a browser context of its
-    /// own: a worker without a browser of its own.
+    /// own: a worker without a browser of its own. With no browser here,
+    /// one with none either.
     pub fn fork(&self) -> anyhow::Result<Self> {
-        Ok(Runner {
-            driver: self.driver.fork()?,
-            config: self.config.clone(),
-            opts: self.opts.clone(),
-            fresh: true,
-            attempt: 1,
-            rep: 0,
-        })
+        let mut r = Runner::bare(self.opts.clone());
+        r.config = self.config.clone();
+        if let Some(d) = &self.driver {
+            r.driver = Some(d.fork()?);
+        }
+        Ok(r)
     }
 
     /// A clean browser context for every scenario but the first one of
     /// the run (a new browser is clean already): no cookies, storage, tabs,
     /// routes, init scripts or `set` emulation from the one before.
     fn clean(&mut self, line: usize) -> Result<(), Box<Failure>> {
-        let fresh = std::mem::replace(&mut self.fresh, false);
-        if fresh {
-            return Ok(());
-        }
-        // An Electron app attached to (`--attach`) is the developer's own:
-        // it can't be started again, so the scenarios go on where the one
-        // before left it.
-        if self.config.attach.is_some() && self.driver.session().is_electron() {
-            return Ok(());
-        }
-        // Lightpanda has one context per process, and an Electron app's
-        // windows and storage are its own: a new one for each scenario.
-        let clean = if navigera::browser::is_lightpanda(&self.config.engine) || self.config.electron.is_some() {
-            Driver::launch(&self.config).map(|d| {
-                std::mem::replace(&mut self.driver, d).session().close();
-            })
-        } else {
-            self.driver.run_op(&Command::Reset { all: true }).map(|_| ())
-        };
+        let clean = self.ensure_browser().and_then(|()| {
+            let fresh = std::mem::replace(&mut self.fresh, false);
+            let Some(driver) = self.driver.as_mut() else { return Ok(()) };
+            // An Electron app attached to (`--attach`) is the developer's own:
+            // it can't be started again, so the scenarios go on where the one
+            // before left it.
+            if fresh || (self.config.attach.is_some() && driver.session().is_electron()) {
+                return Ok(());
+            }
+            // Lightpanda has one context per process, and an Electron app's
+            // windows and storage are its own: a new one for each scenario.
+            if navigera::browser::is_lightpanda(&self.config.engine) || self.config.electron.is_some() {
+                Driver::launch(&self.config).map(|d| {
+                    std::mem::replace(driver, d).session().close();
+                })
+            } else {
+                driver.run_op(&Command::Reset { all: true }).map(|_| ())
+            }
+        });
         clean.map_err(|e| {
             Box::new(Failure {
                 line,
@@ -355,15 +496,42 @@ impl Runner {
         file_vars: &BTreeMap<String, String>,
     ) -> ScenarioResult {
         self.attempt = attempt;
+        // `@slow`: three times the time for each check, as Playwright's
+        // `test.slow()` gives.
+        let slow = scenario.tags.iter().any(|t| t == "slow");
+        if slow {
+            self.opts.expect_ms *= 3;
+        }
+        let result = self.run_inner(suite, scenario, attempt, file_vars);
+        if slow {
+            self.opts.expect_ms /= 3;
+        }
+        result
+    }
+
+    fn run_inner(
+        &mut self,
+        suite: &Suite,
+        scenario: &Scenario,
+        attempt: u32,
+        file_vars: &BTreeMap<String, String>,
+    ) -> ScenarioResult {
         let started = Instant::now();
         let started_ms = now_ms();
         let mut scope = Scope::new(suite, &scenario.name, scenario.vars.clone(), &self.opts, file_vars);
         let mut steps = Vec::new();
-        let mut failure = self.clean(scenario.line).err().map(|f| *f);
-        // `expect screenshot`'s page-quiet clock, before the first goto:
-        // the per-scenario clean context dropped the one before.
-        let _ = self.command(&["init-script".into(), QUIET_CLOCK.into()]);
-        let downloads = if failure.is_none() { self.own_downloads(suite, &scenario.name) } else { None };
+        // Only `http`, `exec` and checks of what they answered: no browser,
+        // the cookies in a jar of the scenario's own.
+        let bare = !suite.scenario_needs_browser(scenario);
+        self.bare = bare;
+        self.jar = Default::default();
+        let mut failure = if bare { None } else { self.clean(scenario.line).err().map(|f| *f) };
+        if !bare {
+            // `expect screenshot`'s page-quiet clock, before the first goto:
+            // the per-scenario clean context dropped the one before.
+            let _ = self.command(&["init-script".into(), QUIET_CLOCK.into()]);
+        }
+        let downloads = if failure.is_none() && !bare { self.own_downloads(suite, &scenario.name) } else { None };
         let all: Vec<&Step> = suite.before_each.iter().chain(&scenario.steps).collect();
         let tracing = self.opts.trace != crate::trace::Trace::Off && failure.is_none();
         let mut trace: Vec<Value> = Vec::new();
@@ -373,7 +541,7 @@ impl Runner {
         let mut seen = (0usize, 0u64);
         // The last captured step's page fingerprint, its line and its file names.
         let mut last: Option<(String, usize, Option<Value>, Option<Value>)> = None;
-        if tracing {
+        if tracing && !bare {
             seen = (self.console_count(), self.last_request());
         }
         if failure.is_none() {
@@ -385,13 +553,22 @@ impl Runner {
                 let missed = res.is_ok() && scope.optional_missed;
                 steps.push(StepResult { line: step.line, text: step.text.clone(), ms, ok: res.is_ok(), missed });
                 if tracing {
-                    let mut tr = self.trace_step(step, ms, res.as_ref().err().map(String::as_str), &mut seen);
-                    self.step_files(trace.len(), step.line, res.is_err(), &mut last, &mut tr, &mut files);
+                    let error = res.as_ref().err().map(String::as_str);
+                    let mut tr = if bare {
+                        // The requests the step made, in the network column.
+                        let made = scope.exchanges[(seen.1 as usize).min(scope.exchanges.len())..].to_vec();
+                        seen.1 = scope.exchanges.len() as u64;
+                        crate::trace::step(step.line, &step.text, ms, error, Default::default(), Vec::new(), made)
+                    } else {
+                        let mut tr = self.trace_step(step, ms, error, &mut seen);
+                        self.step_files(trace.len(), step.line, res.is_err(), &mut last, &mut tr, &mut files);
+                        tr
+                    };
                     if missed {
                         tr["optional_missed"] = Value::Bool(true);
                     }
                     trace.push(tr);
-                    if res.is_err() {
+                    if res.is_err() && !bare {
                         ax_at_failure = match self.command(&["ax".into(), "--limit".into(), "0".into()]) {
                             Ok(Value::String(t)) => Some(t),
                             _ => None,
@@ -412,8 +589,8 @@ impl Runner {
             let message = format!("{n} soft expectation(s) didn't hold:\n{}", all.join("\n"));
             failure = Some(self.failure(&first, message, &scope, suite, &scenario.name));
         }
-        if let (true, Some(f)) = (self.opts.pause, &failure) {
-            self.pause(f, suite);
+        if let (true, Some(f), false) = (self.opts.pause, &failure, bare) {
+            self.pause(f.line, suite, "the failure left it");
         }
         // `after each` runs whatever happened; its own failures count only
         // when the scenario had passed.
@@ -440,6 +617,7 @@ impl Runner {
             rep: 0,
             started: started_ms,
             trace: None,
+            skipped: None,
         };
         let mask = scope.masker();
         if tracing && (self.opts.trace == crate::trace::Trace::All || result.failure.is_some()) {
@@ -502,7 +680,7 @@ impl Runner {
             .map(|i| if i == 1 { base.join("downloads") } else { base.join(format!("downloads-{i}")) })
             .find(|d| std::fs::read_dir(d).map_or(true, |mut e| e.next().is_none()))?;
         let cmd = parse(&["downloads".into(), "--dir".into(), dir.display().to_string()]).ok()?;
-        self.driver.run(&cmd).ok().map(|_| dir)
+        self.driver.as_mut()?.run(&cmd).ok().map(|_| dir)
     }
 
     /// A `before all` or `after all` block: in a clean context of its own;
@@ -515,8 +693,13 @@ impl Runner {
         file_vars: &BTreeMap<String, String>,
     ) -> Result<BTreeMap<String, String>, Box<Failure>> {
         let line = steps.first().map(|s| s.line).unwrap_or(0);
-        self.clean(line)?;
-        let downloads = self.own_downloads(suite, label);
+        let bare = !crate::suite::needs_browser(suite, steps);
+        self.bare = bare;
+        self.jar = Default::default();
+        if !bare {
+            self.clean(line)?;
+        }
+        let downloads = if bare { None } else { self.own_downloads(suite, label) };
         let mut scope = Scope::new(suite, label, BTreeMap::new(), &self.opts, file_vars);
         for step in steps {
             if let Err(message) = self.step(step, &mut scope, suite) {
@@ -530,16 +713,23 @@ impl Runner {
         Ok(scope.saved)
     }
 
-    /// The browser stays as the failure left it, open to another navigera
-    /// session, until Enter.
-    fn pause(&mut self, f: &Failure, suite: &Suite) {
-        // The tab itself, so the look is at the page the failure left.
-        let ws = self.driver.session().page_endpoint().unwrap_or_else(|| self.driver.session().endpoint());
-        eprintln!(
-            "PAUSED  {}:{}  the browser stays as the failure left it; look at it with\n        navigera -s pv start --attach {ws}\n        navigera -s pv ax\n        Enter goes on with the run (Ctrl-C stops it)",
-            suite.file.display(),
-            f.line
-        );
+    /// The browser stays as it is (`how`: as the failure left it), open to
+    /// another navigera session, until Enter.
+    fn pause(&mut self, line: usize, suite: &Suite, how: &str) {
+        match self.driver.as_ref().filter(|_| !self.bare) {
+            Some(driver) => {
+                // The tab itself, so the look is at the page as it is.
+                let ws = driver.session().page_endpoint().unwrap_or_else(|| driver.session().endpoint());
+                eprintln!(
+                    "PAUSED  {}:{line}  the browser stays as {how}; look at it with\n        navigera -s pv start --attach {ws}\n        navigera -s pv ax\n        Enter goes on with the run (Ctrl-C stops it)",
+                    suite.file.display(),
+                );
+            }
+            None => eprintln!(
+                "PAUSED  {}:{line}  (this scenario runs without a browser)\n        Enter goes on with the run (Ctrl-C stops it)",
+                suite.file.display(),
+            ),
+        }
         if enter(None).is_err() {
             // No one can press Enter: an agent looking from elsewhere gets
             // a while (PRIMAVERA_PAUSE_S, default 600 s); CI none.
@@ -559,7 +749,29 @@ impl Runner {
     }
 
     fn failure(&mut self, step: &Step, message: String, scope: &Scope, suite: &Suite, label: &str) -> Failure {
-        let at = self.driver.run(&Command::Url {}).ok().map(|v| {
+        // An API step's failure: the answer it was about says why.
+        let message = match scope.exchanges.last() {
+            // (A request that failed has said its status and body already.)
+            Some(last) if (self.bare || reads_answer(&step.action)) && !message.contains(" answered ") => {
+                let body = scope.saved.get("http.body").map(String::as_str).unwrap_or("").trim();
+                let body = if body.is_empty() { String::new() } else { format!("\n  {}", clip(body, 500)) };
+                format!("{message}\nlast http: {last}{body}")
+            }
+            _ => message,
+        };
+        if self.bare || self.driver.is_none() {
+            return Failure {
+                line: step.line,
+                text: step.text.clone(),
+                message: pv_terms(&message),
+                at: None,
+                hint: scope.noop.clone(),
+                screenshot: None,
+                nearest: Vec::new(),
+                source: scope.inner.clone().map(|(file, s)| (file, s.line, s.text)),
+            };
+        }
+        let at = self.driver.as_mut().and_then(|d| d.run(&Command::Url {}).ok()).map(|v| {
             (
                 v.get("url").and_then(Value::as_str).unwrap_or("").to_string(),
                 v.get("title").and_then(Value::as_str).unwrap_or("").to_string(),
@@ -570,7 +782,7 @@ impl Runner {
             .ok()
             .and_then(|_| {
                 let cmd = parse(&["screenshot".into(), "--path".into(), shot.display().to_string()]).ok()?;
-                self.driver.run(&cmd).ok()
+                self.driver.as_mut()?.run(&cmd).ok()
             })
             .map(|_| shot);
         // A step of a flow failed: what comes closest is to its element.
@@ -693,6 +905,17 @@ impl Runner {
         match action {
             Action::Command(words) => {
                 let words = scope.words(words)?;
+                if let [op, flag, ms] = words.as_slice() {
+                    if op == "wait" && flag == "--ms" && self.bare {
+                        let ms: u64 = ms.parse().map_err(|_| format!("wait --ms takes milliseconds, not {ms:?}"))?;
+                        std::thread::sleep(Duration::from_millis(ms));
+                        return Ok(());
+                    }
+                }
+                // `--slowmo`: a moment to watch each action happen.
+                if let Some(ms) = self.opts.slowmo.filter(|_| !self.bare) {
+                    std::thread::sleep(Duration::from_millis(ms));
+                }
                 let outcome = self.command(&words)?;
                 // A click that changed nothing explains a failure soon after.
                 scope.noop = outcome.get("no_effect").and_then(Value::as_str).map(|n| {
@@ -709,6 +932,15 @@ impl Runner {
                 let v = http_read(&read, scope)?
                     .ok_or_else(|| format!("the last http answer has no {}", command.join(" ")))?;
                 scope.saved.insert(name.clone(), v);
+                Ok(())
+            }
+            Action::Print(command) if crate::suite::print_reads_answer(command) || command[0].contains("${") => {
+                let text = if command[0].contains("${") {
+                    scope.words(command)?.join(" ")
+                } else {
+                    print_answer(&scope.words(command)?, scope)?
+                };
+                scope.notes.push(format!("{PRINTED}{}: {}", step.line, clip(&text, PRINT_MAX)));
                 Ok(())
             }
             Action::Print(command) => {
@@ -740,8 +972,9 @@ impl Runner {
                     scope.noop = None;
                     Ok(())
                 }
-                // Noted; the scenario goes on and fails at its end.
-                Err(m) if e.soft => {
+                // Noted; the scenario goes on and fails at its end (in a
+                // `retry`, it is a failure to try again on).
+                Err(m) if e.soft && !scope.retrying => {
                     scope.soft.push((step.clone(), m));
                     Ok(())
                 }
@@ -749,7 +982,46 @@ impl Runner {
             },
             Action::As(name) => {
                 let path = self.login(name, suite)?;
+                if self.bare {
+                    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+                    let state: Value = serde_json::from_str(&text)
+                        .map_err(|e| format!("{}: not a state file ({e})", path.display()))?;
+                    self.jar.load(&state, crate::http::unix_now());
+                    return Ok(());
+                }
                 self.command(&["state".into(), "load".into(), path.display().to_string()]).map(|_| ())
+            }
+            Action::Pause => {
+                self.pause(step.line, suite, "the steps before left it");
+                Ok(())
+            }
+            Action::Retry { timeout_ms, steps } => {
+                let limit = Duration::from_millis(timeout_ms.unwrap_or(self.opts.expect_ms));
+                let started = Instant::now();
+                let deadline = started + limit;
+                let was = std::mem::replace(&mut scope.retrying, true);
+                let mut tries = 0usize;
+                let result = loop {
+                    tries += 1;
+                    let mut res = Ok(());
+                    for st in steps {
+                        if let Err(e) = self.action(&st.action, st, scope, suite, depth) {
+                            res = Err(format!("line {} `{}`: {e}", st.line, st.text));
+                            break;
+                        }
+                    }
+                    let Err(e) = res else { break Ok(()) };
+                    // A little later each time, and one last try at the deadline.
+                    let wait = Duration::from_millis([100, 250, 500, 1000][(tries - 1).min(3)])
+                        .min(deadline.saturating_duration_since(Instant::now()));
+                    if wait.is_zero() {
+                        let secs = started.elapsed().as_secs_f64();
+                        break Err(format!("retry: still failing after {tries} tries in {secs:.1} s; the last: {e}"));
+                    }
+                    std::thread::sleep(wait);
+                };
+                scope.retrying = was;
+                result
             }
             Action::Handoff(until) => self.handoff(until.as_ref(), step, scope),
             Action::If { cond, steps } => {
@@ -782,7 +1054,21 @@ impl Runner {
                 }
                 Ok(())
             }
-            Action::Http { method, url, headers, body, body_file, json, timeout_ms, follow, insecure, steps } => {
+            Action::Http {
+                method,
+                url,
+                headers,
+                body,
+                body_file,
+                json,
+                timeout_ms,
+                follow,
+                insecure,
+                form,
+                multipart,
+                query,
+                steps,
+            } => {
                 let mut url = scope.word(url)?;
                 if url.starts_with('/') {
                     let base = self.opts.base.as_deref().ok_or_else(|| {
@@ -790,50 +1076,73 @@ impl Runner {
                     })?;
                     url = format!("{}{url}", base.trim_end_matches('/'));
                 }
+                let pairs = |ps: &[(String, String)], scope: &Scope| -> Result<Vec<(String, String)>, String> {
+                    ps.iter().map(|(k, v)| Ok((scope.word(k)?, scope.word(v)?))).collect()
+                };
+                let url = crate::http::with_query(&url, &pairs(query, scope)?);
                 let mut headers = scope.words(headers)?;
-                let body = match (body, body_file) {
-                    (Some(b), _) => Some(scope.word(b)?),
+                let payload = match (body, body_file) {
+                    (Some(b), _) => Some(crate::http::Body::Raw(scope.word(b)?)),
                     (None, Some(f)) => {
                         let f = scope.word(f)?;
-                        Some(std::fs::read_to_string(&f).map_err(|e| format!("http body file {f}: {e}"))?)
+                        let text = std::fs::read_to_string(&f).map_err(|e| format!("http body file {f}: {e}"))?;
+                        Some(crate::http::Body::Raw(text))
+                    }
+                    (None, None) if !form.is_empty() => Some(crate::http::Body::Form(pairs(form, scope)?)),
+                    (None, None) if !multipart.is_empty() => {
+                        Some(crate::http::Body::Multipart(pairs(multipart, scope)?))
                     }
                     (None, None) => None,
                 };
-                let has = |hs: &[String], name: &str| {
-                    hs.iter().any(|h| h.split(':').next().is_some_and(|k| k.trim().eq_ignore_ascii_case(name)))
-                };
-                if *json && !has(&headers, "content-type") {
+                if *json && !crate::http::has_header(&headers, "content-type") {
                     headers.push("Content-Type: application/json".into());
                 }
+                let now = crate::http::unix_now();
                 // The scenario's cookies go with it, unless it sets its own.
-                if !has(&headers, "cookie") {
-                    let jar = self.command(&["cookies".into(), "--url".into(), url.clone(), "--json".into()])?;
-                    let pairs: Vec<String> = jar
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|c| Some(format!("{}={}", c.get("name")?.as_str()?, c.get("value")?.as_str()?)))
-                        .collect();
-                    if !pairs.is_empty() {
-                        headers.push(format!("Cookie: {}", pairs.join("; ")));
+                if !crate::http::has_header(&headers, "cookie") {
+                    let cookie = if self.bare {
+                        self.jar.header(&url, now)
+                    } else {
+                        let jar = self.command(&["cookies".into(), "--url".into(), url.clone(), "--json".into()])?;
+                        let pairs: Vec<String> = jar
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|c| Some(format!("{}={}", c.get("name")?.as_str()?, c.get("value")?.as_str()?)))
+                            .collect();
+                        (!pairs.is_empty()).then(|| pairs.join("; "))
+                    };
+                    if let Some(c) = cookie {
+                        headers.push(format!("Cookie: {c}"));
                     }
                 }
                 let limit = Duration::from_millis(timeout_ms.unwrap_or(self.opts.expect_ms.max(30_000)));
                 let how = crate::http::How { follow: *follow, insecure: *insecure };
-                let r = crate::http::request(method, &url, &headers, body.as_deref(), limit, how)?;
-                // And what it sets comes back to the browser.
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs() as i64)
-                    .unwrap_or(0);
-                for v in &r.cookies {
-                    if let Some(words) = crate::http::cookie_words(v, &url, now) {
+                let r = crate::http::request(method, &url, &headers, payload.as_ref(), limit, how)?;
+                // And what it sets comes back: to the browser, or the jar.
+                for (v, at) in &r.cookies {
+                    if self.bare {
+                        self.jar.store(v, at, now);
+                    } else if let Some(words) = crate::http::cookie_words(v, at, now) {
                         self.command(&words)?;
                     }
                 }
                 scope.saved.insert("http.status".into(), r.status.to_string());
                 scope.saved.insert("http.body".into(), r.body.clone());
+                scope.saved.insert("http.ms".into(), format!("{}", (r.ms * 10.0).round() / 10.0));
                 scope.http_headers = r.headers.clone();
+                let kind = r
+                    .headers
+                    .iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+                    .map(|(_, v)| format!(", {}", v.split(';').next().unwrap_or(v).trim()))
+                    .unwrap_or_default();
+                scope.exchanges.push(format!(
+                    "{method} {url} -> {} ({:.0} ms, {} B{kind})",
+                    r.status,
+                    r.ms,
+                    r.body.len()
+                ));
                 let status = Subject::Var("${http.status}".into());
                 let checked = steps.iter().any(|s| matches!(&s.action, Action::Expect(e) if e.subject == status));
                 if r.status >= 400 && !checked {
@@ -913,7 +1222,16 @@ impl Runner {
         dir: &Path,
         path: PathBuf,
     ) -> Result<PathBuf, String> {
-        let mut aux = self.fork().map_err(|e| format!("auth {}: {e:#}", auth.name))?;
+        // An auth of `http` steps alone signs in with no browser: its jar's
+        // cookies are saved in the state format a browser loads too.
+        let api = !crate::suite::needs_browser(suite, &auth.steps);
+        let mut aux = if api {
+            let mut r = Runner::bare(self.opts.clone());
+            r.bare = true;
+            r
+        } else {
+            self.fork().map_err(|e| format!("auth {}: {e:#}", auth.name))?
+        };
         let label = format!("auth {}", auth.name);
         let mut scope = Scope::new(suite, &label, BTreeMap::new(), &self.opts, &BTreeMap::new());
         let file = auth.file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -922,7 +1240,12 @@ impl Runner {
                 .map_err(|e| scope.masker()(&format!("auth {}, {file}:{} `{}`: {e}", auth.name, st.line, st.text)))?;
         }
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        aux.command(&["state".into(), "save".into(), path.display().to_string()])?;
+        if api {
+            let state = aux.jar.state(crate::http::unix_now()).to_string();
+            std::fs::write(&path, state).map_err(|e| format!("{}: {e}", path.display()))?;
+        } else {
+            aux.command(&["state".into(), "save".into(), path.display().to_string()])?;
+        }
         // Signed-in cookies: for this user only.
         #[cfg(unix)]
         {
@@ -1023,7 +1346,14 @@ impl Runner {
         if matches!(cmd, Command::Quit { .. }) {
             return Err("`quit` isn't a step: the run closes the browser".into());
         }
-        self.driver.run_op(&cmd).map(|o| o.result).map_err(|e| format!("{e:#}"))
+        if self.bare {
+            return Err(format!(
+                "`{}` needs a browser, and this runs without one (only `http`, `exec` and their checks): a primavera bug, please report it",
+                words.join(" ")
+            ));
+        }
+        let driver = self.driver().map_err(|e| browser_failed(&format!("{e:#}")))?;
+        driver.run_op(&cmd).map(|o| o.result).map_err(|e| format!("{e:#}"))
     }
 
     /// `goto /cart` against the base URL.
@@ -1133,7 +1463,9 @@ impl Runner {
     }
 
     fn expect(&mut self, e: &Expect, scope: &mut Scope) -> Result<(), String> {
-        let limit = Duration::from_millis(e.timeout_ms.unwrap_or(self.opts.expect_ms));
+        // In a `retry`, the block is the wait: a check looks once.
+        let default_ms = if scope.retrying { 0 } else { self.opts.expect_ms };
+        let limit = Duration::from_millis(e.timeout_ms.unwrap_or(default_ms));
         let deadline = Instant::now() + limit;
         let value = scope.word(&e.value)?;
         let mut woken = false;
@@ -1842,6 +2174,13 @@ impl Runner {
                 let hit = texts.iter().any(|t| compare(t, e.matcher, value));
                 (hit, if texts.is_empty() { "no console messages".into() } else { texts.join(" | ") })
             }
+            Subject::Cookie(name) if self.bare => {
+                let name = scope.word(name)?;
+                match self.jar.get(&name, crate::http::unix_now()) {
+                    Some(c) => (compare(&c.value, e.matcher, value), c.value.clone()),
+                    None => (false, "no such cookie".into()),
+                }
+            }
             Subject::Cookie(name) => {
                 let name = scope.word(name)?;
                 let v = self.command(&["cookies".into(), "--all".into(), "--json".into()])?;
@@ -1881,9 +2220,28 @@ impl Runner {
             Subject::Screenshot(shot) => self.screenshot(shot, scope, left)?,
             Subject::Http(read) => match http_read(read, scope)? {
                 Some(actual) if e.matcher == Matcher::Holds => (actual != "null", actual),
+                Some(actual) if matches!(read, HttpRead::Json(_)) => {
+                    (crate::expect::compare_json(&actual, e.matcher, value), actual)
+                }
                 Some(actual) => (compare(&actual, e.matcher, value), actual),
                 None => (false, "absent".into()),
             },
+            Subject::JsonSchema { path, file } => {
+                let body = scope.saved.get("http.body").ok_or("no `http` answer yet: an `http` step goes first")?;
+                let doc: Value = serde_json::from_str(body).map_err(|e| format!("the answer isn't JSON ({e})"))?;
+                let at = crate::expect::json_value_at(&doc, &crate::expect::json_path(&scope.word(path)?)?);
+                let file = scope.word(file)?;
+                let text = std::fs::read_to_string(&file).map_err(|e| format!("schema {file}: {e}"))?;
+                let schema: Value =
+                    serde_json::from_str(&text).map_err(|e| format!("schema {file} isn't JSON ({e})"))?;
+                match at {
+                    None => (false, format!("nothing at {path}")),
+                    Some(v) => match crate::schema::validate(&schema, v) {
+                        Ok(()) => (true, "valid".into()),
+                        Err(errors) => (false, errors.join("; ")),
+                    },
+                }
+            }
             Subject::Errors => {
                 let v = self.command(&["errors".into(), "--json".into()])?;
                 let list = v.as_array().cloned().unwrap_or_default();
@@ -1972,7 +2330,9 @@ impl Runner {
 
 impl Drop for Runner {
     fn drop(&mut self) {
-        self.driver.session().close();
+        if let Some(d) = self.driver.as_mut() {
+            d.session().close();
+        }
     }
 }
 
@@ -2111,6 +2471,14 @@ pub(crate) fn parse(words: &[String]) -> Result<Command, String> {
 
 fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
     let not = if e.negate { "not " } else { "" };
+    if let Subject::JsonSchema { path, file } = &e.subject {
+        let name = Path::new(file).file_name().map_or(file.clone(), |n| n.to_string_lossy().into_owned());
+        return if e.negate {
+            format!("expected json {path} not to match schema {name}; it does")
+        } else {
+            format!("expected json {path} to match schema {name}; it doesn't: {actual}")
+        };
+    }
     if let Subject::Screenshot(s) = &e.subject {
         return format!(
             "expected screenshot {} {not}to match its baseline within {} ms: {actual}",
@@ -2172,7 +2540,12 @@ fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
         Subject::Metric(m) => m.clone(),
         Subject::Accessible { .. } => "accessible".to_string(),
         Subject::Http(HttpRead::Json(p)) => format!("json {p}"),
+        Subject::Http(HttpRead::Count(p)) => format!("json {p} count"),
         Subject::Http(HttpRead::Header(h)) => format!("header {h}"),
+        Subject::JsonSchema { path, file } => {
+            let name = Path::new(file).file_name().map_or(file.clone(), |n| n.to_string_lossy().into_owned());
+            format!("json {path} to match schema {name}")
+        }
         Subject::Target { flags, prop } => {
             let p = match prop {
                 Prop::State(s) => s.clone(),
@@ -2202,6 +2575,10 @@ fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
         _ if more > 0 => format!("saw {seen:?} ({more} more characters; a `print` step shows a value whole)"),
         _ => format!("saw {seen:?}"),
     };
+    // An answer that is read once (`http`, `exec`) isn't waited for.
+    if limit.is_zero() {
+        return format!("expected {not}{what}{want}; {seen}");
+    }
     format!("expected {not}{what}{want} within {} ms; {seen}", limit.as_millis())
 }
 
@@ -2349,6 +2726,16 @@ fn http_read(read: &HttpRead, scope: &Scope) -> Result<Option<String>, String> {
             let v: Value = serde_json::from_str(body).map_err(|e| format!("the answer isn't JSON ({e})"))?;
             crate::expect::json_at(&v, &path)
         }
+        HttpRead::Count(path) => {
+            let p = crate::expect::json_path(&scope.word(path)?)?;
+            let v: Value = serde_json::from_str(body).map_err(|e| format!("the answer isn't JSON ({e})"))?;
+            match crate::expect::json_value_at(&v, &p) {
+                Some(Value::Array(a)) => Some(a.len().to_string()),
+                Some(Value::Object(o)) => Some(o.len().to_string()),
+                Some(other) => return Err(format!("{path} is {other}, not an array or an object to count")),
+                None => None,
+            }
+        }
         HttpRead::Header(name) => {
             let name = scope.word(name)?;
             let found: Vec<&str> = scope
@@ -2360,6 +2747,59 @@ fn http_read(read: &HttpRead, scope: &Scope) -> Result<Option<String>, String> {
             (!found.is_empty()).then(|| found.join(", "))
         }
     })
+}
+
+/// `print http|body|json [<$.path>]|header <name>`: the last `http`
+/// answer, or a part of it; JSON pretty-printed.
+fn print_answer(words: &[String], scope: &Scope) -> Result<String, String> {
+    let body = scope.saved.get("http.body").ok_or("no `http` answer yet: an `http` step goes first")?;
+    let pretty = |text: &str| match serde_json::from_str::<Value>(text) {
+        Ok(v) if text.trim_start().starts_with(['{', '[']) => serde_json::to_string_pretty(&v).unwrap_or_default(),
+        _ => text.to_string(),
+    };
+    match words {
+        [w] if w == "http" => {
+            let status = scope.saved.get("http.status").cloned().unwrap_or_default();
+            let mut out = format!("{} {status}\n", scope.exchanges.last().map(String::as_str).unwrap_or(""));
+            for (k, v) in &scope.http_headers {
+                out.push_str(&format!("{k}: {v}\n"));
+            }
+            out.push('\n');
+            out.push_str(&pretty(body));
+            Ok(out)
+        }
+        [w] if w == "body" => Ok(pretty(body)),
+        [w] if w == "json" => Ok(pretty(body)),
+        [w, path] if w == "json" => {
+            let p = crate::expect::json_path(path)?;
+            let v: Value = serde_json::from_str(body).map_err(|e| format!("the answer isn't JSON ({e})"))?;
+            match crate::expect::json_value_at(&v, &p) {
+                Some(Value::String(s)) => Ok(s.clone()),
+                Some(v) => Ok(serde_json::to_string_pretty(v).unwrap_or_default()),
+                None => Ok(format!("(nothing at {path})")),
+            }
+        }
+        [w, name] if w == "header" => {
+            Ok(http_read(&HttpRead::Header(name.clone()), scope)?.unwrap_or_else(|| format!("(no {name} header)")))
+        }
+        _ => Err("print http, print body, print json [<$.path>] or print header <name>".into()),
+    }
+}
+
+/// Whether a step is about the last `http` answer: the request itself, or
+/// a check or a save of what it said.
+fn reads_answer(action: &Action) -> bool {
+    match action {
+        Action::Http { .. } | Action::Retry { .. } => true,
+        Action::Save { command, .. } => matches!(command.first().map(String::as_str), Some("json" | "header")),
+        Action::Expect(e) => match &e.subject {
+            Subject::Http(_) | Subject::JsonSchema { .. } => true,
+            Subject::Var(v) => v.starts_with("${http."),
+            _ => false,
+        },
+        Action::Optional(inner) => reads_answer(inner),
+        _ => false,
+    }
 }
 
 /// A command line as it could be typed again: words with spaces quoted.
@@ -2424,6 +2864,11 @@ struct Scope {
     inner: Option<(PathBuf, Step)>,
     /// An `optional` step just now didn't hold.
     optional_missed: bool,
+    /// Every `http` exchange so far, one line each (`POST <url> -> 201 (12
+    /// ms, 54 B, application/json)`): the trace's and a failure's.
+    exchanges: Vec<String>,
+    /// Inside a `retry`: a check looks once, and a `--soft` one fails.
+    retrying: bool,
 }
 
 impl Scope {
@@ -2452,6 +2897,8 @@ impl Scope {
             pv: suite.file.clone(),
             inner: None,
             optional_missed: false,
+            exchanges: Vec::new(),
+            retrying: false,
         };
         // A `set` value's own `${…}` (a default, `--var`, another `set`, a
         // secret, the environment) is filled in once, here; one that names
@@ -2638,5 +3085,20 @@ mod tests {
             "browser launch failed (engine=chrome, headed=false): no Chrome found — run `navigera install-browser`",
         );
         assert!(none.contains("`primavera navigera install-browser`") && !none.contains("engine="), "{none}");
+    }
+
+    #[test]
+    fn tag_expressions_read_as_cucumber_writes_them() {
+        let t = |tags: &[&str]| tags.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let smoke_slow = t(&["smoke", "slow"]);
+        assert!(tag_expr("smoke", &smoke_slow).unwrap());
+        assert!(tag_expr("@smoke", &smoke_slow).unwrap());
+        assert!(!tag_expr("smoke and not slow", &smoke_slow).unwrap());
+        assert!(tag_expr("not wip and (smoke or api)", &smoke_slow).unwrap());
+        assert!(tag_expr("api or slow and smoke", &smoke_slow).unwrap(), "and binds tighter");
+        assert!(!tag_expr("not (smoke or api)", &smoke_slow).unwrap());
+        for bad in ["", "smoke and", "(smoke", "smoke slow", "and smoke", "smoke)"] {
+            assert!(tag_expr(bad, &smoke_slow).is_err(), "{bad:?}");
+        }
     }
 }

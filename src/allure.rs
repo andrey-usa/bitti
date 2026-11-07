@@ -65,7 +65,13 @@ fn result(r: &ScenarioResult, feature: Option<&str>, id: &str) -> (Value, Option
         "testCaseId": format!("{:016x}", fnv(&format!("{file}\n{}", r.base_name()))),
         "fullName": format!("{file}: {}", r.name),
         "name": r.name,
-        "status": if r.passed() { "passed" } else { "failed" },
+        "status": if r.skipped.is_some() {
+            "skipped"
+        } else if r.passed() {
+            "passed"
+        } else {
+            "failed"
+        },
         "stage": "finished",
         "start": start,
         "stop": start + r.ms as u64,
@@ -146,6 +152,7 @@ mod tests {
             rep: 0,
             started: 1_700_000_000_000.0,
             trace: None,
+            skipped: None,
         }
     }
 

@@ -87,6 +87,13 @@ pub enum Subject {
     },
     /// The last `http` answer: a value in its JSON, or a header.
     Http(HttpRead),
+    /// `json [<$.path>] schema <file.json>`: the last `http` answer's JSON
+    /// (or the value at the path) is valid against a JSON Schema beside
+    /// the `.pv` (see [`crate::schema`]).
+    JsonSchema {
+        path: String,
+        file: String,
+    },
     /// `screenshot <name> [<target>]`: the page (or an element) as its
     /// baseline PNG beside the `.pv` file shows it.
     Screenshot(Shot),
@@ -171,6 +178,9 @@ impl Shot {
 pub enum HttpRead {
     /// `json <$.path>`.
     Json(String),
+    /// `json <$.path> count`: how many items the array (or keys the
+    /// object) at the path has.
+    Count(String),
     /// `header <name>` (any case).
     Header(String),
 }
@@ -267,8 +277,8 @@ pub enum JsonStep {
     Index(usize),
 }
 
-/// The value at a JSON path, as text: strings as they are, the rest as JSON.
-pub fn json_at(v: &serde_json::Value, path: &[JsonStep]) -> Option<String> {
+/// The value at a JSON path.
+pub fn json_value_at<'a>(v: &'a serde_json::Value, path: &[JsonStep]) -> Option<&'a serde_json::Value> {
     let mut cur = v;
     for st in path {
         cur = match st {
@@ -276,6 +286,12 @@ pub fn json_at(v: &serde_json::Value, path: &[JsonStep]) -> Option<String> {
             JsonStep::Index(i) => cur.get(*i)?,
         };
     }
+    Some(cur)
+}
+
+/// The value at a JSON path, as text: strings as they are, the rest as JSON.
+pub fn json_at(v: &serde_json::Value, path: &[JsonStep]) -> Option<String> {
+    let cur = json_value_at(v, path)?;
     Some(match cur {
         serde_json::Value::String(s) => s.clone(),
         other => other.to_string(),
@@ -406,7 +422,7 @@ fn parse_inner(words: &[String]) -> Result<Expect, String> {
         };
     }
     let first = words.first().cloned().ok_or(
-        "expect what? (url, title, text, a target, ${var}, js, request, cookie, storage, download, console, no errors, ax, screenshot, exit, stdout, stderr, status, body, json, header)",
+        "expect what? (url, title, text, a target, ${var}, js, request, cookie, storage, download, console, no errors, ax, screenshot, exit, stdout, stderr, status, body, json, header, time)",
     )?;
     // A subject with an optional comparison after it: present/truthy without
     // one, gone with `absent`.
@@ -449,14 +465,39 @@ fn parse_inner(words: &[String]) -> Result<Expect, String> {
                     format!("expect {first} needs a {}", if first == "json" { "$.path" } else { "header name" })
                 })?
                 .clone();
-            let read = if first == "json" {
+            // `expect json schema f.json`: the whole answer.
+            let (what, rest) =
+                if first == "json" && what == "schema" { ("$".to_string(), &words[1..]) } else { (what, &words[2..]) };
+            if first == "json" && rest.first().map(String::as_str) == Some("schema") {
                 json_path(&what)?;
-                HttpRead::Json(what)
+                let [_, file] = rest else {
+                    return Err("expected `expect json [<$.path>] schema <file.json>`".into());
+                };
+                (Subject::JsonSchema { path: what, file: file.clone() }, Matcher::Holds, String::new())
+            } else if first == "json" && rest.first().map(String::as_str) == Some("count") {
+                json_path(&what)?;
+                let (m, v) = tail(&rest[1..], "count")?;
+                (Subject::Http(HttpRead::Count(what)), m, v)
             } else {
-                HttpRead::Header(what)
-            };
-            let (m, v) = optional_tail(&words[2..], &first)?;
-            (Subject::Http(read), m, v)
+                let read = if first == "json" {
+                    json_path(&what)?;
+                    HttpRead::Json(what)
+                } else {
+                    HttpRead::Header(what)
+                };
+                let (m, v) = optional_tail(rest, &first)?;
+                (Subject::Http(read), m, v)
+            }
+        }
+        // How long the last `http` exchange took.
+        "time" => {
+            timeout_ms = Some(timeout_ms.unwrap_or(0));
+            let (m, v) = tail(&words[1..], "time")?;
+            if !matches!(m, Matcher::Lt | Matcher::Le | Matcher::Gt | Matcher::Ge) {
+                return Err("expect time takes <, <=, > or >= and a time (`expect time < 500ms`)".into());
+            }
+            let v = if v.contains("${") { v } else { metric_value("time", &v)? };
+            (Subject::Var("${http.ms}".into()), m, v)
         }
         "screenshot" => {
             let usage = "expect screenshot <name> [<target>] [--full-page] [--threshold 0.2] [--max-diff-pixels <n>] [--max-diff-ratio <r>] [--mask <css>]…";
@@ -793,6 +834,47 @@ pub fn compare(actual: &str, m: Matcher, expected: &str) -> bool {
     }
 }
 
+/// `compare` for a value read from JSON: an object or an array written as
+/// JSON is compared as JSON, `is` whole (key order and `1` vs `1.0` aside)
+/// and `contains` as a part of it (the keys it names, with values that
+/// match the same way; for an array, items that some item matches).
+/// Anything else is compared as text.
+pub fn compare_json(actual: &str, m: Matcher, expected: &str) -> bool {
+    let structured = |s: &str| {
+        let t = s.trim_start();
+        (t.starts_with('{') || t.starts_with('[')).then(|| serde_json::from_str::<serde_json::Value>(s).ok()).flatten()
+    };
+    match (m, structured(expected), serde_json::from_str::<serde_json::Value>(actual)) {
+        (Matcher::Is, Some(want), Ok(got)) => json_equal(&got, &want),
+        (Matcher::Contains, Some(want), Ok(got)) => json_contains(&got, &want),
+        _ => compare(actual, m, expected),
+    }
+}
+
+fn json_equal(a: &serde_json::Value, b: &serde_json::Value) -> bool {
+    use serde_json::Value::*;
+    match (a, b) {
+        (Number(x), Number(y)) => x.as_f64() == y.as_f64(),
+        (Array(x), Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| json_equal(p, q)),
+        (Object(x), Object(y)) => {
+            x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| json_equal(v, w)))
+        }
+        _ => a == b,
+    }
+}
+
+/// Whether `got` holds everything `want` says.
+fn json_contains(got: &serde_json::Value, want: &serde_json::Value) -> bool {
+    use serde_json::Value::*;
+    match (got, want) {
+        (Object(g), Object(w)) => w.iter().all(|(k, v)| g.get(k).is_some_and(|gv| json_contains(gv, v))),
+        (Array(g), Array(w)) => w.iter().all(|wv| g.iter().any(|gv| json_contains(gv, wv))),
+        // `[…] contains {…}`: one of its items does.
+        (Array(g), Object(_)) => g.iter().any(|gv| json_contains(gv, want)),
+        _ => json_equal(got, want),
+    }
+}
+
 impl Matcher {
     pub fn word(self) -> &'static str {
         match self {
@@ -992,5 +1074,47 @@ mod tests {
         assert!(!compare("abc", Matcher::Gt, "3"));
         assert!(compare("ORD-123", Matcher::Matches, "^ORD-[0-9]+$"));
         assert!(compare("http://x/cart", Matcher::EndsWith, "/cart"));
+    }
+
+    #[test]
+    fn json_counts_schemas_and_times() {
+        let w = |s: &str| crate::suite::tokenize(s).unwrap();
+        let e = parse(&w("json $.items count >= 2")).unwrap();
+        assert_eq!(
+            (e.subject, e.matcher, e.value.as_str()),
+            (Subject::Http(HttpRead::Count("$.items".into())), Matcher::Ge, "2")
+        );
+        let e = parse(&w("json $.user schema user.json")).unwrap();
+        assert_eq!(e.subject, Subject::JsonSchema { path: "$.user".into(), file: "user.json".into() });
+        let e = parse(&w("json schema all.json")).unwrap();
+        assert_eq!(e.subject, Subject::JsonSchema { path: "$".into(), file: "all.json".into() });
+        let e = parse(&w("time < 1.5s")).unwrap();
+        assert_eq!((e.subject, e.value.as_str(), e.timeout_ms), (Subject::Var("${http.ms}".into()), "1500", Some(0)));
+        assert_eq!(parse(&w("time <= 800ms")).unwrap().value, "800");
+        assert!(parse(&w("time is 5")).is_err());
+        assert!(parse(&w("json $.a schema")).is_err());
+    }
+
+    #[test]
+    fn json_values_compare_as_json() {
+        let got = r#"{"role":"shopper","address":{"city":"Oslo","zip":"0150"},"tags":["a","b"],"n":2}"#;
+        assert!(compare_json(
+            got,
+            Matcher::Is,
+            r#"{"n": 2.0, "tags": ["a", "b"], "address": {"zip": "0150", "city": "Oslo"}, "role": "shopper"}"#
+        ));
+        assert!(!compare_json(got, Matcher::Is, r#"{"role": "shopper"}"#));
+        assert!(compare_json(got, Matcher::Contains, r#"{"address": {"city": "Oslo"}, "tags": ["b"]}"#));
+        assert!(!compare_json(got, Matcher::Contains, r#"{"address": {"city": "Bergen"}}"#));
+        let list = r#"[{"sku":"a","qty":1},{"sku":"b","qty":2}]"#;
+        assert!(compare_json(list, Matcher::Contains, r#"{"sku": "b"}"#));
+        assert!(compare_json(list, Matcher::Contains, r#"[{"qty": 2}, {"sku": "a"}]"#));
+        assert!(
+            !compare_json(list, Matcher::Is, r#"[{"sku":"b","qty":2},{"sku":"a","qty":1}]"#),
+            "order counts for is"
+        );
+        // Text stays text.
+        assert!(compare_json("shopper", Matcher::Contains, "shop"));
+        assert!(compare_json("[1, 2]", Matcher::Contains, "1, 2"));
     }
 }

@@ -1,0 +1,44 @@
+# Scenarios of `http` steps and their checks alone: no browser starts.
+
+auth api-user
+  http POST /api/login --form user=ada --form "password=${secret:PV_TEST_PW}"
+
+scenario "Sign in with a form, and the cookie goes with the next call" @api
+  http POST /api/login --form user=ada --form "password=${secret:PV_TEST_PW}"
+    expect status 200
+  expect cookie sid is api
+  http GET /api/profile
+    expect status 200
+    expect json $.email is ada@example.com
+    expect json $ contains '{"role": "shopper", "address": {"city": "Oslo"}}'
+    expect json $.tags is '["a", "b"]'
+    expect json $.tags count is 2
+    expect json $ schema profile.schema.json
+    expect time < 5s
+  print json $.address
+  print "signed in as ${http.status}"
+
+scenario "A query is encoded" @api
+  http GET /api/search --query "q=red shoes & socks" --query n=2
+  expect json $ is '{"n": 2.0, "q": "red shoes & socks"}'
+
+scenario "A multipart upload" @api
+  http POST /api/upload --multipart note=hello --multipart "file=@upload.txt;type=text/plain"
+  expect json $.fields.note is hello
+  expect json $.files.file contains '{"filename": "upload.txt", "size": 6, "type": "text/plain"}'
+
+scenario "A job that finishes in the background" @api
+  http POST /api/jobs
+    expect status 202
+  save job = json $.id
+  retry --timeout-ms 5000
+    http GET /api/jobs/${job}
+      expect json $.status is done
+
+scenario "Signed in by an auth of http steps" @api
+  as api-user
+  http GET /api/profile
+  expect json $.id is 7
+
+scenario "Not written yet" @fixme
+  http GET /api/nowhere

@@ -1,7 +1,9 @@
 """A small site for primavera's own tests: `/flaky` fails its first visit
 and passes after, `/late` shows its text after `?ms=`, `/m1` has what the
 newer expect subjects read, `/login` signs in (counted at `/logins`), and
-`/note?x=` records what `before/after all` did (`/notes`)."""
+`/note?x=` records what `before/after all` did (`/notes`); `/api/…` is the
+API `api.pv` tests with no browser."""
+import email
 import json
 import sys
 import time
@@ -12,6 +14,7 @@ VISITS = {"flaky": 0}
 LOGINS = [0]
 NOTES = []
 ORDERS = [0]
+JOBS = []
 
 M1 = """
 <div data-testid=toast>Saved order 7</div>
@@ -101,9 +104,38 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def sid(self):
+        return next((c.split("=", 1)[1] for c in (self.headers.get("Cookie") or "").split("; ") if c.startswith("sid=")), None)
+
     def do_POST(self):
         u = urlparse(self.path)
-        body = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode()
+        raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        body = raw.decode(errors="replace")
+        # The API a scenario with no browser tests (`api.pv`).
+        if u.path == "/api/login":
+            if self.headers.get("Content-Type") != "application/x-www-form-urlencoded":
+                return self.answer(415, '{"error": "send a form"}')
+            form = parse_qs(body)
+            if form.get("user") == ["ada"] and form.get("password") == ["hunter22"]:
+                LOGINS[0] += 1
+                return self.raw('{"ok": true}', "application/json", [("Set-Cookie", "sid=api; Path=/api; HttpOnly")])
+            return self.answer(403, '{"error": "wrong password"}')
+        if u.path == "/api/upload":
+            msg = email.message_from_bytes(b"Content-Type: " + self.headers.get("Content-Type", "").encode() + b"\r\n\r\n" + raw)
+            fields, files = {}, {}
+            for part in msg.walk():
+                name = part.get_param("name", header="content-disposition")
+                if not name:
+                    continue
+                data = part.get_payload(decode=True) or b""
+                if part.get_filename():
+                    files[name] = {"filename": part.get_filename(), "size": len(data), "type": part.get_content_type()}
+                else:
+                    fields[name] = data.decode()
+            return self.answer(200, json.dumps({"fields": fields, "files": files}))
+        if u.path == "/api/jobs":
+            JOBS.append(0)
+            return self.answer(202, json.dumps({"id": str(len(JOBS) - 1), "status": "pending"}))
         if u.path == "/api/order":
             ORDERS[0] += 1
             return self.raw('{"id": "ORD-7", "items": [{"sku": "sku-1", "qty": 2}], "total": 36}', "application/json")
@@ -148,6 +180,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.raw("id,name\n1,Ada\n", "text/csv", [("Content-Disposition", 'attachment; filename="report-2026.csv"')])
         if u.path == "/login":
             return self.page(LOGIN)
+        if u.path == "/api/profile":
+            if self.sid() != "api":
+                return self.answer(401, '{"error": "signed out"}')
+            return self.answer(200, json.dumps({"id": 7, "email": "ada@example.com", "role": "shopper",
+                                                "tags": ["a", "b"], "address": {"city": "Oslo", "zip": "0150"}}))
+        if u.path == "/api/search":
+            return self.answer(200, json.dumps({"q": q.get("q", [""])[0], "n": int(q.get("n", ["0"])[0])}))
+        if u.path.startswith("/api/jobs/"):
+            i = int(u.path.rsplit("/", 1)[1])
+            JOBS[i] += 1
+            return self.answer(200, json.dumps({"id": str(i), "status": "done" if JOBS[i] >= 3 else "pending"}))
+        if u.path == "/api/items":
+            return self.answer(200, '[{"sku": "a", "price": 9.99}, {"sku": "b", "price": "5"}]')
         if u.path == "/api/me":
             sid = next((c.split("=", 1)[1] for c in (self.headers.get("Cookie") or "").split("; ") if c.startswith("sid=")), None)
             return self.answer(200, json.dumps({"sid": sid})) if sid else self.answer(401, '{"error": "signed out"}')

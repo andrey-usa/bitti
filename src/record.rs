@@ -300,7 +300,7 @@ fn extend(
             f.line, scenario.name, f.message
         ));
     }
-    let driver = r.driver();
+    let driver = r.driver().map_err(|e| crate::runner::browser_failed(&format!("{e:#}")))?;
     run(driver, &["init-script", &recorder()])?;
     run(driver, &["eval", &format!("({}, 1)", recorder())])?;
     run(driver, &["console", "--clear"])?;

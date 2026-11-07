@@ -64,6 +64,10 @@ fn failure_lines(out: &mut String, f: &Failure, indent: &str, file: &Path) {
 /// it failed, and how the first try failed when it passed on a retry.
 pub fn console_line(r: &ScenarioResult) -> String {
     let mut out = String::new();
+    if let Some(why) = &r.skipped {
+        let _ = writeln!(out, "SKIP  {}:{}  {}  ({why})", rel(&r.file), r.line, r.name);
+        return out;
+    }
     let mark = if r.flaky() {
         "FLAKY"
     } else if r.passed() {
@@ -94,9 +98,11 @@ pub fn console_line(r: &ScenarioResult) -> String {
 pub fn summary(results: &[ScenarioResult], ms: f64) -> String {
     let failed = results.iter().filter(|r| !r.passed()).count();
     let flaky = results.iter().filter(|r| r.flaky()).count();
-    let passed = results.len() - failed - flaky;
+    let skipped = results.iter().filter(|r| r.skipped.is_some()).count();
+    let passed = results.len() - failed - flaky - skipped;
     let flaky = if flaky > 0 { format!(", {flaky} flaky") } else { String::new() };
-    format!("{passed} passed{flaky}, {failed} failed in {}", secs(ms))
+    let skipped = if skipped > 0 { format!(", {skipped} skipped") } else { String::new() };
+    format!("{passed} passed{flaky}{skipped}, {failed} failed in {}", secs(ms))
 }
 
 fn failure_json(f: &Failure) -> serde_json::Value {
@@ -117,7 +123,9 @@ fn failure_json(f: &Failure) -> serde_json::Value {
 /// JSON lines: one object per finished scenario (`event: scenario`), for an
 /// orchestrator or an agent reading the run as it goes.
 pub fn jsonl(r: &ScenarioResult) -> String {
-    let status = if r.flaky() {
+    let status = if r.skipped.is_some() {
+        "skipped"
+    } else if r.flaky() {
         "flaky"
     } else if r.passed() {
         "passed"
@@ -138,6 +146,7 @@ pub fn jsonl(r: &ScenarioResult) -> String {
         "retried": r.retried.iter().map(failure_json).collect::<Vec<_>>(),
         "saved": r.saved,
         "notes": r.notes,
+        "skipped": r.skipped,
     });
     format!("{v}\n")
 }
@@ -145,10 +154,12 @@ pub fn jsonl(r: &ScenarioResult) -> String {
 pub fn jsonl_summary(results: &[ScenarioResult], ms: f64) -> String {
     let failed = results.iter().filter(|r| !r.passed()).count();
     let flaky = results.iter().filter(|r| r.flaky()).count();
+    let skipped = results.iter().filter(|r| r.skipped.is_some()).count();
     let v = serde_json::json!({
         "event": "summary",
-        "passed": results.len() - failed - flaky,
+        "passed": results.len() - failed - flaky - skipped,
         "flaky": flaky,
+        "skipped": skipped,
         "failed": failed,
         "ms": ms.round(),
     });
@@ -207,10 +218,11 @@ pub fn junit(results: &[ScenarioResult], ms: f64) -> String {
         }
     }
     let failures = results.iter().filter(|r| !r.passed()).count();
+    let skipped = results.iter().filter(|r| r.skipped.is_some()).count();
     let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     let _ = writeln!(
         out,
-        "<testsuites name=\"primavera\" tests=\"{}\" failures=\"{failures}\" time=\"{:.3}\">",
+        "<testsuites name=\"primavera\" tests=\"{}\" failures=\"{failures}\" skipped=\"{skipped}\" time=\"{:.3}\">",
         results.len(),
         ms / 1000.0
     );
@@ -219,9 +231,10 @@ pub fn junit(results: &[ScenarioResult], ms: f64) -> String {
         let name = xml(&rel(file));
         let _ = writeln!(
             out,
-            "  <testsuite name=\"{name}\" tests=\"{}\" failures=\"{}\" time=\"{:.3}\">",
+            "  <testsuite name=\"{name}\" tests=\"{}\" failures=\"{}\" skipped=\"{}\" time=\"{:.3}\">",
             rs.len(),
             rs.iter().filter(|r| !r.passed()).count(),
+            rs.iter().filter(|r| r.skipped.is_some()).count(),
             rs.iter().map(|r| r.ms).sum::<f64>() / 1000.0
         );
         for r in rs {
@@ -233,6 +246,10 @@ pub fn junit(results: &[ScenarioResult], ms: f64) -> String {
                 r.ms / 1000.0
             );
             match &r.failure {
+                None if r.skipped.is_some() => {
+                    let why = r.skipped.as_deref().unwrap_or("");
+                    let _ = write!(out, ">\n      <skipped message=\"{}\"/>\n    </testcase>\n", xml(why));
+                }
                 None if r.flaky() => {
                     let first =
                         r.retried.first().map(|f| format!("line {}: {}", f.line, f.message)).unwrap_or_default();
@@ -488,7 +505,7 @@ fn href(target: &Path, base: &Path) -> String {
 /// and name, passes, runs.
 pub fn tally(results: &[ScenarioResult]) -> Vec<(String, u32, u32)> {
     let mut t: BTreeMap<String, (u32, u32)> = BTreeMap::new();
-    for r in results {
+    for r in results.iter().filter(|r| r.skipped.is_none()) {
         let e = t.entry(format!("{}  {}", r.file.display(), r.base_name())).or_default();
         e.1 += 1;
         if r.passed() {
@@ -527,6 +544,8 @@ pub fn html(results: &[ScenarioResult], ms: f64, report_dir: &Path) -> String {
             0
         } else if r.flaky() {
             1
+        } else if r.skipped.is_some() {
+            3
         } else {
             2
         }
@@ -537,6 +556,7 @@ pub fn html(results: &[ScenarioResult], ms: f64, report_dir: &Path) -> String {
         let (class, mark) = match rank(r) {
             0 => ("fail", "FAIL"),
             1 => ("flaky", "FLAKY"),
+            3 => ("skip", "SKIP"),
             _ => ("pass", "PASS"),
         };
         let open = if rank(r) < 2 { " open" } else { "" };
@@ -603,7 +623,7 @@ pub fn html(results: &[ScenarioResult], ms: f64, report_dir: &Path) -> String {
 
 const CSS: &str = "body{font:14px/1.4 system-ui,sans-serif;margin:16px;color:#1b1b1b;background:#fff}\
 h1{font-size:18px}details{border:1px solid #ccc;border-radius:4px;margin:6px 0;padding:4px 8px}\
-details.fail{border-left:4px solid #c62828}details.flaky{border-left:4px solid #e0a000}details.pass{border-left:4px solid #2e7d32}\
+details.fail{border-left:4px solid #c62828}details.flaky{border-left:4px solid #e0a000}details.pass{border-left:4px solid #2e7d32}details.skip{border-left:4px solid #9e9e9e}\
 summary{cursor:pointer}.dim{color:#666}.tag{color:#555;font-size:12px}code,pre{font:12px ui-monospace,monospace}\
 pre{white-space:pre-wrap;background:#f6f6f6;padding:6px}table{border-collapse:collapse;margin:6px 0}\
 td,th{border-bottom:1px solid #eee;padding:2px 8px;text-align:left;vertical-align:top}tr.bad td{background:#fdecea}tr.skip td{background:#fff6e0}\
@@ -659,6 +679,7 @@ mod tests {
             rep: 0,
             started: 0.0,
             trace: None,
+            skipped: None,
         };
         let fail = ScenarioResult {
             name: "Total & tax".into(),
@@ -717,6 +738,7 @@ mod tests {
             steps: vec![step(2, "goto /", 5.0, true), step(3, "click --text Pay", 20.0, false)],
             failure: Some(fail_case().failure.unwrap()),
             trace: Some(dir.clone()),
+            skipped: None,
             ..fail_case()
         };
         let h = html(std::slice::from_ref(&r), 30.0, &dir);
@@ -778,6 +800,7 @@ mod tests {
             rep: 0,
             started: 0.0,
             trace: None,
+            skipped: None,
         };
         let fail = ScenarioResult {
             name: "Total & tax".into(),
@@ -839,6 +862,7 @@ mod tests {
             rep: 0,
             started: 0.0,
             trace: None,
+            skipped: None,
         }
     }
 
@@ -863,6 +887,7 @@ mod tests {
             rep: 0,
             started: 0.0,
             trace: None,
+            skipped: None,
         };
         let out = console_line(&r);
         assert!(out.contains("\n  print, line 2:\n    49.55"), "{out}");

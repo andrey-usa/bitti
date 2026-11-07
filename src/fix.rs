@@ -33,6 +33,7 @@ pub fn save(results: &[ScenarioResult]) {
             let (file, line, text) = f.source.clone().unwrap_or_else(|| (r.file.clone(), f.line, f.text.clone()));
             json!({
                 "file": std::path::absolute(&file).unwrap_or(file),
+                "scenario_file": std::path::absolute(&r.file).unwrap_or_else(|_| r.file.clone()),
                 "scenario": r.name,
                 "line": line,
                 "text": text,
@@ -46,6 +47,29 @@ pub fn save(results: &[ScenarioResult]) {
     let _ = std::fs::create_dir_all(".primavera");
     let _ =
         std::fs::write(LAST_RUN, serde_json::to_string_pretty(&json!({ "failures": failures })).unwrap_or_default());
+}
+
+/// The scenarios the last run failed, as (absolute file, name): what
+/// `run --last-failed` takes. A repeated run's `name #k` is the scenario's
+/// name; a file's `(after all)` is no scenario.
+pub fn last_failed() -> Vec<(PathBuf, String)> {
+    let Some(v) = std::fs::read_to_string(LAST_RUN).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else {
+        return Vec::new();
+    };
+    v["failures"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|f| {
+            let file = PathBuf::from(f["scenario_file"].as_str().or(f["file"].as_str())?);
+            let name = f["scenario"].as_str()?;
+            let name = match name.rsplit_once(" #") {
+                Some((base, k)) if k.chars().all(|c| c.is_ascii_digit()) && !k.is_empty() => base,
+                _ => name,
+            };
+            (name != "(after all)").then(|| (file, name.to_string()))
+        })
+        .collect()
 }
 
 /// A word as the tokenizer reads it back.
