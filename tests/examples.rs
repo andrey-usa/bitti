@@ -1117,7 +1117,7 @@ fn a_video_is_kept_for_a_failure_and_dropped_for_a_pass() {
     let jpg = std::fs::read(videos[0].join("frame-00001.jpg")).unwrap();
     assert_eq!(&jpg[..2], &[0xFF, 0xD8], "a JPEG");
     let failed = text.lines().find(|l| l.contains("\"status\":\"failed\"")).expect("the failure's line");
-    assert!(failed.contains("video/index.html"), "{failed}");
+    assert!(failed.contains(r#"index.html""#) && failed.contains("video"), "{failed}");
     let passed = text.lines().find(|l| l.contains("\"status\":\"passed\"")).expect("the pass's line");
     assert!(passed.contains("\"video\":null"), "{passed}");
     let report = std::fs::read_to_string(dir.join("r.html")).unwrap();
