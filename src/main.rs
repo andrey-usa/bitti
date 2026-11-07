@@ -104,6 +104,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ("--html <file>", "also write the run as one HTML page (steps, times, failures with their screenshot)"),
     ("--json", "print what the scenarios saved, as one JSON object, at the end"),
     ("--timeout-ms <ms>", "how long an expect retries (default 5000)"),
+    ("--scenario-timeout-ms <ms>", "the most one scenario may take (its steps; hooks around it aside); @slow triples it"),
     ("--wait-ms <ms>", "how long a step waits for its element (default 5000)"),
     ("--headed", "show the browser"),
     ("--slowmo <ms>", "wait this long before each step that acts on the page (to watch a --headed run)"),
@@ -346,6 +347,11 @@ fn parse_args() -> Result<Args, String> {
             "--timeout-ms" => {
                 let v = val("--timeout-ms")?;
                 opts.expect_ms = v.parse().map_err(|_| format!("--timeout-ms takes milliseconds, not {v:?}"))?;
+            }
+            "--scenario-timeout-ms" => {
+                let v = val("--scenario-timeout-ms")?;
+                let ms: u64 = v.parse().map_err(|_| format!("--scenario-timeout-ms takes milliseconds, not {v:?}"))?;
+                opts.scenario_ms = (ms > 0).then_some(ms);
             }
             "--wait-ms" => {
                 let v = val("--wait-ms")?;

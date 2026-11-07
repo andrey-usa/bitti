@@ -429,6 +429,11 @@ primavera --version
 - `--last-failed` (`--lf`) runs only the scenarios that failed in the last
   run in this directory (`.primavera/last-run.json`); with none, it says
   so and exits 0.
+- `--scenario-timeout-ms <ms>` (`scenario_timeout_ms` in `primavera.toml`)
+  is the most one scenario's steps may take: no step starts once it is
+  up, and a step's wait (an `expect`, a `retry`, an `http` or `exec`, its
+  own `--timeout-ms` too) stops there, the failure saying so. `@slow`
+  triples it. Off by default.
 - `--slowmo <ms>` waits that long before each step that acts on the page
   (`goto`, `click`, `fill` …), to follow a `--headed` run by eye; checks
   and `http` steps aren't slowed.

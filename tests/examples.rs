@@ -1834,3 +1834,27 @@ fn a_scenario_controls_the_pages_clock() {
         assert!(out.contains("2 passed, 0 failed"), "workers {workers}: {out}");
     }
 }
+
+/// `--scenario-timeout-ms`: a scenario's steps stop when its time is up,
+/// a step's own `--timeout-ms` included; `@slow` gets three times as long.
+#[test]
+fn a_scenario_stops_when_its_time_is_up() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let started = std::time::Instant::now();
+    let (code, out) = primavera(&[
+        "run",
+        "tests/fixtures/timeout.pv",
+        "--base-url",
+        &site.1,
+        "--scenario-timeout-ms",
+        "1500",
+        "--workers",
+        "1",
+    ]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("2 passed, 1 failed"), "{out}");
+    assert!(out.contains("FAIL  tests/fixtures/timeout.pv:1  Waits longer than its scenario may"), "{out}");
+    assert!(out.contains("(the scenario's 1.5 s ran out in this step: --scenario-timeout-ms 1500)"), "{out}");
+    assert!(out.contains("PASS  tests/fixtures/timeout.pv:10  Slow, so three times the time"), "{out}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(15), "{:?}", started.elapsed());
+}

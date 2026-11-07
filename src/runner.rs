@@ -77,6 +77,9 @@ pub struct Options {
     /// `--slowmo <ms>`: wait this long before each step that acts on the
     /// page, to watch a headed run.
     pub slowmo: Option<u64>,
+    /// `--scenario-timeout-ms`: the most a scenario's steps may take. A
+    /// step starts only with time left, and waits no longer than what is.
+    pub scenario_ms: Option<u64>,
     /// A `pause` step is in the run: the browser listens on a DevTools
     /// port, for another navigera session to look at it.
     pub pause_step: bool,
@@ -111,6 +114,7 @@ impl Options {
             electron_args: Vec::new(),
             attach: None,
             slowmo: None,
+            scenario_ms: None,
             pause_step: false,
         }
     }
@@ -364,6 +368,9 @@ pub fn tag_expr(expr: &str, tags: &[String]) -> Result<bool, String> {
 }
 
 pub struct Runner {
+    /// When the scenario's `--scenario-timeout-ms` runs out: a step's own
+    /// wait is cut there.
+    cap: Option<Instant>,
     /// None until a scenario needs a browser: one that runs only `http`
     /// and `exec` steps never starts one.
     driver: Option<Driver>,
@@ -411,7 +418,17 @@ impl Runner {
     /// start one, and the first that does starts it ([`Runner::ensure_browser`]).
     pub fn bare(opts: Options) -> Self {
         let config = Self::session_config(&opts);
-        Runner { driver: None, config, opts, fresh: true, attempt: 1, rep: 0, jar: Default::default(), bare: false }
+        Runner {
+            cap: None,
+            driver: None,
+            config,
+            opts,
+            fresh: true,
+            attempt: 1,
+            rep: 0,
+            jar: Default::default(),
+            bare: false,
+        }
     }
 
     /// The browser, started now if there is none yet. An error here is
@@ -499,13 +516,14 @@ impl Runner {
         // `@slow`: three times the time for each check, as Playwright's
         // `test.slow()` gives.
         let slow = scenario.tags.iter().any(|t| t == "slow");
+        let (expect_ms, scenario_ms) = (self.opts.expect_ms, self.opts.scenario_ms);
         if slow {
             self.opts.expect_ms *= 3;
+            self.opts.scenario_ms = scenario_ms.map(|ms| ms * 3);
         }
         let result = self.run_inner(suite, scenario, attempt, file_vars);
-        if slow {
-            self.opts.expect_ms /= 3;
-        }
+        self.opts.expect_ms = expect_ms;
+        self.opts.scenario_ms = scenario_ms;
         result
     }
 
@@ -545,10 +563,34 @@ impl Runner {
             seen = (self.console_count(), self.last_request());
         }
         if failure.is_none() {
+            let budget = self.opts.scenario_ms.map(Duration::from_millis);
             for step in all {
                 let t = Instant::now();
                 scope.optional_missed = false;
+                // `--scenario-timeout-ms`: no step starts after the time is
+                // up, and none waits past it.
+                if let Some(b) = budget {
+                    if started.elapsed() >= b {
+                        let message = format!(
+                            "the scenario ran out of time before this step: {} s (--scenario-timeout-ms {})",
+                            secs(b),
+                            b.as_millis()
+                        );
+                        failure = Some(self.failure(step, message, &scope, suite, &scenario.name));
+                        break;
+                    }
+                }
+                self.cap = budget.map(|b| started + b);
                 let res = self.step(step, &mut scope, suite);
+                self.cap = None;
+                let res = match (res, budget) {
+                    (Err(m), Some(b)) if started.elapsed() >= b => Err(format!(
+                        "{m}\n(the scenario's {} s ran out in this step: --scenario-timeout-ms {})",
+                        secs(b),
+                        b.as_millis()
+                    )),
+                    (res, _) => res,
+                };
                 let ms = t.elapsed().as_secs_f64() * 1000.0;
                 let missed = res.is_ok() && scope.optional_missed;
                 steps.push(StepResult { line: step.line, text: step.text.clone(), ms, ok: res.is_ok(), missed });
@@ -889,6 +931,14 @@ impl Runner {
         ))
     }
 
+    /// `d`, or less: no more than the scenario has left.
+    fn capped(&self, d: Duration) -> Duration {
+        match self.cap {
+            Some(c) => d.min(c.saturating_duration_since(Instant::now()).max(Duration::from_millis(1))),
+            None => d,
+        }
+    }
+
     fn step(&mut self, step: &Step, scope: &mut Scope, suite: &Suite) -> Result<(), String> {
         scope.inner = None;
         self.action(&step.action, step, scope, suite, 0)
@@ -996,7 +1046,7 @@ impl Runner {
                 Ok(())
             }
             Action::Retry { timeout_ms, steps } => {
-                let limit = Duration::from_millis(timeout_ms.unwrap_or(self.opts.expect_ms));
+                let limit = self.capped(Duration::from_millis(timeout_ms.unwrap_or(self.opts.expect_ms)));
                 let started = Instant::now();
                 let deadline = started + limit;
                 let was = std::mem::replace(&mut scope.retrying, true);
@@ -1035,7 +1085,7 @@ impl Runner {
             }
             Action::Exec { argv, timeout_ms, dir, steps } => {
                 let argv = scope.words(argv)?;
-                let limit = Duration::from_millis(timeout_ms.unwrap_or(60_000));
+                let limit = self.capped(Duration::from_millis(timeout_ms.unwrap_or(60_000)));
                 let (code, out, err) = run_program(&argv, dir, limit, self.opts.base.as_deref())?;
                 scope.saved.insert("exec.exit".into(), code.to_string());
                 scope.saved.insert("exec.stdout".into(), out.trim_end_matches(['\n', '\r']).to_string());
@@ -1126,7 +1176,7 @@ impl Runner {
                         headers.push(format!("Cookie: {c}"));
                     }
                 }
-                let limit = Duration::from_millis(timeout_ms.unwrap_or(self.opts.expect_ms.max(30_000)));
+                let limit = self.capped(Duration::from_millis(timeout_ms.unwrap_or(self.opts.expect_ms.max(30_000))));
                 let how = crate::http::How { follow: *follow, insecure: *insecure };
                 let r = crate::http::request(method, &url, &headers, payload.as_ref(), limit, how)?;
                 // And what it sets comes back: to the browser, or the jar.
@@ -1475,7 +1525,7 @@ impl Runner {
     fn expect(&mut self, e: &Expect, scope: &mut Scope) -> Result<(), String> {
         // In a `retry`, the block is the wait: a check looks once.
         let default_ms = if scope.retrying { 0 } else { self.opts.expect_ms };
-        let limit = Duration::from_millis(e.timeout_ms.unwrap_or(default_ms));
+        let limit = self.capped(Duration::from_millis(e.timeout_ms.unwrap_or(default_ms)));
         let deadline = Instant::now() + limit;
         let value = scope.word(&e.value)?;
         let mut woken = false;
@@ -3112,6 +3162,16 @@ fn enter(wait: Option<Duration>) -> Result<bool, ()> {
 /// Running under CI: `CI` set to anything but empty, `false` or `0`.
 pub fn under_ci() -> bool {
     std::env::var("CI").is_ok_and(|v| !matches!(v.trim(), "" | "false" | "0"))
+}
+
+/// Seconds, as a person reads a limit: `30`, `1.5`.
+fn secs(d: Duration) -> String {
+    let s = d.as_secs_f64();
+    if s.fract() == 0.0 {
+        format!("{s:.0}")
+    } else {
+        format!("{s:.1}")
+    }
 }
 
 #[cfg(test)]

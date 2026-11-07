@@ -23,6 +23,8 @@ The first release, still to be named.
 - `clock` steps (navigera's): a page's dates and timers start at a given
   time, paused or flowing, and run forward on command, so a session
   timeout or a countdown is tested in milliseconds.
+- `--scenario-timeout-ms`: the most a scenario's steps may take, each
+  step's wait cut at what is left (`@slow` triples it).
 - `retry` blocks, a `pause` step, `--slowmo <ms>`, tag expressions,
   `--grep-invert`, `--max-failures`/`-x`, `--last-failed`, and `@skip`,
   `@fixme`, `@only` (`--forbid-only`, on under CI) and `@slow`.
