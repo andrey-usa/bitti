@@ -1546,16 +1546,16 @@ impl Runner {
         let stem = scope.pv.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let dir = scope.pv.parent().unwrap_or(Path::new(".")).join(format!("{stem}.snapshots"));
         let baseline = dir.join(format!("{name}.json"));
+        // As the run was given it: `/` between the parts on every OS.
+        let shown = format!("{}.snapshots/{name}.json", scope.pv.display());
         let write = |why: &str| -> Result<(bool, String), String> {
             std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
             let text = serde_json::to_string_pretty(&now).unwrap_or_default() + "\n";
             std::fs::write(&baseline, text).map_err(|e| format!("{}: {e}", baseline.display()))?;
-            Ok((self.opts.update_shots, format!("{why} {}", baseline.display())))
+            Ok((self.opts.update_shots, format!("{why} {shown}")))
         };
         let was = match std::fs::read_to_string(&baseline) {
-            Ok(t) => {
-                serde_json::from_str::<Value>(&t).map_err(|e| format!("{} isn't JSON ({e})", baseline.display()))?
-            }
+            Ok(t) => serde_json::from_str::<Value>(&t).map_err(|e| format!("{shown} isn't JSON ({e})"))?,
             Err(_) => {
                 return write(if self.opts.update_shots {
                     "wrote the baseline"
@@ -1573,7 +1573,7 @@ impl Runner {
         if self.opts.update_shots {
             return write("updated the baseline");
         }
-        Ok((false, format!("{} differs: {}", baseline.display(), diff.join("; "))))
+        Ok((false, format!("{shown} differs: {}", diff.join("; "))))
     }
 
     /// `expect screenshot`: take it (masks painted, animations stopped),
