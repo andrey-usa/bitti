@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 # navigera checked out beside this repository (../navigera).
-navigera = { path = "../navigera" }
+navigera = { path = "../navigera", features = ["http"] }
 anyhow = "1"
 serde_json = "1"
 regex = "1"

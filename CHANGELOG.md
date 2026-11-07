@@ -10,6 +10,19 @@ The first release, still to be named.
 
 ### Added
 
+- API tests with no browser: a scenario of `http`, `exec` and checks of
+  their answers runs without Chrome, and a run of only such scenarios
+  starts none. `http` sends `--form`, `--multipart`, `--query`, `--user`
+  and `--bearer`, keeps a cookie jar per scenario (an API sign-in can be
+  an `auth` that page scenarios start from), and is answered by `expect
+  time`, `json … count`, `json … schema`, `json … snapshot`
+  (`--update-snapshots`) and `print`. The HTTP client is built in
+  (navigera's, over rustls), with kept-alive connections: about a
+  millisecond a request to a local server, where a `curl` process took
+  6-10.
+- `retry` blocks, a `pause` step, `--slowmo <ms>`, tag expressions,
+  `--grep-invert`, `--max-failures`/`-x`, `--last-failed`, and `@skip`,
+  `@fixme`, `@only` (`--forbid-only`, on under CI) and `@slow`.
 - `primavera run --watch` runs the scenario files, then runs again each
   one that changes, until Ctrl-C.
 - `primavera merge <dir|file.jsonl>...` joins the `--reporter jsonl`

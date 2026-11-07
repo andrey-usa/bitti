@@ -128,9 +128,12 @@ Status: pre-release. Everything below works in this build.
   `status`; a timeout fails it whatever is under it. Redirects are followed
   (up to 20, a cookie set on the way going to the next hop and to the
   browser); `--no-follow` gives the 3xx itself. `--insecure` accepts a
-  certificate nothing vouches for (a local server's own). It goes through `curl` (on every supported OS), its options on
-  curl's stdin, so a secret in a header or body stays out of the process
-  list.
+  certificate nothing vouches for (a local server's own). The client is
+  built in (rustls, the operating system's certificates, the proxy from
+  `https_proxy`/`http_proxy`/`no_proxy`): no process per request, and
+  connections are kept alive between requests, so a call to a local
+  server costs about a millisecond and a secret never reaches a command
+  line.
 
   ```text
   http POST /api/users --json '{"email": "${email}", "role": "shopper"}'
@@ -217,7 +220,7 @@ Status: pre-release. Everything below works in this build.
 | `json <$.path> count` + a comparison | how many items the array (or keys the object) at the path has |
 | `json [<$.path>] schema <file.json>` | the answer (or the value at the path) is valid against a JSON Schema beside the `.pv`; a failure lists where it isn't (`$[1].price: expected number, got string "5"`). See [API tests](#api-tests-without-a-browser) for what it reads |
 | `json [<$.path>] snapshot <name>` [`--ignore <$.path>,…`] | the answer (or the value at the path) is what its baseline beside the `.pv` holds, `<file>.pv.snapshots/<name>.json`, compared as JSON; `--ignore $.id,$.items[*].created` leaves out what changes from run to run. With no baseline yet the run writes it and the step fails, so a person reads it first; `--update-snapshots` writes or replaces it. A difference names each path (`$.total: 38, was 36`) |
-| `time` `<`, `<=`, `>`, `>=` `<time>` (`300ms`, `1.5s`) | how long the last `http` exchange took, as curl timed it |
+| `time` `<`, `<=`, `>`, `>=` `<time>` (`300ms`, `1.5s`) | how long the last `http` exchange took, redirects included |
 | `ax [<target>] matches` + the tree indented under it | the page's (or the target's) accessibility tree, as `navigera ax` prints it, holds those lines: partially (`button` matches `button "Place order"`) and in order, a line indented under another inside what that one matched, refs ignored, `/regex/` (spaces allowed) for a name or a value |
 | `screenshot <name> [<target>]` [`--full-page`] [`--threshold 0.2`] [`--max-diff-pixels <n>` \| `--max-diff-ratio <r>`] [`--mask <css>`]… | the viewport (or the element, or the whole page) as its baseline shows it, pixel by pixel; see below |
 | `not …` | any of them, negated |
@@ -268,8 +271,8 @@ A scenario whose steps never touch a page (`http`, `exec`, their checks,
 checks of saved values and of cookies, `save … = json|header`, `print` of
 an answer, `retry`, `wait --ms`, a `flow` or an `auth` made of those) runs
 with no browser at all, and a run of only such scenarios starts none:
-nothing to install on the machine but curl, and each request costs a few
-milliseconds.
+nothing to install on the machine, and each request costs about a
+millisecond on a kept-alive connection.
 
 ```text
 base http://127.0.0.1:8000

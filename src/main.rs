@@ -8,7 +8,7 @@ mod expect;
 mod fix;
 mod from_session;
 mod gherkin;
-mod http;
+use navigera::http;
 mod mcp;
 mod merge;
 mod nearest;
