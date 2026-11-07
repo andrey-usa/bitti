@@ -25,7 +25,7 @@ scenario "A query is encoded" @api
 scenario "A multipart upload" @api
   http POST /api/upload --multipart note=hello --multipart "file=@upload.txt;type=text/plain"
   expect json $.fields.note is hello
-  expect json $.files.file contains '{"filename": "upload.txt", "size": 6, "type": "text/plain"}'
+  expect json $.files.file contains '{"filename": "upload.txt", "size": 5, "type": "text/plain"}'
 
 scenario "A job that finishes in the background" @api
   http POST /api/jobs

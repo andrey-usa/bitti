@@ -634,7 +634,7 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
     std::fs::write(
         &pv,
         "scenario \"Never stops\"\n  goto /login\n  \
-         eval \"(() => { document.body.innerHTML = '<div id=c style=width:80px;height:40px;background:rgb(0,0,255)></div>'; let n = 0; const tick = () => { document.getElementById('c').style.background = 'hsl(' + (n++ * 7 % 360) + ',80%,50%)'; requestAnimationFrame(tick); }; tick(); return 1; })()\"\n  \
+         eval \"(() => { document.body.innerHTML = '<div id=c style=width:80px;height:40px;background:rgb(0,0,255)></div>'; let n = 0; const tick = () => { document.getElementById('c').style.background = 'hsl(' + (120 + n++ * 7 % 120) + ',80%,50%)'; requestAnimationFrame(tick); }; tick(); return 1; })()\"\n  \
          expect screenshot box --selector \"#c\"\n",
     )
     .unwrap();
@@ -664,7 +664,9 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
         .unwrap();
     assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
     std::fs::rename(dir.join("still.pv.screenshots"), dir.join("busy.pv.screenshots")).unwrap();
-    // The busy page against the still red baseline fails at the timeout instead of hanging.
+    // The busy page against the still red baseline fails at the timeout
+    // instead of hanging. Its hues stay between green and blue: a frame
+    // near red would match the baseline within the 0.2 threshold.
     let began = std::time::Instant::now();
     let (code, out) = run(&[]);
     assert_eq!(code, 1, "{out}");
