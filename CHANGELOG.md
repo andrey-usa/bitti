@@ -10,6 +10,11 @@ The first release, still to be named.
 
 ### Added
 
+- `record`: a click that takes its page or its element away (a link, a
+  banner's Accept) is written as a link's or button's role and name, and
+  a field's step by its role and its label's own words (not a select's
+  options), when `locate` can't finish first; before, such a click was
+  sometimes recorded as `--text`.
 - `--video on-failure|all` (also `video` in primavera.toml): what the page
   showed, frame by frame with the time of each, in the scenario's
   evidence (`video/index.html` plays it), named in the console and JSON

@@ -32,10 +32,34 @@ fn recorder() -> String {
     if (window !== window.top) return [];
     if (op === 'click') {{
       const t = norm(el.getAttribute('aria-label') || el.innerText || el.value || el.title);
-      if (t && t.length <= 60) return [{{ kind: 'text', flags: ['--text', t] }}];
+      if (t && t.length <= 60) {{
+        // A link or a button by its role and name, as `locate` would say
+        // (a link's page is often gone before it can).
+        const role = el.getAttribute('role') || (el.matches('a[href],area[href]') ? 'link'
+          : el.matches('button,input[type=submit],input[type=button],input[type=reset]') ? 'button' : '');
+        const text = {{ kind: 'text', flags: ['--text', t] }};
+        return role && /^[a-z]+$/.test(role) ? [{{ kind: 'role', flags: ['--role', role, '--name', t] }}, text] : [text];
+      }}
     }} else {{
-      const l = norm((el.labels && el.labels[0] && el.labels[0].innerText) || el.getAttribute('aria-label'));
-      if (l && l.length <= 80) return [{{ kind: 'label', flags: ['--label', l] }}];
+      // The label's own words: a label around its control holds the
+      // control's text too (a select's options).
+      const own = (lab) => {{
+        const c = lab.cloneNode(true);
+        c.querySelectorAll('input,select,textarea,button').forEach((x) => x.remove());
+        return c.textContent;
+      }};
+      const l = norm(el.getAttribute('aria-label') || (el.labels && el.labels[0] && own(el.labels[0])));
+      if (l && l.length <= 80) {{
+        const type = (el.getAttribute('type') || '').toLowerCase();
+        const role = el.getAttribute('role') || (el.tagName === 'SELECT' ? (el.multiple || el.size > 1 ? 'listbox' : 'combobox')
+          : el.tagName === 'TEXTAREA' ? 'textbox'
+          : el.tagName !== 'INPUT' ? ''
+          : type === 'checkbox' || type === 'radio' ? type
+          : ['', 'text', 'email', 'tel', 'url', 'search'].includes(type) && !el.hasAttribute('list') ? (type === 'search' ? 'searchbox' : 'textbox')
+          : '');
+        const label = {{ kind: 'label', flags: ['--label', l] }};
+        return role && /^[a-z]+$/.test(role) ? [{{ kind: 'role', flags: ['--role', role, '--name', l] }}, label] : [label];
+      }}
       const p = norm(el.getAttribute('placeholder'));
       if (p) return [{{ kind: 'placeholder', flags: ['--placeholder', p] }}];
     }}

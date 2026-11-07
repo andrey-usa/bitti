@@ -910,8 +910,8 @@ fn a_click_that_takes_its_element_away_is_recorded_and_a_covered_click_is_fixed(
         .unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let pv = std::fs::read_to_string(&file).unwrap();
-    // Accept was gone before `locate` could check it: its text finds it.
-    assert!(pv.contains("  click --text Accept\n  click --role button --name \"Buy now\"\n"), "{pv}");
+    // Accept was gone before `locate` could check it: its role and name, read at once, find it.
+    assert!(pv.contains("  click --role button --name Accept\n  click --role button --name \"Buy now\"\n"), "{pv}");
     std::fs::write(&file, pv.replace("?auto=1", "")).unwrap();
     let (code, text) = primavera(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
     assert_eq!(code, 0, "{pv}\n{text}");
