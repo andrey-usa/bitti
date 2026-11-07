@@ -399,7 +399,7 @@ primavera run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--
               [--reporter console|jsonl|github] [--junit <file>] [--cucumber <file>] [--allure <dir>] [--html <file>] [--json]
               [--timeout-ms <ms>] [--wait-ms <ms>] [--headed] [--chromium <path>] [--engine chrome|lightpanda]
               [--electron <app> [--electron-arg <arg>]...] [--attach <port|ws://…>]
-              [--secrets <file>] [--evidence <dir>] [--pause-on-failure] [--trace on-failure|all] [--update-snapshots]
+              [--secrets <file>] [--evidence <dir>] [--pause-on-failure] [--trace on-failure|all] [--video on-failure|all] [--update-snapshots]
               [--compare-report html,json,rows|none] [--config <file>] [--env <name>]
 primavera lint [<file.pv|file.feature|dir>...]
 primavera list [<file.pv|file.feature|dir>...]
@@ -507,6 +507,12 @@ primavera --version
   `.feature`'s name, tags, the worker) and the failure's screenshot
   attached. The directory is kept, so several runs or shards can feed one
   report; the history id is the same from run to run.
+- `--video on-failure` (or `all`) records what the page showed while the
+  scenario ran, a JPEG each time its pixels changed (none while it is
+  still), into `video/` in the scenario's evidence; `video/index.html`
+  plays the frames at their pace. The console and JSON lines name it and
+  `--html` links it. A passing scenario's video is dropped under
+  `on-failure`; recording cost no measurable time on the examples.
 - `--trace on-failure` (or `all`) records each step of a scenario: where
   the page was, the console messages and the requests it brought, in
   `trace.jsonl` beside the scenario's screenshot, with the page's ax tree

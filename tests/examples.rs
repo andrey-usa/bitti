@@ -1080,6 +1080,52 @@ fn load_metrics_are_budgets() {
 }
 
 #[test]
+fn a_video_is_kept_for_a_failure_and_dropped_for_a_pass() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let dir = std::env::temp_dir().join(format!("pv-video-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let pv = dir.join("v.pv");
+    std::fs::write(
+        &pv,
+        "scenario \"Passes\"\n  goto /login\n  expect url ends-with /login\n\n\
+         scenario \"Fails\"\n  goto /login\n  eval \"document.body.style.background = 'red'\"\n  \
+         expect text \"never there\" --timeout-ms 300\n",
+    )
+    .unwrap();
+    let ev = dir.join("ev");
+    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--video", "on-failure", "--reporter", "jsonl"])
+        .args(["--evidence", ev.to_str().unwrap(), "--html", dir.join("r.html").to_str().unwrap()])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    let videos: Vec<std::path::PathBuf> = std::fs::read_dir(&ev)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path().join("video"))
+        .filter(|v| v.is_dir())
+        .collect();
+    assert_eq!(videos.len(), 1, "only the failure keeps one: {videos:?} {text}");
+    assert!(
+        videos[0].to_string_lossy().contains("Fails") || videos[0].to_string_lossy().contains("fails"),
+        "{videos:?}"
+    );
+    let player = std::fs::read_to_string(videos[0].join("index.html")).unwrap();
+    assert!(player.contains("frame-00001.jpg"), "{player}");
+    let jpg = std::fs::read(videos[0].join("frame-00001.jpg")).unwrap();
+    assert_eq!(&jpg[..2], &[0xFF, 0xD8], "a JPEG");
+    let failed = text.lines().find(|l| l.contains("\"status\":\"failed\"")).expect("the failure's line");
+    assert!(failed.contains("video/index.html"), "{failed}");
+    let passed = text.lines().find(|l| l.contains("\"status\":\"passed\"")).expect("the pass's line");
+    assert!(passed.contains("\"video\":null"), "{passed}");
+    let report = std::fs::read_to_string(dir.join("r.html")).unwrap();
+    assert_eq!(report.matches(">video</a>").count(), 1, "{report}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn a_trace_records_each_step_and_reads_back() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let dir = std::env::temp_dir().join(format!("pv-trace-{}", std::process::id()));

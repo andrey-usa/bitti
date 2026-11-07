@@ -10,6 +10,10 @@ The first release, still to be named.
 
 ### Added
 
+- `--video on-failure|all` (also `video` in primavera.toml): what the page
+  showed, frame by frame with the time of each, in the scenario's
+  evidence (`video/index.html` plays it), named in the console and JSON
+  lines and linked from `--html`.
 - API tests with no browser: a scenario of `http`, `exec` and checks of
   their answers runs without Chrome, and a run of only such scenarios
   starts none. `http` sends `--form`, `--multipart`, `--query`, `--user`

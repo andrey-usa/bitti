@@ -25,6 +25,11 @@ impl Trace {
             other => Err(format!("--trace takes on-failure, all or off, not {other:?}")),
         }
     }
+
+    /// `--video`'s word: the same three.
+    pub fn parse_video(word: &str) -> Result<Trace, String> {
+        Trace::parse(word).map_err(|_| format!("--video takes on-failure, all or off, not {word:?}"))
+    }
 }
 
 /// The highest request number in navigera `network` lines (`#12 GET …`).

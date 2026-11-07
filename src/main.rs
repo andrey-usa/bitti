@@ -98,6 +98,10 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
         "--trace <when>",
         "on-failure or all: each step's page (ax tree, JPEG), console and requests beside the screenshot in trace.jsonl; read it with `primavera trace`, or in --html",
     ),
+    (
+        "--video <when>",
+        "on-failure or all: what the page showed, frame by frame, in the scenario's evidence (video/index.html plays it; linked from --html)",
+    ),
     ("--junit <file>", "also write JUnit XML"),
     ("--cucumber <file>", "also write Cucumber JSON for the .feature files (step by step)"),
     ("--allure <dir>", "also write Allure results (a JSON file per scenario run, screenshots attached)"),
@@ -366,6 +370,7 @@ fn parse_args() -> Result<Args, String> {
             "--headed" => opts.headed = true,
             "--update-screenshots" | "--update-snapshots" => opts.update_shots = true,
             "--trace" => opts.trace = trace::Trace::parse(&val("--trace")?)?,
+            "--video" => opts.video = trace::Trace::parse_video(&val("--video")?)?,
             "--compare-report" => opts.compare_report = expect::report_kinds(&val("--compare-report")?)?,
             "--chromium" => opts.chromium = Some(val("--chromium")?),
             "--electron" => opts.electron = Some(val("--electron")?),

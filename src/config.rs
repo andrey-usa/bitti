@@ -53,6 +53,8 @@ pub struct Profile {
     pub headed: Option<bool>,
     /// `on-failure`, `all` or `off`.
     pub trace: Option<String>,
+    /// `--video`: on-failure, all or off.
+    pub video: Option<String>,
     /// compara's reports for `expect download … compare`: html, json, rows.
     pub compare_report: Option<Vec<String>>,
     /// An Electron app to test (`--electron`), from the file's directory.
@@ -126,6 +128,7 @@ impl Profile {
             evidence,
             headed,
             trace,
+            video,
             compare_report,
             electron,
             electron_args,
@@ -170,6 +173,7 @@ impl Profile {
         flag("--engine", self.engine.clone());
         flag("--evidence", self.evidence.clone());
         flag("--trace", self.trace.clone());
+        flag("--video", self.video.clone());
         flag(
             "--compare-report",
             self.compare_report.as_ref().map(|k| if k.is_empty() { "none".into() } else { k.join(",") }),

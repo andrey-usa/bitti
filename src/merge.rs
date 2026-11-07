@@ -147,6 +147,7 @@ fn scenario(v: &Value) -> ScenarioResult {
         rep: 0,
         started: 0.0,
         trace: None,
+        video: None,
         skipped: (status == "skipped")
             .then(|| v.get("skipped").and_then(Value::as_str).unwrap_or("skipped").to_string()),
     }

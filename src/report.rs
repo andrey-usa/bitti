@@ -92,6 +92,9 @@ pub fn console_line(r: &ScenarioResult) -> String {
         let _ = writeln!(out, "      failed first:");
         failure_lines(&mut out, f, "        ", &r.file);
     }
+    if let Some(v) = &r.video {
+        let _ = writeln!(out, "      video {}", rel(v));
+    }
     out
 }
 
@@ -147,6 +150,7 @@ pub fn jsonl(r: &ScenarioResult) -> String {
         "saved": r.saved,
         "notes": r.notes,
         "skipped": r.skipped,
+        "video": r.video.as_ref().map(|p| p.display().to_string()),
     });
     format!("{v}\n")
 }
@@ -605,6 +609,13 @@ pub fn html(results: &[ScenarioResult], ms: f64, report_dir: &Path) -> String {
         if let Some(f) = r.failure.as_ref().filter(|_| !timeline) {
             screenshot_html(&mut out, f, report_dir, &mut embedded);
         }
+        if let Some(v) = &r.video {
+            let _ = write!(
+                out,
+                "<div><a href=\"{}\">video</a> <span class=dim>(what the page showed, frame by frame)</span></div>",
+                esc(&href(v, report_dir))
+            );
+        }
         for n in &r.notes {
             let _ = write!(out, "<div class=note>{}</div>", esc(n));
         }
@@ -679,6 +690,7 @@ mod tests {
             rep: 0,
             started: 0.0,
             trace: None,
+            video: None,
             skipped: None,
         };
         let fail = ScenarioResult {
@@ -738,6 +750,7 @@ mod tests {
             steps: vec![step(2, "goto /", 5.0, true), step(3, "click --text Pay", 20.0, false)],
             failure: Some(fail_case().failure.unwrap()),
             trace: Some(dir.clone()),
+            video: None,
             skipped: None,
             ..fail_case()
         };
@@ -800,6 +813,7 @@ mod tests {
             rep: 0,
             started: 0.0,
             trace: None,
+            video: None,
             skipped: None,
         };
         let fail = ScenarioResult {
@@ -862,6 +876,7 @@ mod tests {
             rep: 0,
             started: 0.0,
             trace: None,
+            video: None,
             skipped: None,
         }
     }
@@ -887,6 +902,7 @@ mod tests {
             rep: 0,
             started: 0.0,
             trace: None,
+            video: None,
             skipped: None,
         };
         let out = console_line(&r);

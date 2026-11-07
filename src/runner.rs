@@ -64,6 +64,8 @@ pub struct Options {
     pub update_shots: bool,
     /// `--trace`: record what each step saw.
     pub trace: crate::trace::Trace,
+    /// `--video`: record what the page showed (navigera `screencast`).
+    pub video: crate::trace::Trace,
     /// `--compare-report`: what compara keeps when a step doesn't say.
     pub compare_report: Vec<String>,
     /// `--electron <app>`: the scenarios drive this Electron app's windows,
@@ -114,6 +116,7 @@ impl Options {
             auth: Default::default(),
             update_shots: false,
             trace: Default::default(),
+            video: Default::default(),
             compare_report: vec!["html".into()],
             electron: None,
             electron_args: Vec::new(),
@@ -184,6 +187,8 @@ pub struct ScenarioResult {
     /// The directory holding this scenario's `trace.jsonl` and its per-step
     /// files, when a trace was kept.
     pub trace: Option<PathBuf>,
+    /// The player of the scenario's video (`--video`), when one was kept.
+    pub video: Option<PathBuf>,
     /// Not run, and why (`@skip`, `@fixme`): it neither passed nor failed.
     pub skipped: Option<String>,
 }
@@ -213,6 +218,7 @@ impl ScenarioResult {
             rep: 0,
             started: now_ms(),
             trace: None,
+            video: None,
             skipped: None,
         }
     }
@@ -557,6 +563,11 @@ impl Runner {
             let _ = self.command(&["init-script".into(), QUIET_CLOCK.into()]);
         }
         let downloads = if failure.is_none() && !bare { self.own_downloads(suite, &scenario.name) } else { None };
+        let video = if failure.is_none() && !bare && self.opts.video != crate::trace::Trace::Off {
+            self.start_video(suite, &scenario.name)
+        } else {
+            None
+        };
         let all: Vec<&Step> = suite.before_each.iter().chain(&scenario.steps).collect();
         let tracing = self.opts.trace != crate::trace::Trace::Off && failure.is_none();
         let mut trace: Vec<Value> = Vec::new();
@@ -671,8 +682,13 @@ impl Runner {
             rep: 0,
             started: started_ms,
             trace: None,
+            video: None,
             skipped: None,
         };
+        if let Some(dir) = video {
+            let keep = self.opts.video == crate::trace::Trace::All || result.failure.is_some();
+            result.video = self.stop_video(dir, keep);
+        }
         let mask = scope.masker();
         if tracing && (self.opts.trace == crate::trace::Trace::All || result.failure.is_some()) {
             let dir = self.evidence_dir(suite, &scenario.name);
@@ -721,6 +737,38 @@ impl Runner {
             dir.push_str(&format!("-try{}", self.attempt));
         }
         self.opts.evidence.join(dir)
+    }
+
+    /// `--video`: record the page into the scenario's evidence from now on.
+    /// A browser that can't (Lightpanda) records nothing.
+    fn start_video(&mut self, suite: &Suite, label: &str) -> Option<PathBuf> {
+        let dir = self.evidence_dir(suite, label).join("video");
+        let cmd = parse(&["screencast".into(), "start".into(), dir.display().to_string()]).ok()?;
+        let driver = self.driver.as_mut()?;
+        if let Err(e) = driver.run(&cmd) {
+            // One a scenario before left running (it stopped half way).
+            if !format!("{e:#}").contains("already recording") {
+                return None;
+            }
+            let stop = parse(&["screencast".into(), "stop".into()]).ok()?;
+            let _ = driver.run(&stop);
+            driver.run(&cmd).ok()?;
+        }
+        Some(dir)
+    }
+
+    /// End the recording: its player when it is kept, else nothing left of it.
+    fn stop_video(&mut self, dir: PathBuf, keep: bool) -> Option<PathBuf> {
+        let stopped =
+            parse(&["screencast".into(), "stop".into()]).ok().and_then(|cmd| self.driver.as_mut()?.run(&cmd).ok());
+        if keep && stopped.is_some() {
+            return Some(dir.join("index.html"));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        if let Some(parent) = dir.parent() {
+            let _ = std::fs::remove_dir(parent);
+        }
+        None
     }
 
     /// Downloads go to a directory of the scenario's own, beside its
