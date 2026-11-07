@@ -54,3 +54,8 @@ scenario "The answer is what its snapshot holds" @api
   http GET /api/profile
   expect json snapshot profile --ignore $.id,$.address.zip
   expect json $.tags snapshot tags
+
+scenario "A GraphQL query" @api
+  http POST /graphql --graphql "query($id: ID!) { product(id: $id) { id name price } }" --variables '{"id": "p1"}'
+  expect json $.data.product.name is "Trail shoe"
+  expect json $.data.product.price > 50

@@ -135,6 +135,11 @@ Status: pre-release. Everything below works in this build.
   server costs about a millisecond and a secret never reaches a command
   line.
 
+  `--graphql <query>` (or `--graphql-file <f>`) with `--variables <json>`
+  and `--operation <name>` sends a GraphQL request as its JSON body; an
+  answer with `errors` (GraphQL sends them with a 200) fails the step,
+  unless a step under it checks `json $.errors`.
+
   ```text
   http POST /api/users --json '{"email": "${email}", "role": "shopper"}'
     expect status 201

@@ -19,3 +19,6 @@ scenario "Signed out"
 scenario "An answer that changed from its snapshot"
   http GET /api/search --query q=boots
   expect json snapshot search
+
+scenario "A GraphQL answer with errors"
+  http POST /graphql --graphql "{ nope }"

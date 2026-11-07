@@ -13,7 +13,7 @@ The first release, still to be named.
 - API tests with no browser: a scenario of `http`, `exec` and checks of
   their answers runs without Chrome, and a run of only such scenarios
   starts none. `http` sends `--form`, `--multipart`, `--query`, `--user`
-  and `--bearer`, keeps a cookie jar per scenario (an API sign-in can be
+  `--bearer` and `--graphql` (an answer with `errors` fails), keeps a cookie jar per scenario (an API sign-in can be
   an `auth` that page scenarios start from), and is answered by `expect
   time`, `json … count`, `json … schema`, `json … snapshot`
   (`--update-snapshots`) and `print`. The HTTP client is built in

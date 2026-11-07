@@ -22,6 +22,18 @@ use std::path::{Path, PathBuf};
 
 use crate::expect::Expect;
 
+/// What `http --graphql` sends.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Graphql {
+    /// The query, or the file it is in (`file`).
+    pub query: String,
+    pub file: bool,
+    /// `--variables`: a JSON object.
+    pub variables: Option<String>,
+    /// `--operation`: which operation of the document to run.
+    pub operation: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     /// A navigera command line.
@@ -94,6 +106,11 @@ pub enum Action {
         /// `--user name:password` (Basic) or `--bearer <token>`: the
         /// `Authorization` header, as `Basic …` or `Bearer …`.
         auth: Option<(String, String)>,
+        /// `--graphql <query>` or `--graphql-file <f>` [`--variables <json>`]
+        /// [`--operation <name>`]: a GraphQL request as its JSON body; an
+        /// answer with `errors` fails the step unless a step under it
+        /// checks `$.errors`.
+        graphql: Option<Graphql>,
         steps: Vec<Step>,
     },
     /// `retry [--timeout-ms n]` and the steps indented under it: run them
@@ -508,13 +525,18 @@ pub fn unset_vars(suite: &Suite, sc: &Scenario, run_vars: &[String]) -> Vec<(usi
             Action::As(name) => vec![name.clone()],
             Action::Exec { argv, .. } => argv.clone(),
             Action::Gherkin(_) => Vec::new(),
-            Action::Http { url, headers, body, form, multipart, query, auth, .. } => std::iter::once(url)
-                .chain(headers)
-                .chain(body)
-                .chain(auth.iter().map(|(_, v)| v))
-                .chain(form.iter().chain(multipart).chain(query).flat_map(|(k, v)| [k, v]))
-                .cloned()
-                .collect(),
+            Action::Http { url, headers, body, form, multipart, query, auth, graphql, .. } => {
+                std::iter::once(url)
+                    .chain(headers)
+                    .chain(body)
+                    .chain(graphql.iter().flat_map(|g| {
+                        (!g.file).then_some(&g.query).into_iter().chain(&g.variables).chain(&g.operation)
+                    }))
+                    .chain(auth.iter().map(|(_, v)| v))
+                    .chain(form.iter().chain(multipart).chain(query).flat_map(|(k, v)| [k, v]))
+                    .cloned()
+                    .collect()
+            }
             Action::Expect(_) | Action::If { .. } | Action::Handoff(_) | Action::Retry { .. } | Action::Pause => {
                 Vec::new()
             }
@@ -1156,7 +1178,12 @@ fn anchor_inputs(action: &mut Action, dir: &Path) {
             }
             return;
         }
-        Action::Http { body_file, multipart, .. } => {
+        Action::Http { body_file, multipart, graphql, .. } => {
+            if let Some(g) = graphql.as_mut().filter(|g| g.file) {
+                if !g.query.starts_with("${") && Path::new(&g.query).is_relative() {
+                    g.query = dir.join(&g.query).to_string_lossy().into_owned();
+                }
+            }
             if let Some(f) = body_file.as_mut() {
                 if !f.starts_with("${") && Path::new(f.as_str()).is_relative() {
                     *f = dir.join(f.as_str()).to_string_lossy().into_owned();
@@ -1305,7 +1332,7 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
             Ok(Action::Exec { argv: rest.to_vec(), timeout_ms, dir: PathBuf::new(), steps: Vec::new() })
         }
         Some("http") => {
-            let usage = "expected `http <METHOD> <url> [--json <text> | --body <text> | --json-file <f> | --body-file <f> | --form name=value… | --multipart name=value|name=@file…] [--query name=value]… [--user name:password | --bearer <token>] [--header \"Name: value\"]… [--no-follow] [--insecure] [--timeout-ms <ms>]`";
+            let usage = "expected `http <METHOD> <url> [--json <text> | --body <text> | --json-file <f> | --body-file <f> | --form name=value… | --multipart name=value|name=@file… | --graphql <query> | --graphql-file <f> [--variables <json>] [--operation <name>]] [--query name=value]… [--user name:password | --bearer <token>] [--header \"Name: value\"]… [--no-follow] [--insecure] [--timeout-ms <ms>]`";
             let method = words.get(1).ok_or(usage)?.to_uppercase();
             let url = words.get(2).ok_or(usage)?.clone();
             if method.starts_with('-') || url.starts_with("--") {
@@ -1316,6 +1343,8 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
             let (mut follow, mut insecure) = (true, false);
             let (mut form, mut multipart, mut query) = (Vec::new(), Vec::new(), Vec::new());
             let mut auth: Option<(String, String)> = None;
+            let (mut graphql, mut variables, mut operation): (Option<(String, bool)>, Option<String>, Option<String>) =
+                (None, None, None);
             let pair = |flag: &str, v: &str| -> Result<(String, String), String> {
                 v.split_once('=')
                     .filter(|(k, _)| !k.is_empty())
@@ -1366,6 +1395,14 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                             body = Some(v);
                         }
                     }
+                    "--graphql" | "--graphql-file" => {
+                        if graphql.is_some() {
+                            return Err("one of --graphql and --graphql-file".into());
+                        }
+                        graphql = Some((v, flag.ends_with("-file")));
+                    }
+                    "--variables" => variables = Some(v),
+                    "--operation" => operation = Some(v),
                     "--timeout-ms" => {
                         timeout_ms =
                             Some(v.parse::<u64>().map_err(|_| format!("--timeout-ms takes milliseconds, not {v:?}"))?)
@@ -1373,10 +1410,21 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                     other => return Err(format!("{usage} (got {other:?})")),
                 }
             }
-            let kinds = [body.is_some() || body_file.is_some(), !form.is_empty(), !multipart.is_empty()];
+            let kinds =
+                [body.is_some() || body_file.is_some(), !form.is_empty(), !multipart.is_empty(), graphql.is_some()];
             if kinds.iter().filter(|k| **k).count() > 1 {
-                return Err("one kind of body: --json/--body (or their -file), --form or --multipart".into());
+                return Err("one kind of body: --json/--body (or their -file), --form, --multipart or --graphql".into());
             }
+            if graphql.is_none() && (variables.is_some() || operation.is_some()) {
+                return Err("--variables and --operation go with --graphql".into());
+            }
+            if let Some(v) = variables.as_deref().filter(|v| !v.contains("${")) {
+                if !serde_json::from_str::<serde_json::Value>(v).is_ok_and(|j| j.is_object()) {
+                    return Err(format!("--variables takes a JSON object, not {v:?}"));
+                }
+            }
+            let graphql = graphql.map(|(query, file)| Graphql { query, file, variables, operation });
+            json |= graphql.is_some();
             Ok(Action::Http {
                 method,
                 url,
@@ -1391,6 +1439,7 @@ pub fn parse_words(words: &[String]) -> Result<Action, String> {
                 multipart,
                 query,
                 auth,
+                graphql,
                 steps: Vec::new(),
             })
         }
@@ -1805,6 +1854,29 @@ mod tests {
         assert_eq!(e.line, 3);
         let e = parse(Path::new("t.pv"), "scenario \"x\"\n  if text a\n  goto /\n").unwrap_err();
         assert!(e.message.contains("needs the steps"), "{e}");
+    }
+
+    #[test]
+    fn graphql_requests_parse() {
+        let s = parse(
+            Path::new("/t/x.pv"),
+            "scenario \"g\"\n  http POST /graphql --graphql \"query($id: ID!) { p(id: $id) { id } }\" --variables '{\"id\": \"1\"}' --operation Q\n  http POST /graphql --graphql-file q.graphql\n",
+        )
+        .unwrap();
+        let Action::Http { graphql: Some(g), json, .. } = &s.scenarios[0].steps[0].action else { panic!() };
+        assert_eq!(
+            (g.query.as_str(), g.file, g.variables.as_deref(), g.operation.as_deref(), *json),
+            ("query($id: ID!) { p(id: $id) { id } }", false, Some("{\"id\": \"1\"}"), Some("Q"), true)
+        );
+        let Action::Http { graphql: Some(g), .. } = &s.scenarios[0].steps[1].action else { panic!() };
+        assert!(g.file && g.query.ends_with("q.graphql"));
+        for bad in [
+            "http POST /g --graphql x --json {}",
+            "http POST /g --variables {}",
+            "http POST /g --graphql x --variables [1]",
+        ] {
+            assert!(parse(Path::new("/t/x.pv"), &format!("scenario \"b\"\n  {bad}\n")).is_err(), "{bad}");
+        }
     }
 
     #[test]

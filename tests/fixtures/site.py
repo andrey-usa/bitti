@@ -120,6 +120,13 @@ class Handler(BaseHTTPRequestHandler):
                 LOGINS[0] += 1
                 return self.raw('{"ok": true}', "application/json", [("Set-Cookie", "sid=api; Path=/api; HttpOnly")])
             return self.answer(403, '{"error": "wrong password"}')
+        if u.path == "/graphql":
+            # A GraphQL endpoint: errors come back with a 200, as the spec has it.
+            req = json.loads(body or "{}")
+            q, v = req.get("query", ""), req.get("variables") or {}
+            if "product" in q and v.get("id") == "p1":
+                return self.answer(200, json.dumps({"data": {"product": {"id": "p1", "name": "Trail shoe", "price": 89.5}}}))
+            return self.answer(200, json.dumps({"data": None, "errors": [{"message": "Cannot query field 'nope' on type 'Query'"}]}))
         if u.path == "/api/upload":
             msg = email.message_from_bytes(b"Content-Type: " + self.headers.get("Content-Type", "").encode() + b"\r\n\r\n" + raw)
             fields, files = {}, {}

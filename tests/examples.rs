@@ -1666,7 +1666,7 @@ fn api_scenarios_run_with_no_browser() {
         "3",
     ]);
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("7 passed, 1 skipped, 0 failed"), "{out}");
+    assert!(out.contains("8 passed, 1 skipped, 0 failed"), "{out}");
     assert!(out.contains("(no browser)"), "{out}");
     assert!(out.contains("SKIP  tests/fixtures/api/api.pv:43  Not written yet  (@fixme)"), "{out}");
     // print: a part of the answer, pretty; a line with values filled in.
@@ -1679,7 +1679,8 @@ fn api_scenarios_run_with_no_browser() {
     let (code, out) =
         primavera(&["run", "tests/fixtures/api/api-fail.pv", "--base-url", &site.1, "--chromium", nothing]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("0 passed, 5 failed"), "{out}");
+    assert!(out.contains("0 passed, 6 failed"), "{out}");
+    assert!(out.contains("the GraphQL answer has 1 error(s): Cannot query field 'nope' on type 'Query'"), "{out}");
     assert!(
         out.contains("api-fail.pv.snapshots/search.json differs: $.n: 0, was 1; $.q: \"boots\", was \"shoes\""),
         "{out}"

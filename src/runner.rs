@@ -1118,6 +1118,7 @@ impl Runner {
                 multipart,
                 query,
                 auth,
+                graphql,
                 steps,
             } => {
                 let mut url = scope.word(url)?;
@@ -1138,6 +1139,27 @@ impl Runner {
                         let f = scope.word(f)?;
                         let text = std::fs::read_to_string(&f).map_err(|e| format!("http body file {f}: {e}"))?;
                         Some(crate::http::Body::Raw(text))
+                    }
+                    (None, None) if graphql.is_some() => {
+                        let g = graphql.as_ref().expect("checked");
+                        let text = if g.file {
+                            let f = scope.word(&g.query)?;
+                            std::fs::read_to_string(&f).map_err(|e| format!("http --graphql-file {f}: {e}"))?
+                        } else {
+                            scope.word(&g.query)?
+                        };
+                        let mut doc = serde_json::json!({ "query": text });
+                        if let Some(v) = &g.variables {
+                            let v = scope.word(v)?;
+                            doc["variables"] = serde_json::from_str::<Value>(&v)
+                                .ok()
+                                .filter(Value::is_object)
+                                .ok_or_else(|| format!("--variables takes a JSON object, not {v:?}"))?;
+                        }
+                        if let Some(op) = &g.operation {
+                            doc["operationName"] = Value::String(scope.word(op)?);
+                        }
+                        Some(crate::http::Body::Raw(doc.to_string()))
                     }
                     (None, None) if !form.is_empty() => Some(crate::http::Body::Form(pairs(form, scope)?)),
                     (None, None) if !multipart.is_empty() => {
@@ -1210,6 +1232,25 @@ impl Runner {
                     let said = if said.len() > 200 { &said[..said.floor_char_boundary(200)] } else { said };
                     let said = if said.is_empty() { String::new() } else { format!(": {said}") };
                     return Err(format!("{method} {url} answered {}{said}", r.status));
+                }
+                // GraphQL answers its errors with a 200: they fail the step,
+                // unless a step under it is there to check them.
+                if graphql.is_some() && !steps.iter().any(|st| st.text.contains("$.errors")) {
+                    let errors = serde_json::from_str::<Value>(&r.body).ok().and_then(|d| d.get("errors").cloned());
+                    if let Some(list) = errors.as_ref().and_then(Value::as_array).filter(|l| !l.is_empty()) {
+                        let said: Vec<String> = list
+                            .iter()
+                            .take(3)
+                            .map(|e| {
+                                e.get("message").and_then(Value::as_str).map_or_else(|| e.to_string(), String::from)
+                            })
+                            .collect();
+                        return Err(format!(
+                            "{method} {url}: the GraphQL answer has {} error(s): {}",
+                            list.len(),
+                            said.join("; ")
+                        ));
+                    }
                 }
                 for st in steps {
                     self.action(&st.action, st, scope, suite, depth)
