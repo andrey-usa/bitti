@@ -14,6 +14,7 @@ scenario "Sign in with a form, and the cookie goes with the next call" @api
     expect json $.tags is '["a", "b"]'
     expect json $.tags count is 2
     expect json $ schema profile.schema.json
+    expect json $ schema openapi.json#/components/schemas/Profile
     expect time < 5s
   print json $.address
   print "signed in as ${http.status}"

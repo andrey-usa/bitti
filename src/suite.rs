@@ -1059,6 +1059,8 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                     }
                 }
                 if let Some(Expect { subject: crate::expect::Subject::JsonSchema { file: f, .. }, .. }) = expect {
+                    // `openapi.json#/components/schemas/Item`: the file before the `#`.
+                    let f = f.split_once('#').map_or(f.as_str(), |(f, _)| f);
                     if !f.contains("${") && !Path::new(f).exists() {
                         return Err(ParseError {
                             file: file.to_path_buf(),

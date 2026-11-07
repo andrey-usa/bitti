@@ -1668,7 +1668,7 @@ fn api_scenarios_run_with_no_browser() {
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("8 passed, 1 skipped, 0 failed"), "{out}");
     assert!(out.contains("(no browser)"), "{out}");
-    assert!(out.contains("SKIP  tests/fixtures/api/api.pv:43  Not written yet  (@fixme)"), "{out}");
+    assert!(out.contains("SKIP  tests/fixtures/api/api.pv:44  Not written yet  (@fixme)"), "{out}");
     // print: a part of the answer, pretty; a line with values filled in.
     assert!(out.contains("\"city\": \"Oslo\""), "{out}");
     assert!(out.contains("signed in as 200"), "{out}");

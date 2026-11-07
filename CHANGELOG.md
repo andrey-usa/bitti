@@ -15,7 +15,8 @@ The first release, still to be named.
   starts none. `http` sends `--form`, `--multipart`, `--query`, `--user`
   `--bearer` and `--graphql` (an answer with `errors` fails), keeps a cookie jar per scenario (an API sign-in can be
   an `auth` that page scenarios start from), and is answered by `expect
-  time`, `json … count`, `json … schema`, `json … snapshot`
+  time`, `json … count`, `json … schema` (a schema file, or one inside an
+  OpenAPI document: `openapi.json#/components/schemas/Item`), `json … snapshot`
   (`--update-snapshots`) and `print`. The HTTP client is built in
   (navigera's, over rustls), with kept-alive connections: about a
   millisecond a request to a local server, where a `curl` process took

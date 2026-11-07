@@ -9,7 +9,8 @@
 //! `uuid`, `uri`, `ipv4`, `ipv6`), `minimum`/`maximum` and their exclusive
 //! forms (a number or, in draft 4, a flag), `multipleOf`, `allOf`,
 //! `anyOf`, `oneOf`, `not`, `if`/`then`/`else`, and `$ref` within the file
-//! (`#/$defs/…`, `#/definitions/…`, `#`). Anything else in a schema is
+//! (`#/$defs/…`, `#/definitions/…`, `#`, an OpenAPI document's
+//! `#/components/schemas/…`). Anything else in a schema is
 //! ignored, as validators do with keywords they don't know.
 
 use serde_json::{Map, Value};
@@ -18,9 +19,16 @@ use serde_json::{Map, Value};
 const MAX_ERRORS: usize = 8;
 
 /// Ok, or what doesn't hold, each as `<$.path>: <what>`.
+#[cfg(test)]
 pub fn validate(schema: &Value, doc: &Value) -> Result<(), Vec<String>> {
+    validate_in(schema, schema, doc)
+}
+
+/// [`validate`] with a schema that is part of `root` (an OpenAPI
+/// document's `#/components/schemas/Item`): its `$ref`s are read in `root`.
+pub fn validate_in(root: &Value, schema: &Value, doc: &Value) -> Result<(), Vec<String>> {
     let mut errors = Vec::new();
-    check(schema, doc, "$", schema, &mut errors, 0);
+    check(schema, doc, "$", root, &mut errors, 0);
     if errors.is_empty() {
         Ok(())
     } else {
@@ -588,5 +596,24 @@ mod snapshot_tests {
             ["$.name: \"Bea\", was \"Ada\"", "$.old: gone (was true)", "$.tags: 2 items, was 1", "$.new: new (1)"]
         );
         assert!(differences(&was, &was).is_empty());
+    }
+
+    #[test]
+    fn a_schema_inside_an_openapi_document_reads_its_refs_there() {
+        let api = json!({
+            "openapi": "3.0.3",
+            "components": {"schemas": {
+                "Item": {"type": "object", "required": ["sku", "price"], "properties": {
+                    "sku": {"type": "string"}, "price": {"$ref": "#/components/schemas/Price"},
+                    "note": {"type": "string", "nullable": true}}},
+                "Price": {"type": "number", "minimum": 0}
+            }}
+        });
+        let item = api.pointer("/components/schemas/Item").unwrap();
+        assert!(validate_in(&api, item, &json!({"sku": "a", "price": 9.5, "note": null})).is_ok());
+        assert_eq!(
+            validate_in(&api, item, &json!({"sku": "a", "price": -1})).unwrap_err(),
+            ["$.price: expected >= 0, got -1"]
+        );
     }
 }

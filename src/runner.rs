@@ -2383,12 +2383,20 @@ impl Runner {
                 let doc: Value = serde_json::from_str(body).map_err(|e| format!("the answer isn't JSON ({e})"))?;
                 let at = crate::expect::json_value_at(&doc, &crate::expect::json_path(&scope.word(path)?)?);
                 let file = scope.word(file)?;
-                let text = std::fs::read_to_string(&file).map_err(|e| format!("schema {file}: {e}"))?;
-                let schema: Value =
-                    serde_json::from_str(&text).map_err(|e| format!("schema {file} isn't JSON ({e})"))?;
+                // `openapi.json#/components/schemas/Item`: a schema inside a
+                // larger document, its `$ref`s read against the whole of it.
+                let (file, pointer) = file.split_once('#').map_or((file.as_str(), None), |(f, p)| (f, Some(p)));
+                let text = std::fs::read_to_string(file).map_err(|e| format!("schema {file}: {e}"))?;
+                let root: Value = serde_json::from_str(&text).map_err(|e| format!("schema {file} isn't JSON ({e})"))?;
+                let schema = match pointer {
+                    Some(p) => {
+                        root.pointer(&p.replace("%25", "%")).ok_or_else(|| format!("schema {file}: nothing at #{p}"))?
+                    }
+                    None => &root,
+                };
                 match at {
                     None => (false, format!("nothing at {path}")),
-                    Some(v) => match crate::schema::validate(&schema, v) {
+                    Some(v) => match crate::schema::validate_in(&root, schema, v) {
                         Ok(()) => (true, "valid".into()),
                         Err(errors) => (false, errors.join("; ")),
                     },
@@ -2627,7 +2635,7 @@ fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
         return format!("expected json {path} {not}to match snapshot {name}: {actual} (--update-snapshots takes it as the baseline)");
     }
     if let Subject::JsonSchema { path, file } = &e.subject {
-        let name = Path::new(file).file_name().map_or(file.clone(), |n| n.to_string_lossy().into_owned());
+        let name = schema_name(file);
         return if e.negate {
             format!("expected json {path} not to match schema {name}; it does")
         } else {
@@ -2698,7 +2706,7 @@ fn describe(e: &Expect, value: &str, actual: &str, limit: Duration) -> String {
         Subject::Http(HttpRead::Count(p)) => format!("json {p} count"),
         Subject::Http(HttpRead::Header(h)) => format!("header {h}"),
         Subject::JsonSchema { path, file } => {
-            let name = Path::new(file).file_name().map_or(file.clone(), |n| n.to_string_lossy().into_owned());
+            let name = schema_name(file);
             format!("json {path} to match schema {name}")
         }
         // Said above.
@@ -3203,6 +3211,17 @@ fn enter(wait: Option<Duration>) -> Result<bool, ()> {
 /// Running under CI: `CI` set to anything but empty, `false` or `0`.
 pub fn under_ci() -> bool {
     std::env::var("CI").is_ok_and(|v| !matches!(v.trim(), "" | "false" | "0"))
+}
+
+/// A schema as a failure names it: the file's name, and the part of it
+/// after a `#`.
+fn schema_name(file: &str) -> String {
+    let (f, part) = file.split_once('#').map_or((file, None), |(f, p)| (f, Some(p)));
+    let name = Path::new(f).file_name().map_or(f.to_string(), |n| n.to_string_lossy().into_owned());
+    match part {
+        Some(p) => format!("{name}#{p}"),
+        None => name,
+    }
 }
 
 /// Seconds, as a person reads a limit: `30`, `1.5`.
