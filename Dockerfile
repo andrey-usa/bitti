@@ -26,12 +26,12 @@ FROM debian:trixie-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends chromium-headless-shell fonts-liberation fonts-noto-color-emoji ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
- && useradd --uid 10001 --create-home --home-dir /home/pv pv \
+ && useradd --uid 10001 --create-home --home-dir /home/bt bt \
  && mkdir /work && chmod 1777 /work
 COPY --from=build /src/bitti/target/release/bitti /usr/local/bin/bitti
 ENV NAVIGERA_CHROMIUM=/usr/bin/chromium-headless-shell \
     NAVIGERA_NO_SANDBOX=1 \
-    HOME=/home/pv
+    HOME=/home/bt
 USER 10001
 WORKDIR /work
 ENTRYPOINT ["bitti"]

@@ -173,7 +173,7 @@ for each step whose element wasn't found, the elements on the page most like
 it (.bitti/last-run.json).
 
   bitti fix                 list each failing step and its suggestions
-  bitti fix shop.pv:12      put suggestion 1 into that step
+  bitti fix shop.bt:12      put suggestion 1 into that step
   --use <n>                     put suggestion n instead
   --all                         fix every failing step with its first
                                 suggestion, if it scores --min or more

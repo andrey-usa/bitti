@@ -23,8 +23,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: pv_parse
-            seeds: pv
+          - target: bt_parse
+            seeds: bt
           - target: gherkin_parse
             seeds: feature
     steps:
@@ -50,7 +50,7 @@ jobs:
         run: |
           mkdir -p "corpus/${{ matrix.target }}" artifacts
           case "${{ matrix.seeds }}" in
-            pv) find ../examples ../tests -name '*.pv' -exec cp {} "corpus/${{ matrix.target }}/" \; 2>/dev/null || true ;;
+            bt) find ../examples ../tests -name '*.bt' -exec cp {} "corpus/${{ matrix.target }}/" \; 2>/dev/null || true ;;
             feature) find ../tests ../examples -name '*.feature' -exec cp {} "corpus/${{ matrix.target }}/" \; 2>/dev/null || true ;;
           esac
           ls "corpus/${{ matrix.target }}" | head -20

@@ -823,7 +823,7 @@ impl Runner {
                 // The tab itself, so the look is at the page as it is.
                 let ws = driver.session().page_endpoint().unwrap_or_else(|| driver.session().endpoint());
                 eprintln!(
-                    "PAUSED  {}:{line}  the browser stays as {how}; look at it with\n        navigera -s pv start --attach {ws}\n        navigera -s pv ax\n        Enter goes on with the run (Ctrl-C stops it)",
+                    "PAUSED  {}:{line}  the browser stays as {how}; look at it with\n        navigera -s bt start --attach {ws}\n        navigera -s bt ax\n        Enter goes on with the run (Ctrl-C stops it)",
                     suite.file.display(),
                 );
             }
@@ -862,7 +862,7 @@ impl Runner {
             return Failure {
                 line: step.line,
                 text: step.text.clone(),
-                message: pv_terms(&message),
+                message: bt_terms(&message),
                 at: None,
                 hint: scope.noop.clone(),
                 screenshot: None,
@@ -898,7 +898,7 @@ impl Runner {
         Failure {
             line: step.line,
             text: step.text.clone(),
-            message: pv_terms(&message),
+            message: bt_terms(&message),
             at,
             hint: scope.noop.clone(),
             screenshot,
@@ -1561,20 +1561,20 @@ impl Runner {
                 let sel = serde_json::to_string(&sel).unwrap_or_default();
                 let value_j = serde_json::to_string(value).unwrap_or_default();
                 let m = e.matcher.word();
-                let cmp = |actual: &str| format!("__pvCmp(({actual}), {m:?}, {value_j})");
+                let cmp = |actual: &str| format!("__btCmp(({actual}), {m:?}, {value_j})");
                 let holds = match prop {
                     Prop::State(state) if state == "visible" => {
-                        format!("__pvVisible(__pvFirst({sel}))")
+                        format!("__btVisible(__btFirst({sel}))")
                     }
                     // A missing element is hidden, as `is hidden` answers.
                     Prop::State(state) if state == "hidden" => {
-                        format!("!__pvVisible(__pvFirst({sel}))")
+                        format!("!__btVisible(__btFirst({sel}))")
                     }
                     Prop::State(state) if state == "enabled" => {
-                        format!("__pvEnabled(__pvFirst({sel}))")
+                        format!("__btEnabled(__btFirst({sel}))")
                     }
                     Prop::State(state) if state == "disabled" => {
-                        format!("__pvDisabled(__pvFirst({sel}))")
+                        format!("__btDisabled(__btFirst({sel}))")
                     }
                     // Checked and focused change by property, which no
                     // observer sees: navigera's wake also ends on input,
@@ -1582,14 +1582,14 @@ impl Runner {
                     // each of these waits at the poll's 25 ms, so a silent
                     // write is seen no later than the poll would see it.
                     Prop::State(state) if state == "checked" => {
-                        format!("__pvChecked(__pvFirst({sel}))")
+                        format!("__btChecked(__btFirst({sel}))")
                     }
                     // A missing box is unchecked, as the read answers.
                     Prop::State(state) if state == "unchecked" => {
-                        format!("!__pvChecked(__pvFirst({sel}))")
+                        format!("!__btChecked(__btFirst({sel}))")
                     }
                     Prop::State(state) if state == "focused" => {
-                        format!("__pvFocused(__pvFirst({sel}))")
+                        format!("__btFocused(__btFirst({sel}))")
                     }
                     // A bare `expect <target> <prop>` (no matcher) is a
                     // read, not a condition: nothing to wait for.
@@ -1598,17 +1598,17 @@ impl Runner {
                     {
                         return Ok(None)
                     }
-                    Prop::Count => cmp(&format!("String(__pvAll({sel}).length)")),
+                    Prop::Count => cmp(&format!("String(__btAll({sel}).length)")),
                     Prop::Text => cmp(&format!(
-                        "(__pvFirst({sel}) ? (__pvFirst({sel}).innerText ?? __pvFirst({sel}).textContent ?? '') : '').trim()"
+                        "(__btFirst({sel}) ? (__btFirst({sel}).innerText ?? __btFirst({sel}).textContent ?? '') : '').trim()"
                     )),
-                    Prop::Value => cmp(&format!("(__pvFirst({sel}) ? String(__pvFirst({sel}).value ?? '') : '').trim()")),
+                    Prop::Value => cmp(&format!("(__btFirst({sel}) ? String(__btFirst({sel}).value ?? '') : '').trim()")),
                     Prop::Attr(name) => cmp(&format!(
-                        "(__pvFirst({sel}) ? String(__pvFirst({sel}).getAttribute({}) ?? '') : '').trim()",
+                        "(__btFirst({sel}) ? String(__btFirst({sel}).getAttribute({}) ?? '') : '').trim()",
                         serde_json::to_string(name).unwrap_or_default()
                     )),
                     Prop::Style(name) => cmp(&format!(
-                        "(__pvFirst({sel}) ? String((__pvFirst({sel}).ownerDocument.defaultView || window).getComputedStyle(__pvFirst({sel})).getPropertyValue({}) ?? '') : '').trim()",
+                        "(__btFirst({sel}) ? String((__btFirst({sel}).ownerDocument.defaultView || window).getComputedStyle(__btFirst({sel})).getPropertyValue({}) ?? '') : '').trim()",
                         serde_json::to_string(name).unwrap_or_default()
                     )),
                     _ => return Ok(None),
@@ -1675,7 +1675,7 @@ impl Runner {
     }
 
     /// `expect json … snapshot <name>`: the answer (its `--ignore`d values
-    /// left out) against `<file>.pv.snapshots/<name>.json`. No baseline
+    /// left out) against `<file>.bt.snapshots/<name>.json`. No baseline
     /// yet: it is written and the check fails, so a person reads it first;
     /// `--update-snapshots` writes or replaces it and passes.
     fn json_snapshot(
@@ -1691,11 +1691,11 @@ impl Runner {
             return Ok((false, format!("nothing at {path}")));
         };
         let now = crate::schema::without(at, ignore);
-        let stem = scope.pv.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let dir = scope.pv.parent().unwrap_or(Path::new(".")).join(format!("{stem}.snapshots"));
+        let stem = scope.bt.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let dir = scope.bt.parent().unwrap_or(Path::new(".")).join(format!("{stem}.snapshots"));
         let baseline = dir.join(format!("{name}.json"));
         // As the run was given it: `/` between the parts on every OS.
-        let shown = format!("{}.snapshots/{name}.json", scope.pv.display());
+        let shown = format!("{}.snapshots/{name}.json", scope.bt.display());
         let write = |why: &str| -> Result<(bool, String), String> {
             std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
             let text = serde_json::to_string_pretty(&now).unwrap_or_default() + "\n";
@@ -1726,7 +1726,7 @@ impl Runner {
 
     /// `expect screenshot`: take it (masks painted, animations stopped),
     /// crop it to its target, and compare it with the baseline beside the
-    /// `.pv` file (`<file>.screenshots/<name>-<os>.png`). No baseline yet:
+    /// `.bt` file (`<file>.screenshots/<name>-<os>.png`). No baseline yet:
     /// it is written, and the step fails so a person looks at it first.
     /// With a baseline to meet, the first capture is compared at once and
     /// a match passes. A mismatch, or a baseline being written or updated,
@@ -1735,22 +1735,22 @@ impl Runner {
     /// half a second; the expectation's own time caps the wait, the last
     /// capture stands, and a failed compare says the page never settled.
     fn screenshot(&mut self, shot: &Shot, scope: &Scope, left: Duration) -> Result<(bool, String), String> {
-        let stem = scope.pv.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let dir = scope.pv.parent().unwrap_or(Path::new(".")).join(format!("{stem}.screenshots"));
+        let stem = scope.bt.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let dir = scope.bt.parent().unwrap_or(Path::new(".")).join(format!("{stem}.screenshots"));
         let baseline = dir.join(format!("{}-{}.png", shot.name, std::env::consts::OS));
         let flags = scope.words(&shot.flags)?;
         // Still and masked while it is taken.
         let masks = serde_json::to_string(&shot.masks).unwrap_or_default();
         let freeze = format!(
-            "(() => {{ const s = document.createElement('style'); s.id = '__pv_freeze'; \
+            "(() => {{ const s = document.createElement('style'); s.id = '__bt_freeze'; \
              s.textContent = '*,*::before,*::after{{animation:none!important;transition:none!important;caret-color:transparent!important}}'; \
              document.documentElement.append(s); const n = []; for (const css of {masks}) {{ const all = document.querySelectorAll(css); \
              n.push(all.length); for (const e of all) {{ \
-             const r = e.getBoundingClientRect(); const m = document.createElement('div'); m.className = '__pv_mask'; \
+             const r = e.getBoundingClientRect(); const m = document.createElement('div'); m.className = '__bt_mask'; \
              m.style.cssText = `position:absolute;left:${{r.left + scrollX}}px;top:${{r.top + scrollY}}px;width:${{r.width}}px;height:${{r.height}}px;background:#ff00ff;z-index:2147483647;pointer-events:none`; \
              document.documentElement.append(m); }} }} return [scrollX, scrollY, devicePixelRatio, n]; }})()"
         );
-        let unfreeze = "(() => { document.getElementById('__pv_freeze')?.remove(); for (const m of document.querySelectorAll('.__pv_mask')) m.remove(); return 1; })()";
+        let unfreeze = "(() => { document.getElementById('__bt_freeze')?.remove(); for (const m of document.querySelectorAll('.__bt_mask')) m.remove(); return 1; })()";
         // The target in view first: scrolled inside its scroll containers
         // and frames, which a full-page capture shows only as they stand.
         if !flags.is_empty() {
@@ -1850,7 +1850,7 @@ impl Runner {
         // predates both the init script and the direct install, as a
         // document can mid-navigation). A timer, not rAF: headless Chrome can
         // starve animation frames between captures.
-        let frame = "new Promise(r=>setTimeout(()=>r(window.__pvQuiet === undefined ? -1 : performance.now() - window.__pvQuiet), 50))";
+        let frame = "new Promise(r=>setTimeout(()=>r(window.__btQuiet === undefined ? -1 : performance.now() - window.__btQuiet), 50))";
         let started = Instant::now();
         let mut prev: Option<crate::shot::Image> = None;
         let (img, stable) = loop {
@@ -2239,7 +2239,7 @@ impl Runner {
                         let f = scope.word(f)?;
                         // Waiting won't make it appear: say so now.
                         let src = std::fs::read_to_string(&f).map_err(|_| {
-                            format!("expect js --file: no file {f} (a relative name is found next to the .pv)")
+                            format!("expect js --file: no file {f} (a relative name is found next to the .bt)")
                         })?;
                         // An expression, or a function body that `return`s
                         // its answer: tried as the first, then run as the
@@ -2560,18 +2560,18 @@ const POLL: Duration = Duration::from_millis(25);
 /// reads elements with: the same deep search navigera's own reads use
 /// (the documents of the same-origin frame tree, plus open shadow roots;
 /// first match in that order), and its `is` rules (visible, disabled,
-/// checked, focused). The `__pv` prefix keeps clear of navigera's own
+/// checked, focused). The `__bt` prefix keeps clear of navigera's own
 /// `__nv` names.
-const WAKE_DEEP: &str = r#"const __pvDocs = (d, out) => { out.push(d); for (const f of d.querySelectorAll('iframe, frame')) { let cd = null; try { cd = f.contentDocument; } catch (_) {} if (cd && cd.documentElement) __pvDocs(cd, out); } return out; };
-const __pvShadows = (root, out) => { const tw = (root.ownerDocument || root).createTreeWalker(root, NodeFilter.SHOW_ELEMENT); for (let n = tw.nextNode(); n; n = tw.nextNode()) { if (n.shadowRoot) { out.push(n.shadowRoot); __pvShadows(n.shadowRoot, out); } } return out; };
-const __pvRoots = () => { const out = []; for (const d of __pvDocs(document, [])) { out.push(d); __pvShadows(d, out); } return out; };
-const __pvFirst = (sel) => { for (const r of __pvRoots()) { const el = r.querySelector(sel); if (el) return el; } return null; };
-const __pvAll = (sel) => __pvRoots().flatMap((r) => Array.from(r.querySelectorAll(sel)));
-const __pvVisible = (el) => !!el && el.getClientRects().length > 0 && (el.ownerDocument.defaultView || window).getComputedStyle(el).visibility !== 'hidden';
-const __pvDisabled = (el) => !!el && !!(el.disabled || el.closest('fieldset[disabled]') || el.getAttribute('aria-disabled') === 'true');
-const __pvEnabled = (el) => !!el && !__pvDisabled(el);
-const __pvChecked = (el) => !!el && !!(el.checked || el.getAttribute('aria-checked') === 'true');
-const __pvFocused = (el) => { if (!el) return false; const a = el.getRootNode().activeElement || el.ownerDocument.activeElement; return el === a || el.contains(a); };
+const WAKE_DEEP: &str = r#"const __btDocs = (d, out) => { out.push(d); for (const f of d.querySelectorAll('iframe, frame')) { let cd = null; try { cd = f.contentDocument; } catch (_) {} if (cd && cd.documentElement) __btDocs(cd, out); } return out; };
+const __btShadows = (root, out) => { const tw = (root.ownerDocument || root).createTreeWalker(root, NodeFilter.SHOW_ELEMENT); for (let n = tw.nextNode(); n; n = tw.nextNode()) { if (n.shadowRoot) { out.push(n.shadowRoot); __btShadows(n.shadowRoot, out); } } return out; };
+const __btRoots = () => { const out = []; for (const d of __btDocs(document, [])) { out.push(d); __btShadows(d, out); } return out; };
+const __btFirst = (sel) => { for (const r of __btRoots()) { const el = r.querySelector(sel); if (el) return el; } return null; };
+const __btAll = (sel) => __btRoots().flatMap((r) => Array.from(r.querySelectorAll(sel)));
+const __btVisible = (el) => !!el && el.getClientRects().length > 0 && (el.ownerDocument.defaultView || window).getComputedStyle(el).visibility !== 'hidden';
+const __btDisabled = (el) => !!el && !!(el.disabled || el.closest('fieldset[disabled]') || el.getAttribute('aria-disabled') === 'true');
+const __btEnabled = (el) => !!el && !__btDisabled(el);
+const __btChecked = (el) => !!el && !!(el.checked || el.getAttribute('aria-checked') === 'true');
+const __btFocused = (el) => { if (!el) return false; const a = el.getRootNode().activeElement || el.ownerDocument.activeElement; return el === a || el.contains(a); };
 "#;
 
 /// `compare()` mirrored for a wake wait's predicate: the matcher word is
@@ -2579,15 +2579,15 @@ const __pvFocused = (el) => { if (!el) return false; const a = el.getRootNode().
 /// numbers as its `parse::<f64>` (an empty or non-numeric side is not a
 /// number). Anything the mirror cannot say (a pattern JS rejects) throws,
 /// and the predicate's own catch wakes early instead of blocking a pass.
-const WAKE_CMP: &str = r#"const __pvNum = (s) => { const t = String(s).trim(); if (t === '') return null; const n = Number(t); return Number.isNaN(n) ? null : n; };
-const __pvCmp = (actual, m, expected) => { actual = String(actual); switch (m) {
-  case 'is': return actual === expected || (__pvNum(actual) !== null && __pvNum(expected) !== null && __pvNum(actual) === __pvNum(expected));
+const WAKE_CMP: &str = r#"const __btNum = (s) => { const t = String(s).trim(); if (t === '') return null; const n = Number(t); return Number.isNaN(n) ? null : n; };
+const __btCmp = (actual, m, expected) => { actual = String(actual); switch (m) {
+  case 'is': return actual === expected || (__btNum(actual) !== null && __btNum(expected) !== null && __btNum(actual) === __btNum(expected));
   case 'contains': return actual.includes(expected);
   case 'starts-with': return actual.startsWith(expected);
   case 'ends-with': return actual.endsWith(expected);
   case 'matches': return new RegExp(expected).test(actual);
   case '>': case '>=': case '<': case '<=': {
-    const a = __pvNum(actual), b = __pvNum(expected);
+    const a = __btNum(actual), b = __btNum(expected);
     if (a === null || b === null) return false;
     if (m === '>') return a > b; if (m === '>=') return a >= b; if (m === '<') return a < b; return a <= b;
   }
@@ -2597,14 +2597,14 @@ const __pvCmp = (actual, m, expected) => { actual = String(actual); switch (m) {
 
 /// `expect screenshot`'s page-quiet clock: from document start in every
 /// tab, the time of the page's own last DOM change. bitti's freeze
-/// style and mask divs (`__pv_freeze`, `__pv_mask`) do not count. It
+/// style and mask divs (`__bt_freeze`, `__bt_mask`) do not count. It
 /// installs once a document (the init script runs it first; a direct
 /// eval is the fallback for pages that predate the registration).
 const QUIET_CLOCK: &str = r#"(() => {
-  if (window.__pvQuiet !== undefined) return;
-  const mark = () => { window.__pvQuiet = performance.now(); };
+  if (window.__btQuiet !== undefined) return;
+  const mark = () => { window.__btQuiet = performance.now(); };
   mark();
-  const own = (n) => n.nodeType === 1 && (n.id === '__pv_freeze' || (n.classList && n.classList.contains('__pv_mask')));
+  const own = (n) => n.nodeType === 1 && (n.id === '__bt_freeze' || (n.classList && n.classList.contains('__bt_mask')));
   new MutationObserver((ms) => {
     for (const m of ms) {
       if (m.type === 'childList') {
@@ -2852,9 +2852,9 @@ pub fn browser_failed(e: &str) -> String {
 }
 
 /// navigera's errors end with advice for its own loop (read `ax`, act on a
-/// ref), which a `.pv` file can't follow: refs change between runs and are
+/// ref), which a `.bt` file can't follow: refs change between runs and are
 /// refused. Here the screenshot and a locator are the way.
-pub fn pv_terms(message: &str) -> String {
+pub fn bt_terms(message: &str) -> String {
     let mut out = message.to_string();
     for (from, to) in [
         (
@@ -3080,8 +3080,8 @@ struct Scope {
     soft: Vec<(Step, String)>,
     /// The last `http` answer's headers.
     http_headers: Vec<(String, String)>,
-    /// The `.pv` file: screenshot baselines are beside it.
-    pv: PathBuf,
+    /// The `.bt` file: screenshot baselines are beside it.
+    bt: PathBuf,
     /// The step of a flow that failed, and its file (see `Failure::source`).
     inner: Option<(PathBuf, Step)>,
     /// An `optional` step just now didn't hold.
@@ -3116,7 +3116,7 @@ impl Scope {
             notes: Vec::new(),
             soft: Vec::new(),
             http_headers: Vec::new(),
-            pv: suite.file.clone(),
+            bt: suite.file.clone(),
             inner: None,
             optional_missed: false,
             exchanges: Vec::new(),
@@ -3305,14 +3305,14 @@ mod tests {
     }
 
     #[test]
-    fn navigera_advice_is_put_in_a_pv_files_terms() {
-        let m = pv_terms("click text \"Buy now\": no element with text \"Buy now\" within 600 ms (run `ax` to see the page and act on a ref from it)");
+    fn navigera_advice_is_put_in_a_bt_files_terms() {
+        let m = bt_terms("click text \"Buy now\": no element with text \"Buy now\" within 600 ms (run `ax` to see the page and act on a ref from it)");
         assert!(!m.contains("`ax`") && m.contains("screenshot") && m.contains("--role button"), "{m}");
-        let old = pv_terms(
+        let old = bt_terms(
             "click: no element matches selector \"Buy now\" within 1500 ms (run `ax` to see the page and act by --ref)",
         );
         assert!(!old.contains("--ref") && !old.contains("`ax`"), "{old}");
-        let refused = pv_terms("goto http://127.0.0.1:1/: net::ERR_CONNECTION_REFUSED");
+        let refused = bt_terms("goto http://127.0.0.1:1/: net::ERR_CONNECTION_REFUSED");
         assert!(refused.contains("[server]"), "{refused}");
     }
 

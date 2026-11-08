@@ -1,4 +1,4 @@
-//! Scenario files (`.pv`): plain text, one step per line.
+//! Scenario files (`.bt`): plain text, one step per line.
 //!
 //! ```text
 //! # comment
@@ -68,7 +68,7 @@ pub enum Action {
     /// person (a 2FA prompt, a CAPTCHA), until the clause holds or Enter.
     Handoff(Option<Expect>),
     /// `exec [--timeout-ms n] <program> <args…>`: a program run (no shell)
-    /// in the `.pv` file's directory; its exit code and output become
+    /// in the `.bt` file's directory; its exit code and output become
     /// `${exec.exit}`, `${exec.stdout}`, `${exec.stderr}`. The steps
     /// indented under it run after it; a nonzero exit fails the step unless
     /// one of them checks `exit`.
@@ -265,7 +265,7 @@ pub struct Suite {
     pub scenarios: Vec<Scenario>,
     pub flows: BTreeMap<String, Flow>,
     pub auths: BTreeMap<String, Auth>,
-    /// `use <file.pv>`: files whose flows and `set`s this one takes.
+    /// `use <file.bt>`: files whose flows and `set`s this one takes.
     pub uses: Vec<(usize, PathBuf)>,
 }
 
@@ -771,7 +771,7 @@ pub fn parse(file: &Path, text: &str) -> Result<Suite, ParseError> {
                 block = Block::None;
             }
             Some("use") => {
-                let path = words.get(1).ok_or_else(|| err(line_no, "expected `use <file.pv>`".into()))?;
+                let path = words.get(1).ok_or_else(|| err(line_no, "expected `use <file.bt>`".into()))?;
                 let dir = file.parent().unwrap_or(Path::new("."));
                 suite.uses.push((line_no, dir.join(path)));
                 block = Block::None;
@@ -983,7 +983,7 @@ pub fn resolve(suites: &mut [Suite]) -> Result<(), ParseError> {
     for suite in suites.iter_mut() {
         resolve_uses(suite)?;
     }
-    // A .feature file's steps: the `step` blocks of every .pv file in the run.
+    // A .feature file's steps: the `step` blocks of every .bt file in the run.
     let defs: Vec<Flow> =
         suites.iter().flat_map(|s| s.flows.values()).filter(|f| f.name.starts_with("step \"")).cloned().collect();
     for suite in suites.iter_mut() {
@@ -995,7 +995,7 @@ pub fn resolve(suites: &mut [Suite]) -> Result<(), ParseError> {
     Ok(())
 }
 
-/// `use <file.pv>`: the flows, auths and `set`s of the files it names.
+/// `use <file.bt>`: the flows, auths and `set`s of the files it names.
 fn resolve_uses(suite: &mut Suite) -> Result<(), ParseError> {
     {
         let mut seen = std::collections::BTreeSet::new();
@@ -1009,7 +1009,7 @@ fn resolve_uses(suite: &mut Suite) -> Result<(), ParseError> {
             let text = std::fs::read_to_string(&path).map_err(|e| {
                 err(match e.kind() {
                     std::io::ErrorKind::NotFound => {
-                        format!("use {}: no such file (a name is found next to this .pv)", path.display())
+                        format!("use {}: no such file (a name is found next to this .bt)", path.display())
                     }
                     _ => format!("use {}: {}", path.display(), crate::plain_io(&e)),
                 })
@@ -1054,7 +1054,7 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                         return Err(ParseError {
                             file: file.to_path_buf(),
                             line: st.line,
-                            message: format!("js --file {f}: no such file (a script is found next to the .pv)"),
+                            message: format!("js --file {f}: no such file (a script is found next to the .bt)"),
                         });
                     }
                 }
@@ -1065,7 +1065,7 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                         return Err(ParseError {
                             file: file.to_path_buf(),
                             line: st.line,
-                            message: format!("schema {f}: no such file (a schema is found next to the .pv)"),
+                            message: format!("schema {f}: no such file (a schema is found next to the .bt)"),
                         });
                     }
                 }
@@ -1145,7 +1145,7 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
 }
 
 /// Files a step reads (`upload`, `state load`, `eval --file`, `init-script
-/// --file`, `route --body-file`, `route --har`) are found next to the `.pv` file, as `use`
+/// --file`, `route --body-file`, `route --har`) are found next to the `.bt` file, as `use`
 /// and `for each` are, so a suite runs the same from any directory. Absolute
 /// paths, `-` (stdin) and paths that start with a variable are left alone.
 fn anchor_inputs(action: &mut Action, dir: &Path) {
@@ -1191,7 +1191,7 @@ fn anchor_inputs(action: &mut Action, dir: &Path) {
                     *f = dir.join(f.as_str()).to_string_lossy().into_owned();
                 }
             }
-            // `name=@file`: the file beside the `.pv`.
+            // `name=@file`: the file beside the `.bt`.
             for (_, v) in multipart.iter_mut() {
                 if let Some(f) = v.strip_prefix('@') {
                     let path = f.split(';').next().unwrap_or(f);
@@ -1520,7 +1520,7 @@ fn reads_as_text(word: &str) -> bool {
         && word.chars().any(|c| c.is_whitespace() || c.is_uppercase() || !c.is_ascii())
 }
 
-/// The `.pv` files under each path (a file is taken as is).
+/// The `.bt` files under each path (a file is taken as is).
 pub fn discover(paths: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
@@ -1533,7 +1533,7 @@ pub fn discover(paths: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {
             }
             if p.is_dir() {
                 walk(&p, out)?;
-            } else if matches!(p.extension().and_then(|e| e.to_str()), Some("pv" | "feature")) {
+            } else if matches!(p.extension().and_then(|e| e.to_str()), Some("bt" | "feature")) {
                 out.push(p);
             }
         }
@@ -1585,7 +1585,7 @@ mod tests {
     #[test]
     fn a_file_parses_into_blocks_and_steps() {
         let text = "# shop\nbase http://127.0.0.1:8000\nset coupon = SAVE10\n\nbefore each\n  goto /shop\n\nscenario \"Add one\" @smoke @cart\n  click --text \"Add to cart\"\n  expect --selector #cart-count text is 1\n  save n = get text --selector #cart-count\n\nscenario \"Docs\"\n  goto /docs\n";
-        let s = parse(Path::new("t.pv"), text).unwrap();
+        let s = parse(Path::new("t.bt"), text).unwrap();
         assert_eq!(s.base.as_deref(), Some("http://127.0.0.1:8000"));
         assert_eq!(s.vars["coupon"], "SAVE10");
         assert_eq!(s.before_each.len(), 1);
@@ -1594,23 +1594,23 @@ mod tests {
         assert_eq!(s.scenarios[0].steps[0].line, 9);
         assert!(matches!(s.scenarios[0].steps[1].action, Action::Expect(_)));
         assert!(matches!(&s.scenarios[0].steps[2].action, Action::Save { name, .. } if name == "n"));
-        let p = parse(Path::new("p.pv"), "scenario \"p\"\n  print get text --testid total\n").unwrap();
+        let p = parse(Path::new("p.bt"), "scenario \"p\"\n  print get text --testid total\n").unwrap();
         assert!(matches!(&p.scenarios[0].steps[0].action, Action::Print(w) if w[0] == "get" && w[3] == "total"));
-        assert!(parse(Path::new("p.pv"), "scenario \"p\"\n  print\n").unwrap_err().to_string().contains("print needs"));
+        assert!(parse(Path::new("p.bt"), "scenario \"p\"\n  print\n").unwrap_err().to_string().contains("print needs"));
     }
 
     #[test]
     fn mistakes_are_reported_with_their_line() {
-        let e = parse(Path::new("t.pv"), "scenario \"A\"\n  click 12\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"A\"\n  click 12\n").unwrap_err();
         assert_eq!(e.line, 2);
         assert!(e.message.contains("refs"), "{e}");
-        let e = parse(Path::new("t.pv"), "  goto /\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "  goto /\n").unwrap_err();
         assert!(e.message.contains("outside"), "{e}");
-        let e = parse(Path::new("t.pv"), "scenario \"A\"\n  goto /\nscenario \"A\"\n  goto /\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"A\"\n  goto /\nscenario \"A\"\n  goto /\n").unwrap_err();
         assert_eq!(e.line, 3);
-        let e = parse(Path::new("t.pv"), "scenario \"Empty\"\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"Empty\"\n").unwrap_err();
         assert!(e.message.contains("no steps"), "{e}");
-        let e = parse(Path::new("t.pv"), "scenario \"A\"\n  expect url sounds-like x\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"A\"\n  expect url sounds-like x\n").unwrap_err();
         assert_eq!(e.line, 2);
     }
 
@@ -1618,16 +1618,16 @@ mod tests {
     fn variables_reach_values_checked_at_parse_time() {
         // A flow's arguments fill a count and a regex; they're checked when filled in (T-0058).
         let text = "flow rows(n, re)\n  expect --selector tr count is ${n}\n  expect title matches ${re}\n  expect request GET /api/* count >= ${n}\nscenario \"x\"\n  run rows 3 ^Shop\n";
-        let mut s = parse(Path::new("t.pv"), text).unwrap();
+        let mut s = parse(Path::new("t.bt"), text).unwrap();
         resolve(std::slice::from_mut(&mut s)).unwrap();
-        assert!(parse(Path::new("t.pv"), "scenario \"x\"\n  expect --selector tr count is three\n").is_err());
-        assert!(parse(Path::new("t.pv"), "scenario \"x\"\n  expect title matches (\n").is_err());
+        assert!(parse(Path::new("t.bt"), "scenario \"x\"\n  expect --selector tr count is three\n").is_err());
+        assert!(parse(Path::new("t.bt"), "scenario \"x\"\n  expect title matches (\n").is_err());
     }
 
     #[test]
     fn exec_takes_its_checks_under_it_and_runs_beside_the_file() {
         let text = "scenario \"x\"\n  exec --timeout-ms 900 ./seed.sh ${who}\n    expect exit 0\n  exec psql -c \"select 1\"\n  expect ax matches\n    - button \"Go\"\n\n    - link\n  goto /\n";
-        let mut s = parse(Path::new("dir/t.pv"), text).unwrap();
+        let mut s = parse(Path::new("dir/t.bt"), text).unwrap();
         resolve(std::slice::from_mut(&mut s)).unwrap();
         let steps = &s.scenarios[0].steps;
         match &steps[0].action {
@@ -1646,15 +1646,15 @@ mod tests {
             Action::Expect(Expect { subject: crate::expect::Subject::Ax { tree, .. }, .. }) if tree.len() == 3
         ));
         assert!(matches!(&steps[3].action, Action::Command(w) if w[0] == "goto"));
-        assert!(parse(Path::new("t.pv"), "scenario \"x\"\n  exec\n").is_err());
-        assert!(parse(Path::new("t.pv"), "scenario \"x\"\n  if ax matches\n    goto /\n").is_err());
-        assert!(parse(Path::new("t.pv"), "scenario \"x\"\n  expect ax matches\n  goto /\n").is_err());
+        assert!(parse(Path::new("t.bt"), "scenario \"x\"\n  exec\n").is_err());
+        assert!(parse(Path::new("t.bt"), "scenario \"x\"\n  if ax matches\n    goto /\n").is_err());
+        assert!(parse(Path::new("t.bt"), "scenario \"x\"\n  expect ax matches\n  goto /\n").is_err());
     }
 
     #[test]
     fn flows_rows_and_optional_steps() {
         let text = "flow sign-in(email, password)\n  goto /login\n  fill --label Email ${email}\n\nscenario \"Ship to ${country}\"\n  examples\n    | country | fee |\n    | Canada  | $9  |\n    | Mexico  | $12 |\n  run sign-in a@b.c pw\n  optional click --selector #banner\n  expect text ${fee}\n";
-        let mut s = parse(Path::new("t.pv"), text).unwrap();
+        let mut s = parse(Path::new("t.bt"), text).unwrap();
         assert_eq!(s.flows["sign-in"].params, ["email", "password"]);
         assert_eq!(
             s.scenarios.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
@@ -1667,22 +1667,22 @@ mod tests {
         assert!(matches!(&s.scenarios[0].steps[1].action, Action::Optional(_)));
         resolve(std::slice::from_mut(&mut s)).unwrap();
         // A wrong flow call is a file error, with its line.
-        let mut bad = parse(Path::new("t.pv"), "flow f(a)\n  goto /\nscenario \"x\"\n  run f\n").unwrap();
+        let mut bad = parse(Path::new("t.bt"), "flow f(a)\n  goto /\nscenario \"x\"\n  run f\n").unwrap();
         let e = resolve(std::slice::from_mut(&mut bad)).unwrap_err();
         assert_eq!(e.line, 4);
         assert!(e.message.contains("takes 1 argument"), "{e}");
-        let mut bad = parse(Path::new("t.pv"), "scenario \"x\"\n  run nowhere\n").unwrap();
+        let mut bad = parse(Path::new("t.bt"), "scenario \"x\"\n  run nowhere\n").unwrap();
         assert!(resolve(std::slice::from_mut(&mut bad)).unwrap_err().message.contains("no flow named"));
         // Rows that would give two scenarios one name.
         let e = parse(
-            Path::new("t.pv"),
+            Path::new("t.bt"),
             "scenario \"Same ${a}\"\n  examples\n    | a | b |\n    | 1 | x |\n    | 1 | y |\n  goto /\n",
         )
         .unwrap_err();
         assert!(e.message.contains("two data rows"), "{e}");
         // A name without a column gets the row's number.
         let s =
-            parse(Path::new("t.pv"), "scenario \"Plain\"\n  examples\n    | a |\n    | 1 |\n    | 2 |\n  goto /${a}\n")
+            parse(Path::new("t.bt"), "scenario \"Plain\"\n  examples\n    | a |\n    | 1 |\n    | 2 |\n  goto /${a}\n")
                 .unwrap();
         assert_eq!(s.scenarios[1].name, "Plain [2]");
     }
@@ -1695,7 +1695,7 @@ mod tests {
                     upload --frame iframe e.txt\n  optional state load s.json\n  eval --file x.js\n  \
                     route **/api --body-file body.json\n  upload --file ${download.path}\n  eval -\n  \
                     fill --selector a.txt b.txt\n  route **/api/* --har api.har --not-found continue\n";
-        let suite = parse(&dir.join("t.pv"), text).unwrap();
+        let suite = parse(&dir.join("t.bt"), text).unwrap();
         let at = |p: &str| dir.join(p).to_string_lossy().into_owned();
         let words: Vec<Vec<String>> = suite.scenarios[0]
             .steps
@@ -1730,12 +1730,12 @@ mod tests {
         assert_eq!(rows[0]["password"], "p,w");
         assert_eq!(rows[1]["email"], "bo \"b\"");
         assert!(csv_rows("a,b\n1\n").is_err());
-        let dir = std::env::temp_dir().join(format!("pv-use-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bt-use-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("flows")).unwrap();
-        std::fs::write(dir.join("flows/auth.pv"), "set who = ada\nflow hello\n  goto /\n").unwrap();
+        std::fs::write(dir.join("flows/auth.bt"), "set who = ada\nflow hello\n  goto /\n").unwrap();
         std::fs::write(dir.join("logins.csv"), "user\nada\nbo\n").unwrap();
-        let main = dir.join("main.pv");
-        std::fs::write(&main, "use flows/auth.pv\nscenario \"Hi ${user}\" for each logins.csv @data\n  run hello\n")
+        let main = dir.join("main.bt");
+        std::fs::write(&main, "use flows/auth.bt\nscenario \"Hi ${user}\" for each logins.csv @data\n  run hello\n")
             .unwrap();
         let mut s = parse(&main, &std::fs::read_to_string(&main).unwrap()).unwrap();
         resolve(std::slice::from_mut(&mut s)).unwrap();
@@ -1747,11 +1747,11 @@ mod tests {
 
     #[test]
     fn a_files_variable_under_a_scenario_says_where_it_goes() {
-        let e = parse(Path::new("t.pv"), "scenario \"x\"\n  set who = ada\n  goto /\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"x\"\n  set who = ada\n  goto /\n").unwrap_err();
         assert_eq!(e.line, 2);
         assert!(e.message.contains("`set who = …` goes at the top of the file, not indented"), "{}", e.message);
         // The browser's own `set` is a step.
-        assert!(parse(Path::new("t.pv"), "scenario \"x\"\n  set viewport 800x600\n  goto /\n").is_ok());
+        assert!(parse(Path::new("t.bt"), "scenario \"x\"\n  set viewport 800x600\n  goto /\n").is_ok());
         // What navigera refuses from the words alone fails in lint too. An
         // older navigera (CI builds against `master` too) refuses these only
         // in the run, so there is nothing for lint to see.
@@ -1762,7 +1762,7 @@ mod tests {
             if crate::runner::parse(&words).is_ok() {
                 continue;
             }
-            let mut s = vec![parse(Path::new("t.pv"), &format!("scenario \"x\"\n  {step}\n")).unwrap()];
+            let mut s = vec![parse(Path::new("t.bt"), &format!("scenario \"x\"\n  {step}\n")).unwrap()];
             let e = resolve(&mut s).unwrap_err();
             assert_eq!(e.line, 2);
             assert!(e.message.contains(said), "{step}: {}", e.message);
@@ -1772,7 +1772,7 @@ mod tests {
     #[test]
     fn mistakes_in_the_file_say_where_and_what_to_do() {
         let fails = |text: &str| -> ParseError {
-            match parse(Path::new("t.pv"), text) {
+            match parse(Path::new("t.bt"), text) {
                 Err(e) => e,
                 Ok(s) => resolve(&mut [s]).unwrap_err(),
             }
@@ -1781,16 +1781,16 @@ mod tests {
         assert_eq!((e.line, e.message.as_str()), (2, "a second `base` (the first is at line 1); keep one"));
         let e = fails("scenario \"x\"\n  goto /\nscenario \"x\"\n  goto /\n");
         assert_eq!(e.message, "a second scenario named \"x\" (the first is at line 1); rename one");
-        let e = fails("use nowhere.pv\nscenario \"x\"\n  goto /\n");
-        assert_eq!(e.message, "use nowhere.pv: no such file (a name is found next to this .pv)");
+        let e = fails("use nowhere.bt\nscenario \"x\"\n  goto /\n");
+        assert_eq!(e.message, "use nowhere.bt: no such file (a name is found next to this .bt)");
         for step in ["expect js --file nofile.js", "optional expect js --file nofile.js", "if js --file nofile.js"] {
             let under = if step.starts_with("if") { "    " } else { "  " };
             let e = fails(&format!("scenario \"x\"\n  {step}\n{under}goto /\n"));
-            assert_eq!(e.message, "js --file nofile.js: no such file (a script is found next to the .pv)", "{step}");
+            assert_eq!(e.message, "js --file nofile.js: no such file (a script is found next to the .bt)", "{step}");
         }
         // `if expect …` is the same as `if …`.
-        let with = parse(Path::new("t.pv"), "scenario \"x\"\n  if expect text \"Hi\"\n    goto /\n").unwrap();
-        let without = parse(Path::new("t.pv"), "scenario \"x\"\n  if text \"Hi\"\n    goto /\n").unwrap();
+        let with = parse(Path::new("t.bt"), "scenario \"x\"\n  if expect text \"Hi\"\n    goto /\n").unwrap();
+        let without = parse(Path::new("t.bt"), "scenario \"x\"\n  if text \"Hi\"\n    goto /\n").unwrap();
         assert_eq!(
             format!("{:?}", with.scenarios[0].steps[0].action),
             format!("{:?}", without.scenarios[0].steps[0].action)
@@ -1800,7 +1800,7 @@ mod tests {
     #[test]
     fn lint_finds_variables_nothing_sets() {
         let text = "set a = 1\nflow f\n  save got = get text --selector h1\nscenario \"x\"\n  goto /${a}\n  goto /${row}\n  run f\n  expect ${got} is ${b:-2}\n  expect ${missing} is 1\n  save later = get title\n  goto /${later}\n";
-        let s = parse(Path::new("t.pv"), text).unwrap();
+        let s = parse(Path::new("t.bt"), text).unwrap();
         let un = unset_vars(&s, &s.scenarios[0], &[]);
         assert_eq!(un, [(6, "row".to_string()), (9, "missing".to_string())]);
         assert_eq!(unset_vars(&s, &s.scenarios[0], &["row".into(), "missing".into()]), []);
@@ -1826,7 +1826,7 @@ mod tests {
     #[test]
     fn a_misspelled_step_is_a_file_error() {
         let check = |text: &str| {
-            let mut suites = vec![parse(Path::new("t.pv"), text).unwrap()];
+            let mut suites = vec![parse(Path::new("t.bt"), text).unwrap()];
             resolve(&mut suites)
         };
         let e = check("scenario \"x\"\n  goto /\n  clik --text Go\n").unwrap_err();
@@ -1845,23 +1845,23 @@ mod tests {
     #[test]
     fn if_blocks_nest_by_indentation() {
         let text = "scenario \"x\"\n  goto /\n  if --selector \"#banner\" visible\n    click --selector \"#close\"\n    if text \"More\"\n      click --text More\n  expect title is t\n";
-        let s = parse(Path::new("t.pv"), text).unwrap();
+        let s = parse(Path::new("t.bt"), text).unwrap();
         let steps = &s.scenarios[0].steps;
         assert_eq!(steps.len(), 3);
         let Action::If { cond, steps: inner } = &steps[1].action else { panic!("{:?}", steps[1]) };
         assert_eq!(cond.timeout_ms, Some(0));
         assert_eq!(inner.len(), 2);
         assert!(matches!(&inner[1].action, Action::If { steps, .. } if steps.len() == 1));
-        let e = parse(Path::new("t.pv"), "scenario \"x\"\n  goto /\n    click --text a\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"x\"\n  goto /\n    click --text a\n").unwrap_err();
         assert_eq!(e.line, 3);
-        let e = parse(Path::new("t.pv"), "scenario \"x\"\n  if text a\n  goto /\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"x\"\n  if text a\n  goto /\n").unwrap_err();
         assert!(e.message.contains("needs the steps"), "{e}");
     }
 
     #[test]
     fn graphql_requests_parse() {
         let s = parse(
-            Path::new("/t/x.pv"),
+            Path::new("/t/x.bt"),
             "scenario \"g\"\n  http POST /graphql --graphql \"query($id: ID!) { p(id: $id) { id } }\" --variables '{\"id\": \"1\"}' --operation Q\n  http POST /graphql --graphql-file q.graphql\n",
         )
         .unwrap();
@@ -1877,39 +1877,39 @@ mod tests {
             "http POST /g --variables {}",
             "http POST /g --graphql x --variables [1]",
         ] {
-            assert!(parse(Path::new("/t/x.pv"), &format!("scenario \"b\"\n  {bad}\n")).is_err(), "{bad}");
+            assert!(parse(Path::new("/t/x.bt"), &format!("scenario \"b\"\n  {bad}\n")).is_err(), "{bad}");
         }
     }
 
     #[test]
     fn http_takes_forms_queries_and_multipart_parts() {
         let text = "scenario \"s\"\n  http POST /login --form user=ada --form \"pw=${secret:PW}\" --query next=/home\n  http POST /up --multipart note=hi --multipart file=@data/a.png\n";
-        let s = parse(Path::new("/t/x.pv"), text).unwrap();
+        let s = parse(Path::new("/t/x.bt"), text).unwrap();
         let Action::Http { form, query, .. } = &s.scenarios[0].steps[0].action else { panic!() };
         assert_eq!(form, &[("user".to_string(), "ada".to_string()), ("pw".into(), "${secret:PW}".into())]);
         assert_eq!(query, &[("next".to_string(), "/home".to_string())]);
         let Action::Http { multipart, .. } = &s.scenarios[0].steps[1].action else { panic!() };
-        // A file part is found beside the .pv.
+        // A file part is found beside the .bt.
         assert_eq!(multipart[1].1, format!("@{}", Path::new("/t").join("data/a.png").display()));
         assert_eq!(multipart[0].1, "hi");
         for bad in ["http POST /a --form nope", "http POST /a --form a=1 --json '{}'", "http POST /a --multipart =x"] {
-            assert!(parse(Path::new("x.pv"), &format!("scenario \"s\"\n  {bad}\n")).is_err(), "{bad}");
+            assert!(parse(Path::new("x.bt"), &format!("scenario \"s\"\n  {bad}\n")).is_err(), "{bad}");
         }
     }
 
     #[test]
     fn retry_and_pause_are_steps() {
         let text = "scenario \"s\"\n  retry --timeout-ms 9000\n    http GET /job\n      expect json $.status is done\n  pause\n";
-        let s = parse(Path::new("x.pv"), text).unwrap();
+        let s = parse(Path::new("x.bt"), text).unwrap();
         let steps = &s.scenarios[0].steps;
         let Action::Retry { timeout_ms, steps: inner } = &steps[0].action else { panic!("{:?}", steps[0]) };
         assert_eq!(*timeout_ms, Some(9000));
         assert!(matches!(&inner[0].action, Action::Http { steps, .. } if steps.len() == 1));
         assert_eq!(steps[1].action, Action::Pause);
         assert!(s.has_pause(&s.scenarios[0]));
-        let e = parse(Path::new("x.pv"), "scenario \"s\"\n  retry\n  goto /\n").unwrap_err();
+        let e = parse(Path::new("x.bt"), "scenario \"s\"\n  retry\n  goto /\n").unwrap_err();
         assert!(e.message.contains("`retry` needs the steps"), "{e}");
-        assert!(parse(Path::new("x.pv"), "scenario \"s\"\n  retry --every 1\n    goto /\n").is_err());
+        assert!(parse(Path::new("x.bt"), "scenario \"s\"\n  retry --every 1\n    goto /\n").is_err());
     }
 
     #[test]
@@ -1954,13 +1954,13 @@ scenario \"a read\"
 scenario \"a page print\"
   print url
 ";
-        let s = parse(Path::new("x.pv"), text).unwrap();
+        let s = parse(Path::new("x.bt"), text).unwrap();
         let needs: Vec<bool> = s.scenarios.iter().map(|sc| s.scenario_needs_browser(sc)).collect();
         assert_eq!(needs, [false, true, true, true, true, true]);
         // A `before each` that opens a page puts every scenario in a browser.
-        let s = parse(Path::new("x.pv"), "before each\n  goto /\nscenario \"s\"\n  http GET /me\n").unwrap();
+        let s = parse(Path::new("x.bt"), "before each\n  goto /\nscenario \"s\"\n  http GET /me\n").unwrap();
         assert!(s.scenario_needs_browser(&s.scenarios[0]));
-        let s = parse(Path::new("x.pv"), "before all\n  goto /\nscenario \"s\"\n  http GET /me\n").unwrap();
+        let s = parse(Path::new("x.bt"), "before all\n  goto /\nscenario \"s\"\n  http GET /me\n").unwrap();
         assert!(!s.scenario_needs_browser(&s.scenarios[0]) && s.job_needs_browser(&s.scenarios[0]));
     }
 }

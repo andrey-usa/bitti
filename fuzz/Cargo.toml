@@ -15,11 +15,11 @@ png = "0.17"
 serde = { version = "1", features = ["derive"] }
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 [lib]
-name = "pvlib"
+name = "btlib"
 path = "src/lib.rs"
 [[bin]]
-name = "pv_parse"
-path = "fuzz_targets/pv_parse.rs"
+name = "bt_parse"
+path = "fuzz_targets/bt_parse.rs"
 test = false
 doc = false
 [[bin]]

@@ -169,7 +169,7 @@ fn an_electron_app_already_running_is_tested_by_attaching() {
 #[test]
 fn two_workers_trace_every_step_without_trading_screenshots() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else { return };
-    let ev = std::env::temp_dir().join(format!("pv-trace2-{}", std::process::id()));
+    let ev = std::env::temp_dir().join(format!("bt-trace2-{}", std::process::id()));
     let child = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", "examples/bench-site", "--base-url", &site.1, "--workers", "2", "--trace", "all"])
         .args(["--evidence", ev.to_str().unwrap()])
@@ -224,7 +224,7 @@ fn a_failure_says_what_was_expected_seen_and_why() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else {
         return;
     };
-    let (code, out) = bitti(&["run", "tests/fixtures/failing.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/failing.bt", "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("expected --selector #cart-count text is \"2\" within 600 ms; saw \"1\""), "{out}");
     assert!(out.contains("note: the step at line 10 (click --selector \"h1\") changed nothing"), "{out}");
@@ -233,7 +233,7 @@ fn a_failure_says_what_was_expected_seen_and_why() {
     assert!(!out.contains("note: the step at line 15"), "{out}");
     assert!(out.contains("screenshot "), "{out}");
     assert!(
-        out.contains("in flow open-docs, failing.pv:21 `expect title contains \"Nope\" --timeout-ms 300`"),
+        out.contains("in flow open-docs, failing.bt:21 `expect title contains \"Nope\" --timeout-ms 300`"),
         "{out}"
     );
     assert!(out.contains("nearest on the page:"), "{out}");
@@ -250,7 +250,7 @@ fn lint_and_list_need_no_browser() {
     let (code, out) = bitti(&["list", "examples", "--tag", "smoke"]);
     assert_eq!(code, 0, "{out}");
     assert_eq!(out.lines().count(), 2, "{out}");
-    let bad = std::env::temp_dir().join(format!("bitti-bad-{}.pv", std::process::id()));
+    let bad = std::env::temp_dir().join(format!("bitti-bad-{}.bt", std::process::id()));
     std::fs::write(&bad, "scenario \"A\"\n  click 12\n").unwrap();
     let (code, out) = bitti(&["lint", &bad.display().to_string()]);
     assert_eq!(code, 2, "{out}");
@@ -268,7 +268,7 @@ fn an_expect_is_woken_by_the_pages_change() {
     // 25 ms cap, as the poll would), a target that appears, a negated
     // state expect, a box a click checks and a field that takes focus
     // (woken by their events): the waits resolve, well inside the timeout.
-    let (code, out) = bitti(&["run", "tests/fixtures/wake.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/wake.bt", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("9 passed, 0 failed"), "{out}");
 }
@@ -278,26 +278,26 @@ fn workers_retries_and_reporters() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     // Retried: the first try fails, the second passes, and that is flaky.
     let (code, out) =
-        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site.1, "--retries", "1", "--workers", "2"]);
+        bitti(&["run", "tests/fixtures/flaky.bt", "--base-url", &site.1, "--retries", "1", "--workers", "2"]);
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("FLAKY tests/fixtures/flaky.pv:1  Fails once, then passes"), "{out}");
+    assert!(out.contains("FLAKY tests/fixtures/flaky.bt:1  Fails once, then passes"), "{out}");
     assert!(out.contains("failed first:"), "{out}");
     assert!(out.contains("1 passed, 1 flaky, 0 failed"), "{out}");
     // --fail-on-flaky makes it fail the run; jsonl says what happened.
     let (_, out) =
-        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site.1, "--grep", "Steady", "--reporter", "jsonl"]);
+        bitti(&["run", "tests/fixtures/flaky.bt", "--base-url", &site.1, "--grep", "Steady", "--reporter", "jsonl"]);
     let first: serde_json::Value = serde_json::from_str(out.lines().next().unwrap_or("")).unwrap_or_default();
     assert_eq!(first["event"], "scenario", "{out}");
     assert_eq!(first["status"], "passed", "{out}");
     let site2 = own_site().unwrap();
     let (code, out) =
-        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site2.1, "--retries", "1", "--fail-on-flaky"]);
+        bitti(&["run", "tests/fixtures/flaky.bt", "--base-url", &site2.1, "--retries", "1", "--fail-on-flaky"]);
     assert_eq!(code, 1, "{out}");
     // GitHub annotations: the failing line, no retries.
     let site3 = own_site().unwrap();
-    let (code, out) = bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site3.1, "--reporter", "github"]);
+    let (code, out) = bitti(&["run", "tests/fixtures/flaky.bt", "--base-url", &site3.1, "--reporter", "github"]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("::error file=tests/fixtures/flaky.pv,line=3,title=Fails once%2C then passes::"), "{out}");
+    assert!(out.contains("::error file=tests/fixtures/flaky.bt,line=3,title=Fails once%2C then passes::"), "{out}");
 }
 
 #[test]
@@ -322,7 +322,7 @@ fn shards_split_the_scenarios() {
 #[test]
 fn if_blocks_look_at_the_page_as_it_is() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = bitti(&["run", "tests/fixtures/if.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/if.bt", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
 }
@@ -330,10 +330,10 @@ fn if_blocks_look_at_the_page_as_it_is() {
 #[test]
 fn ax_trees_match_partially_and_say_where_they_dont() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = bitti(&["run", "tests/fixtures/ax.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/ax.bt", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
-    let (code, out) = bitti(&["run", "tests/fixtures/ax-fail.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/ax-fail.bt", "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("expected ax --role form --name Checkout to match the tree under it"), "{out}");
     assert!(out.contains("nearest: `- combobox \"Country\" value=\"Canada\""), "{out}");
@@ -343,16 +343,16 @@ fn ax_trees_match_partially_and_say_where_they_dont() {
 fn exec_runs_programs_and_checks_what_they_said() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let py = if cfg!(windows) { "PY=python" } else { "PY=python3" };
-    let (code, out) = bitti(&["run", "tests/fixtures/exec.pv", "--base-url", &site.1, "--var", py]);
+    let (code, out) = bitti(&["run", "tests/fixtures/exec.bt", "--base-url", &site.1, "--var", py]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
-    let (code, out) = bitti(&["run", "tests/fixtures/exec-fail.pv", "--var", py]);
+    let (code, out) = bitti(&["run", "tests/fixtures/exec-fail.bt", "--var", py]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("exited 2: db down"), "{out}");
     assert!(out.contains("still ran after 300 ms; stopped it"), "{out}");
     // A script named by its path, the run started from elsewhere.
     if cfg!(unix) {
-        let (code, out) = bitti(&["run", "tests/fixtures/exec-path.pv"]);
+        let (code, out) = bitti(&["run", "tests/fixtures/exec-path.bt"]);
         assert_eq!(code, 0, "{out}");
     }
 }
@@ -361,10 +361,10 @@ fn exec_runs_programs_and_checks_what_they_said() {
 fn http_calls_share_cookies_with_the_browser() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let secrets = secrets_file();
-    let (code, out) = bitti(&["run", "tests/fixtures/http.pv", "--base-url", &site.1, "--secrets", &secrets]);
+    let (code, out) = bitti(&["run", "tests/fixtures/http.bt", "--base-url", &site.1, "--secrets", &secrets]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
-    let (code, out) = bitti(&["run", "tests/fixtures/http-fail.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/http-fail.bt", "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("/api/fail answered 500: db down"), "{out}");
     assert!(out.contains("GET http://127.0.0.1:9/: "), "{out}");
@@ -373,7 +373,7 @@ fn http_calls_share_cookies_with_the_browser() {
 #[test]
 fn feature_files_run_with_the_runs_steps_and_report_cucumber_json() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let report = std::env::temp_dir().join(format!("pv-cucumber-{}.json", std::process::id()));
+    let report = std::env::temp_dir().join(format!("bt-cucumber-{}.json", std::process::id()));
     let (code, out) =
         bitti(&["run", "tests/fixtures/features", "--base-url", &site.1, "--cucumber", &report.display().to_string()]);
     assert_eq!(code, 0, "{out}");
@@ -385,7 +385,7 @@ fn feature_files_run_with_the_runs_steps_and_report_cucumber_json() {
     assert_eq!(first["steps"][0]["keyword"], "Given ");
     assert!(first["steps"].as_array().unwrap().iter().all(|s| s["result"]["status"] == "passed"), "{first}");
     // Allure results: one per scenario, the feature as a label.
-    let allure = std::env::temp_dir().join(format!("pv-allure-{}", std::process::id()));
+    let allure = std::env::temp_dir().join(format!("bt-allure-{}", std::process::id()));
     let (code, out) =
         bitti(&["run", "tests/fixtures/features", "--base-url", &site.1, "--allure", &allure.display().to_string()]);
     assert_eq!(code, 0, "{out}");
@@ -422,18 +422,18 @@ fn feature_files_run_with_the_runs_steps_and_report_cucumber_json() {
 fn a_config_starts_the_app_and_picks_a_profile() {
     let Some(_turn) = chrome() else { return };
     let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-    let dir = std::env::temp_dir().join(format!("pv-config-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-config-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let py = if cfg!(windows) { "python" } else { "python3" };
     let site = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/site.py").replace('\\', "/");
     let config = format!(
-        "base_url = \"http://127.0.0.1:{port}\"\npaths = [\"t.pv\"]\n[vars]\ngreeting = \"from the file\"\n\
+        "base_url = \"http://127.0.0.1:{port}\"\npaths = [\"t.bt\"]\n[vars]\ngreeting = \"from the file\"\n\
          [server]\ncommand = \"{py} {site} --port {port}\"\nurl = \"http://127.0.0.1:{port}/login\"\nreuse = false\n\
          [env.other.vars]\ngreeting = \"from other\"\n"
     );
     std::fs::write(dir.join("bitti.toml"), config).unwrap();
     std::fs::write(
-        dir.join("t.pv"),
+        dir.join("t.bt"),
         "scenario \"Config\"\n  goto /login\n  expect text \"Sign in\"\n  expect ${greeting} is ${want}\n",
     )
     .unwrap();
@@ -458,7 +458,7 @@ fn a_config_starts_the_app_and_picks_a_profile() {
     assert_eq!(code, 0, "{out}");
     // Stopped with the run.
     assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err(), "the server is still up");
-    let (code, out) = run(&["--config", "bad.toml", "t.pv"]);
+    let (code, out) = run(&["--config", "bad.toml", "t.bt"]);
     assert_eq!(code, 3, "{out}");
     assert!(out.contains("exited") && out.contains("boom"), "{out}");
     let (code, out) = run(&["--env", "nope"]);
@@ -470,11 +470,11 @@ fn a_config_starts_the_app_and_picks_a_profile() {
 #[test]
 fn screenshots_match_their_baselines() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-shots-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-shots-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let pv = dir.join("look.pv");
+    let bt = dir.join("look.bt");
     std::fs::write(
-        &pv,
+        &bt,
         "scenario \"The page looks as it did\"\n  goto /login\n  \
          eval \"(document.body.innerHTML = '<h1>Checkout</h1><p id=clock>${run.id}</p><button id=b style=\\\"width:120px;height:30px;background:${color}\\\">Pay</button>', 1)\"\n  \
          expect screenshot pay --selector \"#b\"\n  expect screenshot page --mask \"#clock\"\n",
@@ -483,7 +483,7 @@ fn screenshots_match_their_baselines() {
     let evidence = dir.join("ev").display().to_string();
     let run = |extra: &[&str]| {
         let mut args =
-            vec!["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "500"];
+            vec!["run", bt.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "500"];
         args.extend_from_slice(extra);
         let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(&args).output().expect("run bitti");
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
@@ -496,7 +496,7 @@ fn screenshots_match_their_baselines() {
     let (code, out) = run(&["--var", "color=blue", "--update-screenshots"]);
     assert_eq!(code, 0, "{out}");
     let os = std::env::consts::OS;
-    let shots = dir.join("look.pv.screenshots");
+    let shots = dir.join("look.bt.screenshots");
     let pay = std::fs::read(shots.join(format!("pay-{os}.png"))).unwrap();
     assert_eq!(&pay[1..4], b"PNG");
     // The same again matches, the masked clock changing every run.
@@ -506,10 +506,10 @@ fn screenshots_match_their_baselines() {
     let (code, out) = run(&["--var", "color=red"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("pixels differ") && out.contains("pay-diff.png"), "{out}");
-    assert!(dir.join("ev").join("look.pv-pay-actual.png").exists());
+    assert!(dir.join("ev").join("look.bt-pay-actual.png").exists());
     // A share of the pixels is allowed by `--max-diff-ratio` on its own: the
     // whole button differs, so 100% lets the shots pass and 0.1% does not.
-    let plain = std::fs::read_to_string(&pv).unwrap();
+    let plain = std::fs::read_to_string(&bt).unwrap();
     let with_ratio = |r: &str| {
         let text = plain
             .replace(
@@ -520,7 +520,7 @@ fn screenshots_match_their_baselines() {
                 "expect screenshot page --mask \"#clock\"",
                 &format!("expect screenshot page --mask \"#clock\" --max-diff-ratio {r}"),
             );
-        std::fs::write(&pv, text).unwrap();
+        std::fs::write(&bt, text).unwrap();
     };
     with_ratio("0.001");
     let (code, out) = run(&["--var", "color=red"]);
@@ -535,16 +535,16 @@ fn screenshots_match_their_baselines() {
 #[test]
 fn press_understands_control_or_meta() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-chord-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-chord-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let want = if cfg!(target_os = "macos") {
         "window.mods.some(m => m[0] === 'k' && m[2] === true && m[1] === false)"
     } else {
         "window.mods.some(m => m[0] === 'k' && m[1] === true && m[2] === false)"
     };
-    let pv = dir.join("chord.pv");
+    let bt = dir.join("chord.bt");
     std::fs::write(
-        &pv,
+        &bt,
         format!(
             "scenario \"A chord\"\n  goto /login\n  \
              eval \"(() => {{ window.mods = []; document.addEventListener('keydown', e => window.mods.push([e.key, e.ctrlKey, e.metaKey])); return 1; }})()\"\n  \
@@ -554,7 +554,7 @@ fn press_understands_control_or_meta() {
     )
     .unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &dir.join("ev").display().to_string()])
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--evidence", &dir.join("ev").display().to_string()])
         .args(["--timeout-ms", "3000"])
         .output()
         .unwrap();
@@ -566,12 +566,12 @@ fn press_understands_control_or_meta() {
 #[test]
 fn screenshots_wait_for_a_stable_render() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-stable-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-stable-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     // The box is there from load; its paint lands ${delay} ms later.
-    let pv = dir.join("late.pv");
+    let bt = dir.join("late.bt");
     std::fs::write(
-        &pv,
+        &bt,
         "scenario \"A late paint\"\n  goto /login\n  \
          eval \"(() => { document.body.innerHTML = '<div id=c style=width:80px;height:40px></div>'; setTimeout(() => { document.getElementById('c').style.background = 'rgb(0,0,255)'; }, ${delay}); return 1; })()\"\n  \
          expect screenshot box --selector \"#c\"\n",
@@ -580,7 +580,7 @@ fn screenshots_wait_for_a_stable_render() {
     let evidence = dir.join("ev").display().to_string();
     let run = |extra: &[&str]| {
         let mut args =
-            vec!["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "3000"];
+            vec!["run", bt.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "3000"];
         args.extend_from_slice(extra);
         let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(&args).output().expect("run bitti");
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
@@ -592,11 +592,11 @@ fn screenshots_wait_for_a_stable_render() {
     let (code, out) = run(&["--var", "delay=300"]);
     assert_eq!(code, 0, "the compare must not see the blank state: {out}");
     // A baseline written while the paint is late waits for it too.
-    std::fs::remove_dir_all(dir.join("late.pv.screenshots")).ok();
+    std::fs::remove_dir_all(dir.join("late.bt.screenshots")).ok();
     let (code, out) = run(&["--var", "delay=300", "--update-screenshots"]);
     assert_eq!(code, 0, "{out}");
     let baseline =
-        std::fs::read(dir.join("late.pv.screenshots").join(format!("box-{}.png", std::env::consts::OS))).unwrap();
+        std::fs::read(dir.join("late.bt.screenshots").join(format!("box-{}.png", std::env::consts::OS))).unwrap();
     let mut reader = png::Decoder::new(&baseline[..]).read_info().unwrap();
     let mut buf = vec![0; reader.output_buffer_size()];
     reader.next_frame(&mut buf).unwrap();
@@ -608,11 +608,11 @@ fn screenshots_wait_for_a_stable_render() {
 #[test]
 fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-unstable-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-unstable-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let pv = dir.join("busy.pv");
+    let bt = dir.join("busy.bt");
     std::fs::write(
-        &pv,
+        &bt,
         "scenario \"Never stops\"\n  goto /login\n  \
          eval \"(() => { document.body.innerHTML = '<div id=c style=width:80px;height:40px;background:rgb(0,0,255)></div>'; let n = 0; const tick = () => { document.getElementById('c').style.background = 'hsl(' + (120 + n++ * 7 % 120) + ',80%,50%)'; requestAnimationFrame(tick); }; tick(); return 1; })()\"\n  \
          expect screenshot box --selector \"#c\"\n",
@@ -621,7 +621,7 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
     let evidence = dir.join("ev").display().to_string();
     let run = |extra: &[&str]| {
         let mut args =
-            vec!["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "1500"];
+            vec!["run", bt.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "1500"];
         args.extend_from_slice(extra);
         let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(&args).output().expect("run bitti");
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
@@ -629,7 +629,7 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
     };
     // Baseline: a still red box, written by a second file and kept under
     // the busy file's screenshots name.
-    let still = dir.join("still.pv");
+    let still = dir.join("still.bt");
     std::fs::write(
         &still,
         "scenario \"Still\"\n  goto /login\n  \
@@ -643,7 +643,7 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
-    std::fs::rename(dir.join("still.pv.screenshots"), dir.join("busy.pv.screenshots")).unwrap();
+    std::fs::rename(dir.join("still.bt.screenshots"), dir.join("busy.bt.screenshots")).unwrap();
     // The busy page against the still red baseline fails at the timeout
     // instead of hanging. Its hues stay between green and blue: a frame
     // near red would match the baseline within the 0.2 threshold.
@@ -658,13 +658,13 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
 #[test]
 fn check_waits_for_a_late_commit() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-latecheck-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-latecheck-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     // A controlled checkbox: the click's default is cancelled, the state
     // commits 300 ms later (React's forecast-toggle shape).
-    let pv = dir.join("late.pv");
+    let bt = dir.join("late.bt");
     std::fs::write(
-        &pv,
+        &bt,
         "scenario \"A late commit\"\n  goto /login\n  \
          eval \"(() => { document.body.innerHTML = '<input type=checkbox id=c>'; document.getElementById('c').addEventListener('click', e => { e.preventDefault(); setTimeout(() => { document.getElementById('c').checked = true; }, 300); }); return 1; })()\"\n  \
          check --selector \"#c\"\n  \
@@ -672,7 +672,7 @@ fn check_waits_for_a_late_commit() {
     )
     .unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &dir.join("ev").display().to_string()])
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--evidence", &dir.join("ev").display().to_string()])
         .args(["--timeout-ms", "3000"])
         .output()
         .unwrap();
@@ -684,7 +684,7 @@ fn check_waits_for_a_late_commit() {
 #[test]
 fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-shots-el-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-shots-el-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     // A button below the fold of a scroll box, another in an iframe further down.
     let solid = "width:80px;height:30px;border:0;background:rgb(0,0,255)";
@@ -697,9 +697,9 @@ fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
         ),
     )
     .unwrap();
-    let pv = dir.join("el.pv");
+    let bt = dir.join("el.bt");
     std::fs::write(
-        &pv,
+        &bt,
         format!(
             "scenario \"Elements\"\n  goto /login\n  eval --file \"{}\"\n  wait --selector \"#framed\"\n  \
              expect screenshot low --selector \"#low\"\n  expect screenshot framed --selector \"#framed\"\n\
@@ -709,7 +709,7 @@ fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
     )
     .unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--update-screenshots", "--timeout-ms", "2000"])
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--update-screenshots", "--timeout-ms", "2000"])
         .args(["--evidence", dir.join("ev").to_str().unwrap()])
         .output()
         .unwrap();
@@ -718,7 +718,7 @@ fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
     assert!(text.contains("--mask \"#not-there\" matches nothing on the page"), "{text}");
     // Each crop is the button, solid blue to its corners.
     for name in ["low", "framed"] {
-        let path = dir.join("el.pv.screenshots").join(format!("{name}-{}.png", std::env::consts::OS));
+        let path = dir.join("el.bt.screenshots").join(format!("{name}-{}.png", std::env::consts::OS));
         let mut reader = png::Decoder::new(std::fs::File::open(&path).unwrap()).read_info().unwrap();
         let mut buf = vec![0; reader.output_buffer_size()];
         let info = reader.next_frame(&mut buf).unwrap();
@@ -738,7 +738,7 @@ fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
 #[test]
 fn a_navigera_session_becomes_a_scenario_that_passes() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-from-session-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-from-session-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let name = dir.join("work.sock").display().to_string();
     let nv = |args: &[&str]| -> serde_json::Value {
@@ -773,23 +773,23 @@ fn a_navigera_session_becomes_a_scenario_that_passes() {
         .output()
         .unwrap();
     nv(&["quit"]);
-    let pv = String::from_utf8_lossy(&out.stdout).to_string();
-    assert!(out.status.success(), "{pv}{}", String::from_utf8_lossy(&out.stderr));
-    assert!(pv.contains("scenario \"Shops\"\n  goto /login\n"), "{pv}");
-    assert!(pv.contains("click --role button --name \"Accept all\"\n"), "{pv}");
-    assert!(pv.contains("fill --role textbox --name Email ada@example.com\n"), "{pv}");
-    assert!(pv.contains("fill --role textbox --name Password ${secret:PASSWORD}\n"), "{pv}");
-    assert!(!pv.contains("hunter2"), "{pv}");
-    assert!(pv.contains("click --role link --name Shop\n  expect url ends-with /shop\n  expect text Shop\n"), "{pv}");
-    assert!(!pv.contains("get value") && !pv.contains("left out"), "reads stay out, every ref found again: {pv}");
+    let bt = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(out.status.success(), "{bt}{}", String::from_utf8_lossy(&out.stderr));
+    assert!(bt.contains("scenario \"Shops\"\n  goto /login\n"), "{bt}");
+    assert!(bt.contains("click --role button --name \"Accept all\"\n"), "{bt}");
+    assert!(bt.contains("fill --role textbox --name Email ada@example.com\n"), "{bt}");
+    assert!(bt.contains("fill --role textbox --name Password ${secret:PASSWORD}\n"), "{bt}");
+    assert!(!bt.contains("hunter2"), "{bt}");
+    assert!(bt.contains("click --role link --name Shop\n  expect url ends-with /shop\n  expect text Shop\n"), "{bt}");
+    assert!(!bt.contains("get value") && !bt.contains("left out"), "reads stay out, every ref found again: {bt}");
     // And it runs, from a fresh browser.
-    let file = dir.join("shops.pv");
-    std::fs::write(&file, &pv).unwrap();
+    let file = dir.join("shops.bt");
+    std::fs::write(&file, &bt).unwrap();
     let secrets = dir.join("secrets.env");
     std::fs::write(&secrets, "PASSWORD=from-the-secrets-file\n").unwrap();
     let (code, text) =
         bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1, "--secrets", secrets.to_str().unwrap()]);
-    assert_eq!(code, 0, "{pv}\n{text}");
+    assert_eq!(code, 0, "{bt}\n{text}");
     std::fs::remove_dir_all(&dir).ok();
 }
 
@@ -797,7 +797,7 @@ fn a_navigera_session_becomes_a_scenario_that_passes() {
 fn over_mcp_an_agent_explores_writes_the_test_and_runs_it() {
     use std::io::Write as _;
     let (Some(_turn), Some(site)) = (chrome(), site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-mcp-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-mcp-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .arg("mcp")
@@ -831,12 +831,12 @@ fn over_mcp_an_agent_explores_writes_the_test_and_runs_it() {
     rpc("tools/call", serde_json::json!({"name": "browser_click", "arguments": {"ref": r}}));
     let wrote = rpc(
         "tools/call",
-        serde_json::json!({"name": "bitti_from_session", "arguments": {"scenario": "Consents", "out": "consent.pv"}}),
+        serde_json::json!({"name": "bitti_from_session", "arguments": {"scenario": "Consents", "out": "consent.bt"}}),
     );
     assert!(text(&wrote).contains("click --role button --name \"Accept all\""), "{wrote}");
     let ran = rpc(
         "tools/call",
-        serde_json::json!({"name": "bitti_run", "arguments": {"paths": ["consent.pv"], "base_url": site.1}}),
+        serde_json::json!({"name": "bitti_run", "arguments": {"paths": ["consent.bt"], "base_url": site.1}}),
     );
     assert_eq!(ran["result"]["isError"], false, "{}", text(&ran));
     assert!(text(&ran).ends_with("exit 0"), "{}", text(&ran));
@@ -850,9 +850,9 @@ fn over_mcp_an_agent_explores_writes_the_test_and_runs_it() {
 #[test]
 fn a_recording_becomes_a_scenario_that_passes() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-record-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-record-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("order.pv");
+    let file = dir.join("order.bt");
     // The page uses itself (`?auto=1`): a field, a checkbox, a select, a link.
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["record", &format!("{}/form?auto=1", site.1), "--headless", "--for", "3"])
@@ -860,46 +860,46 @@ fn a_recording_becomes_a_scenario_that_passes() {
         .output()
         .unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let pv = std::fs::read_to_string(&file).unwrap();
+    let bt = std::fs::read_to_string(&file).unwrap();
     let want = "scenario \"Orders\"\n  goto /form?auto=1\n  fill --role textbox --name Email ada@example.com\n  \
                 check --role checkbox --name \"Gift wrap\"\n  click --selector \"#tip >>> button\"\n  \
                 select --role combobox --name Size Large\n  \
                 click --role link --name \"Place order\"\n  expect url ends-with /done\n";
     assert!(
-        pv.ends_with(want),
-        "recorded:\n{pv}\nwanted it to end with:\n{want}\nstderr:\n{}",
+        bt.ends_with(want),
+        "recorded:\n{bt}\nwanted it to end with:\n{want}\nstderr:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
     // Run without the page using itself: the steps do it.
-    std::fs::write(&file, pv.replace("?auto=1", "")).unwrap();
+    std::fs::write(&file, bt.replace("?auto=1", "")).unwrap();
     let (code, text) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
-    assert_eq!(code, 0, "{pv}\n{text}");
+    assert_eq!(code, 0, "{bt}\n{text}");
     std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
 fn a_click_that_takes_its_element_away_is_recorded_and_a_covered_click_is_fixed() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-bar-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-bar-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("buy.pv");
+    let file = dir.join("buy.bt");
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["record", &format!("{}/bar?auto=1", site.1), "--headless", "--for", "3"])
         .args(["--scenario", "Buys", "--out", file.to_str().unwrap()])
         .output()
         .unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let pv = std::fs::read_to_string(&file).unwrap();
+    let bt = std::fs::read_to_string(&file).unwrap();
     // Accept was gone before `locate` could check it: its role and name, read at once, find it.
-    assert!(pv.contains("  click --role button --name Accept\n  click --role button --name \"Buy now\"\n"), "{pv}");
-    std::fs::write(&file, pv.replace("?auto=1", "")).unwrap();
+    assert!(bt.contains("  click --role button --name Accept\n  click --role button --name \"Buy now\"\n"), "{bt}");
+    std::fs::write(&file, bt.replace("?auto=1", "")).unwrap();
     let (code, text) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
-    assert_eq!(code, 0, "{pv}\n{text}");
+    assert_eq!(code, 0, "{bt}\n{text}");
     // Without the Accept click, Buy is covered: `fix` puts it back as an
     // optional click before the step.
     std::fs::write(&file, "scenario \"Buys\"\n  goto /bar\n  click --role button --name \"Buy now\" --timeout-ms 500\n  expect text Bought\n").unwrap();
     let run = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_bitti")).args(args).current_dir(&dir).output().unwrap();
-    let out = run(&["run", "buy.pv", "--base-url", &site.1]);
+    let out = run(&["run", "buy.bt", "--base-url", &site.1]);
     assert!(!out.status.success());
     let list = String::from_utf8_lossy(&run(&["fix"]).stdout).to_string();
     assert!(list.contains("before: optional click --role button --name Accept   0.90"), "{list}");
@@ -910,7 +910,7 @@ fn a_click_that_takes_its_element_away_is_recorded_and_a_covered_click_is_fixed(
         fixed.contains("  goto /bar\n  optional click --role button --name Accept\n  click --role button"),
         "{fixed}"
     );
-    let out = run(&["run", "buy.pv", "--base-url", &site.1]);
+    let out = run(&["run", "buy.bt", "--base-url", &site.1]);
     assert!(out.status.success(), "{fixed}\n{}", String::from_utf8_lossy(&out.stdout));
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -918,9 +918,9 @@ fn a_click_that_takes_its_element_away_is_recorded_and_a_covered_click_is_fixed(
 #[test]
 fn a_recording_extends_a_scenario_from_where_it_ends() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-extend-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-extend-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("order.pv");
+    let file = dir.join("order.bt");
     let start = "# An order.\nscenario \"Opens the form\"\n  goto /form?auto=2\n  expect text Order\n\nscenario \"Other\"\n  goto /done\n";
     std::fs::write(&file, start).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
@@ -929,13 +929,13 @@ fn a_recording_extends_a_scenario_from_where_it_ends() {
         .output()
         .unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let pv = std::fs::read_to_string(&file).unwrap();
+    let bt = std::fs::read_to_string(&file).unwrap();
     let want = "# An order.\nscenario \"Opens the form\"\n  goto /form?auto=2\n  expect text Order\n  \
                 fill --role textbox --name Email ada@example.com\n  check --role checkbox --name \"Gift wrap\"\n  \
                 click --selector \"#tip >>> button\"\n  select --role combobox --name Size Large\n  \
                 click --role link --name \"Place order\"\n  expect url ends-with /done\n\nscenario \"Other\"\n  goto /done\n";
-    assert_eq!(pv, want);
-    std::fs::write(&file, pv.replace("?auto=2", "")).unwrap();
+    assert_eq!(bt, want);
+    std::fs::write(&file, bt.replace("?auto=2", "")).unwrap();
     let (code, text) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
     assert_eq!(code, 0, "{text}");
     // A scenario that fails before its end isn't extended.
@@ -959,14 +959,14 @@ fn an_unsure_failure_asks_the_decision_model_when_there_is_one() {
     let mut line = String::new();
     BufReader::new(child.stdout.take().unwrap()).read_line(&mut line).unwrap();
     let jev = Site(child, line.trim().strip_prefix("LISTENING ").unwrap().to_string());
-    let dir = std::env::temp_dir().join(format!("pv-decider-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-decider-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
-        dir.join("t.pv"),
+        dir.join("t.bt"),
         "scenario \"Consents\"\n  goto /login\n  click --role button --name \"Agree to the cookie banner\" --timeout-ms 300\n",
     )
     .unwrap();
-    let pv = |args: &[&str]| {
+    let bt = |args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
             .args(args)
             .current_dir(&dir)
@@ -979,14 +979,14 @@ fn an_unsure_failure_asks_the_decision_model_when_there_is_one() {
             String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr),
         )
     };
-    let (code, out) = pv(&["run", "t.pv", "--base-url", &site.1, "--evidence", "ev"]);
+    let (code, out) = bt(&["run", "t.bt", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("1. button \"Accept all\""), "{out}");
     assert!(out.contains("(decider)"), "{out}");
-    let (code, out) = pv(&["fix", "t.pv:3", "--use", "1"]);
+    let (code, out) = bt(&["fix", "t.bt:3", "--use", "1"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("+ click --role button --name \"Accept all\" --timeout-ms 300"), "{out}");
-    let (code, out) = pv(&["run", "t.pv", "--base-url", &site.1, "--evidence", "ev"]);
+    let (code, out) = bt(&["run", "t.bt", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 0, "{out}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -994,26 +994,26 @@ fn an_unsure_failure_asks_the_decision_model_when_there_is_one() {
 #[test]
 fn a_missing_element_in_a_frame_gets_suggestions_from_the_frame() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-framed-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-framed-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
-        dir.join("t.pv"),
+        dir.join("t.bt"),
         "scenario \"Framed\"\n  goto /framed\n  click --role button --name Subscribe --frame iframe --timeout-ms 300\n",
     )
     .unwrap();
-    let pv = |args: &[&str]| {
+    let bt = |args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(args).current_dir(&dir).output().unwrap();
         (
             out.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr),
         )
     };
-    let (code, out) = pv(&["run", "t.pv", "--base-url", &site.1, "--evidence", "ev"]);
+    let (code, out) = bt(&["run", "t.bt", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("1. button \"Subscibe\""), "{out}");
-    let (code, out) = pv(&["fix", "t.pv:3", "--use", "1"]);
+    let (code, out) = bt(&["fix", "t.bt:3", "--use", "1"]);
     assert_eq!(code, 0, "{out}");
-    let (code, out) = pv(&["run", "t.pv", "--base-url", &site.1, "--evidence", "ev"]);
+    let (code, out) = bt(&["run", "t.bt", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 0, "{out}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -1021,9 +1021,9 @@ fn a_missing_element_in_a_frame_gets_suggestions_from_the_frame() {
 #[test]
 fn accessibility_is_checked_by_axe() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-a11y-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-a11y-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("a11y.pv");
+    let file = dir.join("a11y.bt");
     std::fs::write(
         &file,
         "scenario \"Fails\"\n  goto /a11y\n  expect accessible --timeout-ms 300\n\n\
@@ -1042,9 +1042,9 @@ fn accessibility_is_checked_by_axe() {
 #[test]
 fn load_metrics_are_budgets() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-metrics-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-metrics-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("budgets.pv");
+    let file = dir.join("budgets.bt");
     std::fs::write(
         &file,
         "scenario \"Within budget\"\n  goto /form\n  expect ttfb < 10s\n  expect fcp < 10s\n  expect lcp < 10s\n  \
@@ -1061,12 +1061,12 @@ fn load_metrics_are_budgets() {
 #[test]
 fn a_video_is_kept_for_a_failure_and_dropped_for_a_pass() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-video-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-video-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let pv = dir.join("v.pv");
+    let bt = dir.join("v.bt");
     std::fs::write(
-        &pv,
+        &bt,
         "scenario \"Passes\"\n  goto /login\n  expect url ends-with /login\n\n\
          scenario \"Fails\"\n  goto /login\n  eval \"document.body.style.background = 'red'\"\n  \
          expect text \"never there\" --timeout-ms 300\n",
@@ -1074,7 +1074,7 @@ fn a_video_is_kept_for_a_failure_and_dropped_for_a_pass() {
     .unwrap();
     let ev = dir.join("ev");
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--video", "on-failure", "--reporter", "jsonl"])
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--video", "on-failure", "--reporter", "jsonl"])
         .args(["--evidence", ev.to_str().unwrap(), "--html", dir.join("r.html").to_str().unwrap()])
         .output()
         .unwrap();
@@ -1107,18 +1107,18 @@ fn a_video_is_kept_for_a_failure_and_dropped_for_a_pass() {
 #[test]
 fn a_trace_records_each_step_and_reads_back() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-trace-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-trace-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let pv = dir.join("t.pv");
+    let bt = dir.join("t.bt");
     std::fs::write(
-        &pv,
+        &bt,
         "scenario \"Traced\"\n  goto /login\n  eval \"(console.error('boom-trace'), fetch('/api/n'), 1)\"\n  \
          wait --ms 200\n  expect text \"never there\" --timeout-ms 300\n",
     )
     .unwrap();
     let ev = dir.join("ev");
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--trace", "on-failure"])
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--trace", "on-failure"])
         .args(["--evidence", ev.to_str().unwrap(), "--html", dir.join("r.html").to_str().unwrap()])
         .output()
         .unwrap();
@@ -1175,20 +1175,20 @@ fn a_download_is_compared_with_the_expected_file() {
         return; // compara isn't here
     }
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-compare-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-compare-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("expected.csv"), "id,name\n1,Ada\n").unwrap();
     std::fs::write(dir.join("other.csv"), "id,name\n1,Bob\n").unwrap();
-    let pv = dir.join("c.pv");
+    let bt = dir.join("c.bt");
     let scenario = |name: &str, file: &str| {
         format!("scenario \"{name}\"\n  goto /m1\n  click --selector \"#dl\"\n  expect download \"report-*.csv\" compare {file} --key id\n")
     };
     let rows = "scenario \"Rows and a summary\"\n  goto /m1\n  click --selector \"#dl\"\n  \
                 expect download \"report-*.csv\" compare other.csv --key id --report json,rows\n";
-    std::fs::write(&pv, scenario("The same", "expected.csv") + &scenario("Not the same", "other.csv") + rows).unwrap();
+    std::fs::write(&bt, scenario("The same", "expected.csv") + &scenario("Not the same", "other.csv") + rows).unwrap();
     let ev = dir.join("ev");
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", ev.to_str().unwrap()])
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--evidence", ev.to_str().unwrap()])
         .output()
         .unwrap();
     let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
@@ -1215,43 +1215,43 @@ fn a_download_is_compared_with_the_expected_file() {
 #[test]
 fn fix_puts_a_suggestion_into_the_failing_step() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-fix-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-fix-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
-        dir.join("t.pv"),
+        dir.join("t.bt"),
         "scenario \"Signs in\"\n  goto /login\n  click --role button --name \"Sign on\" --timeout-ms 300\n",
     )
     .unwrap();
-    let pv = |args: &[&str]| {
+    let bt = |args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(args).current_dir(&dir).output().unwrap();
         (
             out.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr),
         )
     };
-    let (code, out) = pv(&["run", "t.pv", "--base-url", &site.1, "--evidence", "ev"]);
+    let (code, out) = bt(&["run", "t.bt", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("fix: bitti fix t.pv:3 --use 1"), "{out}");
-    let (_, list) = pv(&["fix"]);
-    assert!(list.contains("t.pv:3") && list.contains("--role button --name \"Sign in\""), "{list}");
-    let (code, out) = pv(&["fix", "t.pv:3", "--use", "1"]);
+    assert!(out.contains("fix: bitti fix t.bt:3 --use 1"), "{out}");
+    let (_, list) = bt(&["fix"]);
+    assert!(list.contains("t.bt:3") && list.contains("--role button --name \"Sign in\""), "{list}");
+    let (code, out) = bt(&["fix", "t.bt:3", "--use", "1"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("+ click --role button --name \"Sign in\" --timeout-ms 300"), "{out}");
-    let (code, out) = pv(&["run", "t.pv", "--base-url", &site.1, "--evidence", "ev"]);
+    let (code, out) = bt(&["run", "t.bt", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 0, "{out}");
     // The run that passed left nothing to fix.
-    let (code, out) = pv(&["fix", "t.pv:3"]);
+    let (code, out) = bt(&["fix", "t.bt:3"]);
     assert_eq!(code, 2, "{out}");
     // A step of a flow in a used file is fixed where it is written.
-    std::fs::write(dir.join("lib.pv"), "flow sign_in()\n  click --role button --name \"Sign on\" --timeout-ms 300\n")
+    std::fs::write(dir.join("lib.bt"), "flow sign_in()\n  click --role button --name \"Sign on\" --timeout-ms 300\n")
         .unwrap();
-    std::fs::write(dir.join("u.pv"), "use lib.pv\n\nscenario \"Signs in\"\n  goto /login\n  run sign_in\n").unwrap();
-    let (code, out) = pv(&["run", "u.pv", "--base-url", &site.1, "--evidence", "ev"]);
+    std::fs::write(dir.join("u.bt"), "use lib.bt\n\nscenario \"Signs in\"\n  goto /login\n  run sign_in\n").unwrap();
+    let (code, out) = bt(&["run", "u.bt", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("fix: bitti fix lib.pv:2 --use 1"), "{out}");
-    let (code, out) = pv(&["fix", "lib.pv:2", "--use", "1"]);
+    assert!(out.contains("fix: bitti fix lib.bt:2 --use 1"), "{out}");
+    let (code, out) = bt(&["fix", "lib.bt:2", "--use", "1"]);
     assert_eq!(code, 0, "{out}");
-    let (code, out) = pv(&["run", "u.pv", "--base-url", &site.1, "--evidence", "ev"]);
+    let (code, out) = bt(&["run", "u.bt", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 0, "{out}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -1269,7 +1269,7 @@ fn fetch(site: &Site, path: &str) -> String {
 
 fn secrets_file() -> String {
     let path = std::env::temp_dir().join(format!("bitti-secrets-{}.env", std::process::id()));
-    std::fs::write(&path, "# test only\nPV_TEST_PW=\"hunter22\"\n").unwrap();
+    std::fs::write(&path, "# test only\nBT_TEST_PW=\"hunter22\"\n").unwrap();
     path.display().to_string()
 }
 
@@ -1277,16 +1277,16 @@ fn secrets_file() -> String {
 fn the_newer_subjects_and_isolation_between_scenarios() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     for workers in ["1", "2"] {
-        let (code, out) = bitti(&["run", "tests/fixtures/m1.pv", "--base-url", &site.1, "--workers", workers]);
+        let (code, out) = bitti(&["run", "tests/fixtures/m1.bt", "--base-url", &site.1, "--workers", workers]);
         assert_eq!(code, 1, "{out}");
         assert!(out.contains("5 passed, 1 failed"), "workers {workers}: {out}");
-        assert!(out.contains("FAIL  tests/fixtures/m1.pv:23  Soft expectations fail it at the end"), "{out}");
+        assert!(out.contains("FAIL  tests/fixtures/m1.bt:23  Soft expectations fail it at the end"), "{out}");
         assert!(out.contains("2 soft expectation(s) didn't hold"), "{out}");
     }
     // Every run of a scenario downloads into a directory of its own: the
     // same file name each time, not `report-2026 (2).csv`.
     let repeat = ["--grep", "Subjects", "--repeat", "3", "--workers", "2"];
-    let (code, out) = bitti(&[&["run", "tests/fixtures/m1.pv", "--base-url", &site.1][..], &repeat].concat());
+    let (code, out) = bitti(&[&["run", "tests/fixtures/m1.bt", "--base-url", &site.1][..], &repeat].concat());
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("3 passed, 0 failed"), "{out}");
 }
@@ -1296,40 +1296,40 @@ fn auth_runs_once_and_hooks_wrap_the_file() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let secrets = secrets_file();
     let (code, out) =
-        bitti(&["run", "tests/fixtures/auth.pv", "--base-url", &site.1, "--workers", "2", "--secrets", &secrets]);
+        bitti(&["run", "tests/fixtures/auth.bt", "--base-url", &site.1, "--workers", "2", "--secrets", &secrets]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("5 passed, 0 failed"), "{out}");
     // Two auths, each signed in once, for five scenarios on two workers.
     assert_eq!(fetch(&site, "/logins"), "2", "{out}");
     assert_eq!(fetch(&site, "/notes"), "setup,teardown", "{out}");
     // Again: `shopper` signs in anew, `keeper` (ttl 1h) is reused.
-    let (code, out) = bitti(&["run", "tests/fixtures/auth.pv", "--base-url", &site.1, "--secrets", &secrets]);
+    let (code, out) = bitti(&["run", "tests/fixtures/auth.bt", "--base-url", &site.1, "--secrets", &secrets]);
     assert_eq!(code, 0, "{out}");
     assert_eq!(fetch(&site, "/logins"), "3", "{out}");
     // A secret never shows in what the run prints.
-    let (code, out) = bitti(&["run", "tests/fixtures/secret-fail.pv", "--base-url", &site.1, "--secrets", &secrets]);
+    let (code, out) = bitti(&["run", "tests/fixtures/secret-fail.bt", "--base-url", &site.1, "--secrets", &secrets]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("saw \"***\""), "{out}");
     assert!(!out.contains("hunter22"), "{out}");
     // A file whose `before all` fails runs none of its scenarios.
-    let (code, out) = bitti(&["run", "tests/fixtures/before-fail.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/before-fail.bt", "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("before all: expected title is \"not this one\""), "{out}");
-    let (_, out) = bitti(&["lint", "tests/fixtures/auth.pv", "--secrets", &secrets]);
+    let (_, out) = bitti(&["lint", "tests/fixtures/auth.bt", "--secrets", &secrets]);
     assert!(out.contains("ok: 1 file, 5 scenarios") && !out.contains("warning"), "{out}");
 }
 
 #[test]
 fn handoff_waits_only_when_it_must() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = bitti(&["run", "tests/fixtures/handoff.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/handoff.bt", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     // Nobody at a screen here: it says so instead of waiting.
     if cfg!(target_os = "linux")
         && std::env::var_os("DISPLAY").is_none()
         && std::env::var_os("WAYLAND_DISPLAY").is_none()
     {
-        let (code, out) = bitti(&["run", "tests/fixtures/handoff-wait.pv", "--base-url", &site.1]);
+        let (code, out) = bitti(&["run", "tests/fixtures/handoff-wait.bt", "--base-url", &site.1]);
         assert_eq!(code, 1, "{out}");
         assert!(out.contains("handoff needs a person at a screen"), "{out}");
     }
@@ -1340,7 +1340,7 @@ fn a_pause_leaves_the_failing_tab_to_navigera() {
     use std::io::Write;
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let mut child = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", "tests/fixtures/pause.pv", "--base-url", &site.1, "--pause-on-failure"])
+        .args(["run", "tests/fixtures/pause.bt", "--base-url", &site.1, "--pause-on-failure"])
         .args(["--evidence", &tempfile_dir()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .stdin(Stdio::piped())
@@ -1379,11 +1379,11 @@ fn a_pause_leaves_the_failing_tab_to_navigera() {
 fn repeat_and_shuffle_hunt_flakes() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let (code, out) =
-        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site.1, "--repeat", "3", "--shuffle", "42"]);
+        bitti(&["run", "tests/fixtures/flaky.bt", "--base-url", &site.1, "--repeat", "3", "--shuffle", "42"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("shuffled with seed 42"), "{out}");
-    assert!(out.contains("FLAKY 2/3  tests/fixtures/flaky.pv  Fails once, then passes"), "{out}");
-    assert!(out.contains("    3/3  tests/fixtures/flaky.pv  Steady"), "{out}");
+    assert!(out.contains("FLAKY 2/3  tests/fixtures/flaky.bt  Fails once, then passes"), "{out}");
+    assert!(out.contains("    3/3  tests/fixtures/flaky.bt  Steady"), "{out}");
     assert!(out.contains("Steady #3"), "{out}");
     // The same seed, the same order.
     let order = |out: &str| -> Vec<String> {
@@ -1392,23 +1392,23 @@ fn repeat_and_shuffle_hunt_flakes() {
             .map(|l| l.split("  ").nth(2).unwrap_or("").to_string())
             .collect()
     };
-    let (_, again) = bitti(&["list", "tests/fixtures/flaky.pv"]);
+    let (_, again) = bitti(&["list", "tests/fixtures/flaky.bt"]);
     assert_eq!(again.lines().count(), 2, "{again}");
     let site2 = own_site().unwrap();
     let (_, out2) =
-        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site2.1, "--repeat", "3", "--shuffle", "42"]);
+        bitti(&["run", "tests/fixtures/flaky.bt", "--base-url", &site2.1, "--repeat", "3", "--shuffle", "42"]);
     assert_eq!(order(&out), order(&out2), "{out}\n{out2}");
 }
 
 #[test]
 fn set_values_fill_in_their_variables() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = bitti(&["run", "tests/fixtures/set-expand.pv", "--base-url", &site.1, "--var", "WHO=ada"]);
+    let (code, out) = bitti(&["run", "tests/fixtures/set-expand.bt", "--base-url", &site.1, "--var", "WHO=ada"]);
     assert_eq!(code, 0, "{out}");
     // Annotations don't take the console's place.
     let (code, out) = bitti(&[
         "run",
-        "tests/fixtures/set-expand.pv",
+        "tests/fixtures/set-expand.bt",
         "--base-url",
         &site.1,
         "--var",
@@ -1423,12 +1423,12 @@ fn set_values_fill_in_their_variables() {
 #[test]
 fn a_script_that_never_settles_is_bounded_by_the_step_and_an_optional_miss_shows() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let dir = std::env::temp_dir().join(format!("pv-t125-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-t125-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("never.js"), "new Promise(() => {})").unwrap();
-    let pv = dir.join("t.pv");
+    let bt = dir.join("t.bt");
     std::fs::write(
-        &pv,
+        &bt,
         "scenario \"Never\"\n  goto /login\n  expect js --file never.js --timeout-ms 1500\n\
          scenario \"Optional\"\n  goto /login\n  optional expect text \"Nothing here\" --timeout-ms 300\n",
     )
@@ -1436,7 +1436,7 @@ fn a_script_that_never_settles_is_bounded_by_the_step_and_an_optional_miss_shows
     let ev = dir.join("ev");
     let start = std::time::Instant::now();
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--trace", "all"])
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--trace", "all"])
         .args(["--evidence", ev.to_str().unwrap(), "--html", dir.join("r.html").to_str().unwrap()])
         .output()
         .unwrap();
@@ -1484,7 +1484,7 @@ fn a_run_costs_the_same_for_each_scenario() {
     let dir = std::env::temp_dir().join(format!("bitti-linear-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let timed = |n: usize| {
-        let file = dir.join(format!("s{n}.pv"));
+        let file = dir.join(format!("s{n}.bt"));
         let text: String = (0..n)
             .map(|i| {
                 format!(
@@ -1510,12 +1510,12 @@ fn a_run_costs_the_same_for_each_scenario() {
 /// the 0 of a run that passed.
 #[test]
 fn a_browser_that_never_starts_is_an_exit_code_not_a_pass() {
-    let dir = std::env::temp_dir().join(format!("pv-nobrowser-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bt-nobrowser-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let pv = dir.join("t.pv");
-    std::fs::write(&pv, "scenario \"A\"\n  goto /\nscenario \"B\"\n  goto /\n").unwrap();
+    let bt = dir.join("t.bt");
+    std::fs::write(&bt, "scenario \"A\"\n  goto /\nscenario \"B\"\n  goto /\n").unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", pv.to_str().unwrap(), "--base-url", "http://127.0.0.1:9"])
+        .args(["run", bt.to_str().unwrap(), "--base-url", "http://127.0.0.1:9"])
         .env("CHROME_BIN", dir.join("no-such-chrome"))
         .output()
         .expect("run bitti");
@@ -1528,7 +1528,7 @@ fn a_browser_that_never_starts_is_an_exit_code_not_a_pass() {
 #[test]
 fn routes_replay_a_har_and_change_real_responses() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = bitti(&["run", "tests/fixtures/har.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/har.bt", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
@@ -1536,7 +1536,7 @@ fn routes_replay_a_har_and_change_real_responses() {
 #[test]
 fn a_permissions_step_grants_denies_and_resets() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = bitti(&["run", "tests/fixtures/permissions.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/permissions.bt", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
 }
@@ -1574,10 +1574,10 @@ fn watch_runs_again_only_the_file_that_changed() {
     std::fs::create_dir_all(&dir).unwrap();
     let py = if cfg!(windows) { "python" } else { "python3" };
     let scenario = |name: &str| format!("scenario \"{name}\"\n  exec {py} -c \"print(1)\"\n    expect exit 0\n");
-    std::fs::write(dir.join("a.pv"), scenario("alpha")).unwrap();
-    std::fs::write(dir.join("b.pv"), scenario("beta")).unwrap();
+    std::fs::write(dir.join("a.bt"), scenario("alpha")).unwrap();
+    std::fs::write(dir.join("b.bt"), scenario("beta")).unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_bitti"))
-        .args(["run", "a.pv", "b.pv", "--watch", "--evidence", &tempfile_dir()])
+        .args(["run", "a.bt", "b.bt", "--watch", "--evidence", &tempfile_dir()])
         .current_dir(&dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1591,7 +1591,7 @@ fn watch_runs_again_only_the_file_that_changed() {
     assert!(seen.iter().any(|l| l.contains("PASS") && l.contains("beta")), "{seen:#?}");
     seen.clear();
     // The size changes too, so a coarse file clock cannot hide the edit.
-    std::fs::write(dir.join("b.pv"), scenario("beta again")).unwrap();
+    std::fs::write(dir.join("b.bt"), scenario("beta again")).unwrap();
     let second = wait_all(&rx, &mut seen, &["changed: ", "beta again", "1 passed", "watching 2 files"], 60);
     // Anything else the rerun printed (an alpha would be a wrong rerun).
     while let Ok(l) = rx.recv_timeout(std::time::Duration::from_millis(300)) {
@@ -1601,7 +1601,7 @@ fn watch_runs_again_only_the_file_that_changed() {
     let _ = child.wait();
     let _ = std::fs::remove_dir_all(&dir);
     assert!(second, "{seen:#?}");
-    assert!(seen.iter().any(|l| l.starts_with("changed: ") && l.contains("b.pv") && !l.contains("a.pv")), "{seen:#?}");
+    assert!(seen.iter().any(|l| l.starts_with("changed: ") && l.contains("b.bt") && !l.contains("a.bt")), "{seen:#?}");
     assert!(seen.iter().any(|l| l.contains("PASS") && l.contains("beta again")), "{seen:#?}");
     assert!(!seen.iter().any(|l| l.contains("alpha")), "the untouched file ran again: {seen:#?}");
 }
@@ -1618,8 +1618,8 @@ fn merge_joins_the_jsonl_of_shards_into_one_report() {
         let shard = format!("{i}/2");
         let (_, out) = bitti(&[
             "run",
-            "tests/fixtures/failing.pv",
-            "tests/fixtures/if.pv",
+            "tests/fixtures/failing.bt",
+            "tests/fixtures/if.bt",
             "--base-url",
             &site.1,
             "--shard",
@@ -1679,7 +1679,7 @@ fn api_scenarios_run_with_no_browser() {
     let started = std::time::Instant::now();
     let (code, out) = bitti(&[
         "run",
-        "tests/fixtures/api/api.pv",
+        "tests/fixtures/api/api.bt",
         "--base-url",
         &site.1,
         "--secrets",
@@ -1692,7 +1692,7 @@ fn api_scenarios_run_with_no_browser() {
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("8 passed, 1 skipped, 0 failed"), "{out}");
     assert!(out.contains("(no browser)"), "{out}");
-    assert!(out.contains("SKIP  tests/fixtures/api/api.pv:44  Not written yet  (@fixme)"), "{out}");
+    assert!(out.contains("SKIP  tests/fixtures/api/api.bt:44  Not written yet  (@fixme)"), "{out}");
     // print: a part of the answer, pretty; a line with values filled in.
     assert!(out.contains("\"city\": \"Oslo\""), "{out}");
     assert!(out.contains("signed in as 200"), "{out}");
@@ -1700,12 +1700,12 @@ fn api_scenarios_run_with_no_browser() {
     assert!(!out.contains("hunter22"), "{out}");
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
 
-    let (code, out) = bitti(&["run", "tests/fixtures/api/api-fail.pv", "--base-url", &site.1, "--chromium", nothing]);
+    let (code, out) = bitti(&["run", "tests/fixtures/api/api-fail.bt", "--base-url", &site.1, "--chromium", nothing]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("0 passed, 6 failed"), "{out}");
     assert!(out.contains("the GraphQL answer has 1 error(s): Cannot query field 'nope' on type 'Query'"), "{out}");
     assert!(
-        out.contains("api-fail.pv.snapshots/search.json differs: $.n: 0, was 1; $.q: \"boots\", was \"shoes\""),
+        out.contains("api-fail.bt.snapshots/search.json differs: $.n: 0, was 1; $.q: \"boots\", was \"shoes\""),
         "{out}"
     );
     // What came back, under the check that read it.
@@ -1727,7 +1727,7 @@ fn an_api_sign_in_carries_into_the_browser() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let secrets = secrets_file();
     let (code, out) =
-        bitti(&["run", "tests/fixtures/api/mixed.pv", "--base-url", &site.1, "--secrets", &secrets, "-j", "2"]);
+        bitti(&["run", "tests/fixtures/api/mixed.bt", "--base-url", &site.1, "--secrets", &secrets, "-j", "2"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
     assert!(!out.contains("(no browser)"), "{out}");
@@ -1740,7 +1740,7 @@ fn run_control_picks_and_stops() {
     let Some(site) = own_site() else { return };
     let dir = own_dir("control");
     std::fs::write(
-        dir.join("t.pv"),
+        dir.join("t.bt"),
         "scenario \"one\" @smoke\n  http GET /api/search --query q=1\n  expect json $.q is 1\n\
          scenario \"two\" @smoke @slow\n  http GET /api/search --query q=2\n  expect json $.q is 3\n\
          scenario \"three\" @wip\n  http GET /api/search --query q=3\n  expect json $.q is 4\n\
@@ -1752,41 +1752,41 @@ fn run_control_picks_and_stops() {
             .filter_map(|l| l.split("  ").nth(1).map(|n| n.split(" @").next().unwrap_or(n).to_string()))
             .collect()
     };
-    let (_, out) = bitti_in(&dir, &["list", "t.pv", "--tag", "smoke and not slow"], &[]);
+    let (_, out) = bitti_in(&dir, &["list", "t.bt", "--tag", "smoke and not slow"], &[]);
     assert_eq!(names(&out), ["one"], "{out}");
-    let (_, out) = bitti_in(&dir, &["list", "t.pv", "--tag", "not (smoke or wip)", "--tag", "wip"], &[]);
+    let (_, out) = bitti_in(&dir, &["list", "t.bt", "--tag", "not (smoke or wip)", "--tag", "wip"], &[]);
     assert_eq!(names(&out), ["three", "four"], "{out}");
-    let (_, out) = bitti_in(&dir, &["list", "t.pv", "--grep-invert", "o"], &[]);
+    let (_, out) = bitti_in(&dir, &["list", "t.bt", "--grep-invert", "o"], &[]);
     assert_eq!(names(&out), ["three"], "{out}");
-    let (code, out) = bitti_in(&dir, &["list", "t.pv", "--tag", "smoke and"], &[]);
+    let (code, out) = bitti_in(&dir, &["list", "t.bt", "--tag", "smoke and"], &[]);
     assert_eq!(code, 2, "{out}");
 
     // One failure stops the run: the rest are not started.
-    let (code, out) = bitti_in(&dir, &["run", "t.pv", "--base-url", &site.1, "-x"], &[]);
+    let (code, out) = bitti_in(&dir, &["run", "t.bt", "--base-url", &site.1, "-x"], &[]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("2 scenarios not run: 1 scenario failed (--max-failures 1)"), "{out}");
     // The whole run, then only what failed in it.
-    let (code, _) = bitti_in(&dir, &["run", "t.pv", "--base-url", &site.1], &[]);
+    let (code, _) = bitti_in(&dir, &["run", "t.bt", "--base-url", &site.1], &[]);
     assert_eq!(code, 1);
-    let (code, out) = bitti_in(&dir, &["run", "t.pv", "--base-url", &site.1, "--last-failed"], &[]);
+    let (code, out) = bitti_in(&dir, &["run", "t.bt", "--base-url", &site.1, "--last-failed"], &[]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("0 passed, 2 failed"), "{out}");
-    assert!(out.contains("FAIL  t.pv:4  two") && out.contains("FAIL  t.pv:7  three"), "{out}");
-    std::fs::write(dir.join("t.pv"), "scenario \"one\"\n  http GET /api/search --query q=1\n  expect json $.q is 1\n")
+    assert!(out.contains("FAIL  t.bt:4  two") && out.contains("FAIL  t.bt:7  three"), "{out}");
+    std::fs::write(dir.join("t.bt"), "scenario \"one\"\n  http GET /api/search --query q=1\n  expect json $.q is 1\n")
         .unwrap();
-    let (code, out) = bitti_in(&dir, &["run", "t.pv", "--base-url", &site.1, "--last-failed"], &[]);
+    let (code, out) = bitti_in(&dir, &["run", "t.bt", "--base-url", &site.1, "--last-failed"], &[]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("no scenario failed in the last run"), "{out}");
 
     // @only focuses a run, unless it is forbidden (as under CI).
-    std::fs::write(dir.join("t.pv"), "scenario \"one\"\n  wait --ms 1\nscenario \"two\" @only\n  wait --ms 1\n")
+    std::fs::write(dir.join("t.bt"), "scenario \"one\"\n  wait --ms 1\nscenario \"two\" @only\n  wait --ms 1\n")
         .unwrap();
-    let (code, out) = bitti_in(&dir, &["run", "t.pv", "--allow-only"], &[]);
+    let (code, out) = bitti_in(&dir, &["run", "t.bt", "--allow-only"], &[]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed") && out.contains("two"), "{out}");
-    let (code, out) = bitti_in(&dir, &["run", "t.pv"], &[("CI", "true")]);
+    let (code, out) = bitti_in(&dir, &["run", "t.bt"], &[("CI", "true")]);
     assert_eq!(code, 2, "{out}");
-    assert!(out.contains("@only is on 1 scenario") && out.contains("t.pv:3  two"), "{out}");
+    assert!(out.contains("@only is on 1 scenario") && out.contains("t.bt:3  two"), "{out}");
 }
 
 /// `--slowmo` waits before each action; a `pause` step stops the run with
@@ -1796,7 +1796,7 @@ fn slowmo_and_a_pause_step() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let dir = own_dir("slowmo");
     std::fs::write(
-        dir.join("s.pv"),
+        dir.join("s.bt"),
         "scenario \"three actions\"\n  goto /\n  click --text Late\n  goto /done\n  expect text Thanks\n",
     )
     .unwrap();
@@ -1805,16 +1805,16 @@ fn slowmo_and_a_pause_step() {
         serde_json::from_str::<serde_json::Value>(line).unwrap()["ms"].as_f64().unwrap()
     };
     let (code, out) =
-        bitti_in(&dir, &["run", "s.pv", "--base-url", &site.1, "--slowmo", "300", "--reporter", "jsonl"], &[]);
+        bitti_in(&dir, &["run", "s.bt", "--base-url", &site.1, "--slowmo", "300", "--reporter", "jsonl"], &[]);
     assert_eq!(code, 0, "{out}");
     assert!(ms(&out) >= 900.0, "three actions, 300 ms before each: {}", ms(&out));
 
-    std::fs::write(dir.join("p.pv"), "scenario \"stops for a look\"\n  goto /done\n  pause\n  expect text Thanks\n")
+    std::fs::write(dir.join("p.bt"), "scenario \"stops for a look\"\n  goto /done\n  pause\n  expect text Thanks\n")
         .unwrap();
-    let (code, out) = bitti_in(&dir, &["run", "p.pv", "--base-url", &site.1, "-j", "2"], &[("BITTI_PAUSE_S", "1")]);
+    let (code, out) = bitti_in(&dir, &["run", "p.bt", "--base-url", &site.1, "-j", "2"], &[("BITTI_PAUSE_S", "1")]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("a `pause` step waits for Enter: --workers 2 becomes 1"), "{out}");
-    assert!(out.contains("PAUSED  p.pv:3  the browser stays as the steps before left it"), "{out}");
+    assert!(out.contains("PAUSED  p.bt:3  the browser stays as the steps before left it"), "{out}");
     assert!(out.contains("--attach ws://"), "{out}");
 }
 
@@ -1825,17 +1825,17 @@ fn slowmo_and_a_pause_step() {
 fn json_snapshots_are_written_then_held() {
     let Some(site) = own_site() else { return };
     let dir = own_dir("snapshot");
-    let pv = "scenario \"s\"\n  http GET /api/search --query q=${q:-a} --query n=1\n  expect json snapshot search --ignore $.n\n";
-    std::fs::write(dir.join("s.pv"), pv).unwrap();
+    let bt = "scenario \"s\"\n  http GET /api/search --query q=${q:-a} --query n=1\n  expect json snapshot search --ignore $.n\n";
+    std::fs::write(dir.join("s.bt"), bt).unwrap();
     let run = |extra: &[&str]| {
-        let mut args = vec!["run", "s.pv", "--base-url", site.1.as_str()];
+        let mut args = vec!["run", "s.bt", "--base-url", site.1.as_str()];
         args.extend_from_slice(extra);
         bitti_in(&dir, &args, &[])
     };
     let (code, out) = run(&[]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("no baseline yet: wrote it, read it and run again:"), "{out}");
-    let baseline = dir.join("s.pv.snapshots/search.json");
+    let baseline = dir.join("s.bt.snapshots/search.json");
     assert_eq!(std::fs::read_to_string(&baseline).unwrap(), "{\n  \"q\": \"a\"\n}\n");
     assert_eq!(run(&[]).0, 0);
     let (code, out) = run(&["--var", "q=b"]);
@@ -1852,7 +1852,7 @@ fn json_snapshots_are_written_then_held() {
 fn a_scenario_controls_the_pages_clock() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     for workers in ["1", "2"] {
-        let (code, out) = bitti(&["run", "tests/fixtures/clock.pv", "--base-url", &site.1, "--workers", workers]);
+        let (code, out) = bitti(&["run", "tests/fixtures/clock.bt", "--base-url", &site.1, "--workers", workers]);
         assert_eq!(code, 0, "workers {workers}: {out}");
         assert!(out.contains("2 passed, 0 failed"), "workers {workers}: {out}");
     }
@@ -1866,7 +1866,7 @@ fn a_scenario_stops_when_its_time_is_up() {
     let started = std::time::Instant::now();
     let (code, out) = bitti(&[
         "run",
-        "tests/fixtures/timeout.pv",
+        "tests/fixtures/timeout.bt",
         "--base-url",
         &site.1,
         "--scenario-timeout-ms",
@@ -1876,16 +1876,16 @@ fn a_scenario_stops_when_its_time_is_up() {
     ]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("2 passed, 1 failed"), "{out}");
-    assert!(out.contains("FAIL  tests/fixtures/timeout.pv:1  Waits longer than its scenario may"), "{out}");
+    assert!(out.contains("FAIL  tests/fixtures/timeout.bt:1  Waits longer than its scenario may"), "{out}");
     // In the long wait, or (a slow machine's goto) before it.
     assert!(out.contains("the scenario's 1.5 s (--scenario-timeout-ms 1500) ran out"), "{out}");
-    assert!(out.contains("PASS  tests/fixtures/timeout.pv:10  Slow, so three times the time"), "{out}");
+    assert!(out.contains("PASS  tests/fixtures/timeout.bt:10  Slow, so three times the time"), "{out}");
     assert!(started.elapsed() < std::time::Duration::from_secs(15), "{:?}", started.elapsed());
     // `--global-timeout-ms`: the scenario running then stops, the rest don't start, the run fails.
     let started = std::time::Instant::now();
     let (code, out) = bitti(&[
         "run",
-        "tests/fixtures/timeout.pv",
+        "tests/fixtures/timeout.bt",
         "--base-url",
         &site.1,
         "--global-timeout-ms",

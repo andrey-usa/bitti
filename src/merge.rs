@@ -220,7 +220,7 @@ mod tests {
             "null"
         };
         format!(
-            r#"{{"event":"scenario","file":"a.pv","line":3,"name":"{name}","tags":["smoke"],"status":"{status}","ms":{ms},"attempt":1,"worker":0,"failure":{failure},"retried":[],"saved":{{}},"notes":[]}}"#
+            r#"{{"event":"scenario","file":"a.bt","line":3,"name":"{name}","tags":["smoke"],"status":"{status}","ms":{ms},"attempt":1,"worker":0,"failure":{failure},"retried":[],"saved":{{}},"notes":[]}}"#
         )
     }
 
@@ -229,7 +229,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("bitti-merge-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("shard-2")).unwrap();
-        let one = format!("{}\n::error file=a.pv::noise\n{}\n{{\"event\":\"summary\",\"passed\":2,\"flaky\":0,\"failed\":0,\"ms\":900}}\n", line("one", "passed", 400.0), line("two", "passed", 500.0));
+        let one = format!("{}\n::error file=a.bt::noise\n{}\n{{\"event\":\"summary\",\"passed\":2,\"flaky\":0,\"failed\":0,\"ms\":900}}\n", line("one", "passed", 400.0), line("two", "passed", 500.0));
         let two = format!(
             "{}\n{{\"event\":\"summary\",\"passed\":0,\"flaky\":0,\"failed\":1,\"ms\":1200}}\n",
             line("three", "failed", 1200.0)

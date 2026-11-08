@@ -1,5 +1,5 @@
 name: bitti
-description: Run plain-text web tests (.pv and .feature files) with bitti on the runner's Chrome.
+description: Run plain-text web tests (.bt and .feature files) with bitti on the runner's Chrome.
 author: andrey-usa
 branding:
   icon: check-circle
@@ -7,7 +7,7 @@ branding:
 
 inputs:
   paths:
-    description: ".pv/.feature files or directories, separated by spaces"
+    description: ".bt/.feature files or directories, separated by spaces"
     default: "."
   base-url:
     description: "where relative URLs (goto /cart) point; else `base` in the file or bitti.toml"
@@ -36,23 +36,23 @@ runs:
     - name: Install bitti
       shell: bash
       env:
-        PV_VERSION: ${{ inputs.version }}
-        PV_NAVIGERA_REF: ${{ inputs.navigera-ref }}
-        PV_ACTION: ${{ github.action_path }}
-      run: bash "$PV_ACTION/action/install.sh"
+        BT_VERSION: ${{ inputs.version }}
+        BT_NAVIGERA_REF: ${{ inputs.navigera-ref }}
+        BT_ACTION: ${{ github.action_path }}
+      run: bash "$BT_ACTION/action/install.sh"
     - name: Run
       id: run
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        PV_PATHS: ${{ inputs.paths }}
-        PV_BASE_URL: ${{ inputs.base-url }}
-        PV_ARGS: ${{ inputs.args }}
+        BT_PATHS: ${{ inputs.paths }}
+        BT_BASE_URL: ${{ inputs.base-url }}
+        BT_ARGS: ${{ inputs.args }}
       run: |
-        read -ra paths <<< "$PV_PATHS"
-        read -ra extra <<< "$PV_ARGS"
+        read -ra paths <<< "$BT_PATHS"
+        read -ra extra <<< "$BT_ARGS"
         set -- run "${paths[@]}"
-        [ -n "$PV_BASE_URL" ] && set -- "$@" --base-url "$PV_BASE_URL"
+        [ -n "$BT_BASE_URL" ] && set -- "$@" --base-url "$BT_BASE_URL"
         evidence="$RUNNER_TEMP/bitti-evidence"
         given=""
         for ((i = 0; i < ${#extra[@]}; i++)); do

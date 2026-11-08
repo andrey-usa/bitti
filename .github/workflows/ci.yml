@@ -93,7 +93,7 @@ jobs:
           done
           [ -x target/debug/bitti ] || cargo build --locked
           export GAUNTLET_URL=http://127.0.0.1:18201
-          ./target/debug/bitti run $S/pv --base-url http://127.0.0.1:18001 --workers 4 \
+          ./target/debug/bitti run $S/bt --base-url http://127.0.0.1:18001 --workers 4 \
             --repeat 3 --shuffle --junit suite40.xml 2>&1 | tee suite40.log
           code=${PIPESTATUS[0]}
           tally=$(grep -E "^[0-9]+ passed" suite40.log | tail -1)
@@ -132,8 +132,8 @@ jobs:
           python3 bitti/bench/suite40/site/server.py --port 18001 > site.out 2>&1 &
           for _ in $(seq 150); do curl -sf -o /dev/null http://127.0.0.1:18001/ && break; sleep 0.2; done
           mkdir -p t
-          printf 'scenario "The shop opens"\n  goto /\n  expect url ends-with /shop\n  expect title contains Acme\n  expect lcp < 10s\n  expect no errors\n' > t/shop.pv
-      - id: pv
+          printf 'scenario "The shop opens"\n  goto /\n  expect url ends-with /shop\n  expect title contains Acme\n  expect lcp < 10s\n  expect no errors\n' > t/shop.bt
+      - id: bt
         uses: ./bitti
         with:
           paths: t
@@ -142,7 +142,7 @@ jobs:
       - name: What it left
         shell: bash
         env:
-          EVIDENCE: ${{ steps.pv.outputs.evidence }}
+          EVIDENCE: ${{ steps.bt.outputs.evidence }}
         run: |
           grep -q 'tests="1"' t/report.xml && grep -q 'failures="0"' t/report.xml
           echo "evidence: $EVIDENCE"
@@ -178,7 +178,7 @@ jobs:
           python3 bitti/bench/suite40/site/server.py --port 18001 > site.out 2>&1 &
           for _ in $(seq 150); do curl -sf -o /dev/null http://127.0.0.1:18001/ && break; sleep 0.2; done
           mkdir -p t out && chmod 777 out
-          printf 'scenario "The shop opens"\n  goto /\n  expect url ends-with /shop\n  expect title contains Acme\n  expect lcp < 10s\n' > t/shop.pv
+          printf 'scenario "The shop opens"\n  goto /\n  expect url ends-with /shop\n  expect title contains Acme\n  expect lcp < 10s\n' > t/shop.bt
           start=$(date +%s%N)
           docker run --rm --network host --user 12345 --read-only --cap-drop ALL \
             --security-opt no-new-privileges --tmpfs /tmp --shm-size 512m -e HOME=/tmp \
@@ -227,7 +227,7 @@ jobs:
           cargo build --locked
           python3 bench/suite40/site/server.py --port 18001 > site.out 2>&1 &
           for _ in $(seq 150); do curl -sf -o /dev/null http://127.0.0.1:18001/ && break; sleep 0.2; done
-          files=$(ls bench/suite40/pv/s*.pv | grep -v -e s19- -e s20- -e s25-)
+          files=$(ls bench/suite40/bt/s*.bt | grep -v -e s19- -e s20- -e s25-)
           ./target/debug/bitti run $files --base-url http://127.0.0.1:18001 --engine lightpanda --workers 4 | tee lp.log
           echo "::notice title=bitti on Lightpanda::$(tail -1 lp.log)"
 

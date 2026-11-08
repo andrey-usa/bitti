@@ -276,7 +276,7 @@ fn anchored(mut p: Profile, dir: &Path) -> Profile {
     p
 }
 
-/// A TOML error with the line it is on, as a `.pv` error says it.
+/// A TOML error with the line it is on, as a `.bt` error says it.
 fn at_line(text: &str, e: &toml::de::Error) -> String {
     match e.span() {
         Some(span) => {

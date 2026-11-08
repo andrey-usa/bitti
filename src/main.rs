@@ -38,7 +38,7 @@ bitti: plain-text web tests on real Chrome (through navigera)
 usage: bitti <command> [...]
 
 commands:
-  run [<file|dir>...]    run scenarios (default: every .pv and .feature file
+  run [<file|dir>...]    run scenarios (default: every .bt and .feature file
                          under the current directory)
   lint [<file|dir>...]   check files without a browser
   list [<file|dir>...]   the scenarios a run would take
@@ -52,7 +52,7 @@ commands:
                          (bitti navigera -s work goto <url>)
   mcp                    an MCP server: navigera's browser tools and
                          bitti's own
-  skill                  the agent skill: the .pv format, steps and expect forms
+  skill                  the agent skill: the .bt format, steps and expect forms
   --version
 
 `bitti <command> --help` lists a command's options. Steps, locators and
@@ -161,8 +161,8 @@ fn help_for(cmd: &str) -> Option<String> {
     let text = match cmd {
         "run" => {
             let mut out = String::from(
-                "usage: bitti run [<file.pv|file.feature|dir>...] [options]\n\n\
-                 Runs the scenarios in the files, or in every .pv and .feature file under\n\
+                "usage: bitti run [<file.bt|file.feature|dir>...] [options]\n\n\
+                 Runs the scenarios in the files, or in every .bt and .feature file under\n\
                  the directories (default: the current one).\n\noptions:\n",
             );
             for (flag, what) in RUN_OPTIONS {
@@ -171,7 +171,7 @@ fn help_for(cmd: &str) -> Option<String> {
             out
         }
         "lint" => "usage: bitti lint [<file|dir>...] [--var <name=value>] [--secrets <file>]\n\n\
-                   Checks .pv and .feature files without a browser: syntax, unknown steps,\n\
+                   Checks .bt and .feature files without a browser: syntax, unknown steps,\n\
                    and variables nothing sets (warnings: the run's environment may set them).\n"
             .to_string(),
         "list" => "usage: bitti list [<file|dir>...] [--grep <text>] [--tag <tag>]\n\
@@ -189,13 +189,13 @@ fn help_for(cmd: &str) -> Option<String> {
         "merge" => merge::HELP.to_string(),
         "fix" => fix::HELP.to_string(),
         "from-session" => "usage: bitti from-session <navigera session> [--scenario <name>]\n\
-                           \x20                             [--out <file.pv>]\n\n\
+                           \x20                             [--out <file.bt>]\n\n\
                            Writes what a navigera session did as a scenario, its refs turned into\n\
                            locators that hold between runs.\n"
             .to_string(),
-        "record" => "usage: bitti record <url> [--out <file.pv>] [--scenario <name>] [--headless]\n\
+        "record" => "usage: bitti record <url> [--out <file.bt>] [--scenario <name>] [--headless]\n\
                      \x20                       [--for <seconds>]\n\
-                     \x20      bitti record --extend <file.pv> [--scenario <name>]\n\
+                     \x20      bitti record --extend <file.bt> [--scenario <name>]\n\
                      \x20                       [--base-url <url>] [--secrets <file>]\n\n\
                      Opens a browser to use by hand; what you do becomes a scenario. With\n\
                      --extend, runs the scenario to its end first, then records more steps\n\
@@ -206,7 +206,7 @@ fn help_for(cmd: &str) -> Option<String> {
                   bitti_from_session, bitti_run, bitti_failure and bitti_fix.\n"
             .to_string(),
         "skill" => {
-            "usage: bitti skill\n\nPrints the agent skill: the .pv format, steps and expect forms.\n".to_string()
+            "usage: bitti skill\n\nPrints the agent skill: the .bt format, steps and expect forms.\n".to_string()
         }
         _ => return None,
     };
@@ -527,7 +527,7 @@ fn load(paths: &[PathBuf]) -> Result<Vec<suite::Suite>, String> {
         format!("reading {}: {}", shown.join(", "), plain_io(&e))
     })?;
     if files.is_empty() {
-        return Err("no .pv or .feature files found".into());
+        return Err("no .bt or .feature files found".into());
     }
     let mut suites = Vec::new();
     let mut errors = Vec::new();
@@ -1376,12 +1376,12 @@ mod tests {
         // A Windows checkout has the file with CRLF line ends.
         let skill = SKILL_MD.replace("\r\n", "\n");
         let blocks: Vec<&str> = skill.split("```text\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
-        // The scripts it names sit next to the .pv, as the skill says.
+        // The scripts it names sit next to the .bt, as the skill says.
         let dir = std::env::temp_dir().join(format!("bitti-skill-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("check.js"), "return true").unwrap();
         let lints = |text: &str| {
-            let path = dir.join("skill.pv");
+            let path = dir.join("skill.bt");
             let mut suites = vec![suite::parse(&path, text).map_err(|e| e.to_string())?];
             suite::resolve(&mut suites).map_err(|e| e.to_string())
         };
@@ -1395,7 +1395,7 @@ mod tests {
         assert!(blocks[2].starts_with("auth "), "{}", blocks[2]);
         std::fs::write(dir.join("user.schema.json"), "{}").unwrap();
         lints(blocks[2]).unwrap_or_else(|e| panic!("{e}\n{}", blocks[2]));
-        let api = suite::parse(&dir.join("skill.pv"), blocks[2]).unwrap();
+        let api = suite::parse(&dir.join("skill.bt"), blocks[2]).unwrap();
         assert!(!api.scenario_needs_browser(&api.scenarios[0]));
         // A `#` after a step is a word of it, not a comment.
         for line in blocks[..3].iter().flat_map(|b| b.lines()) {

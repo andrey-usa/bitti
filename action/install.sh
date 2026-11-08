@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Git Bash on Windows: POSIX paths here, a Windows one for GITHUB_PATH.
 unix() { cygpath -u "$1" 2>/dev/null || printf '%s\n' "$1"; }
-PV_ACTION=$(unix "$PV_ACTION")
+BT_ACTION=$(unix "$BT_ACTION")
 temp=$(unix "$RUNNER_TEMP")
 root="$temp/bitti"
 mkdir -p "$root/bin"
@@ -25,38 +25,38 @@ sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum 
 
 release() {
   [ -n "$target" ] || return 1
-  case "$PV_VERSION" in
+  case "$BT_VERSION" in
     latest) url="https://github.com/andrey-usa/bitti/releases/latest/download/bitti-$target.$ext" ;;
-    *) url="https://github.com/andrey-usa/bitti/releases/download/$PV_VERSION/bitti-$target.$ext" ;;
+    *) url="https://github.com/andrey-usa/bitti/releases/download/$BT_VERSION/bitti-$target.$ext" ;;
   esac
   tmp=$(mktemp -d)
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$tmp/pv.$ext" "$url" || return 1
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$tmp/pv.sha256" "$url.sha256" || {
+  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$tmp/bt.$ext" "$url" || return 1
+  curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$tmp/bt.sha256" "$url.sha256" || {
     echo "::error title=bitti::no checksum beside $url"; exit 1; }
-  [ "$(cut -d' ' -f1 < "$tmp/pv.sha256")" = "$(sha256 "$tmp/pv.$ext")" ] || {
+  [ "$(cut -d' ' -f1 < "$tmp/bt.sha256")" = "$(sha256 "$tmp/bt.$ext")" ] || {
     echo "::error title=bitti::$url does not match its checksum"; exit 1; }
   if [ "$ext" = zip ]; then
     # Git Bash may have no unzip; PowerShell always can.
-    pwsh -NoProfile -Command "Expand-Archive -Force -Path '$(cygpath -w "$tmp/pv.zip")' -DestinationPath '$(cygpath -w "$root/bin")'" || return 1
+    pwsh -NoProfile -Command "Expand-Archive -Force -Path '$(cygpath -w "$tmp/bt.zip")' -DestinationPath '$(cygpath -w "$root/bin")'" || return 1
   else
-    tar -C "$root/bin" -xzf "$tmp/pv.tar.gz" || return 1
+    tar -C "$root/bin" -xzf "$tmp/bt.tar.gz" || return 1
   fi
-  echo "bitti $PV_VERSION from $url"
+  echo "bitti $BT_VERSION from $url"
 }
 
 source_build() {
   # Cargo.toml takes navigera from ../navigera.
-  nav="$PV_ACTION/../navigera"
+  nav="$BT_ACTION/../navigera"
   if [ ! -f "$nav/Cargo.toml" ]; then
     git clone --quiet --filter=blob:none https://github.com/andrey-usa/navigera "$nav"
-    git -C "$nav" checkout --quiet "$PV_NAVIGERA_REF"
+    git -C "$nav" checkout --quiet "$BT_NAVIGERA_REF"
   fi
-  echo "building bitti from $PV_ACTION with navigera $(git -C "$nav" rev-parse --short HEAD)"
-  CARGO_TARGET_DIR="$temp/bitti-target" cargo install --quiet --locked --path "$PV_ACTION" --root "$root"
+  echo "building bitti from $BT_ACTION with navigera $(git -C "$nav" rev-parse --short HEAD)"
+  CARGO_TARGET_DIR="$temp/bitti-target" cargo install --quiet --locked --path "$BT_ACTION" --root "$root"
 }
 
-if [ "$PV_VERSION" = source ] || ! release; then
-  [ "$PV_VERSION" = source ] || echo "::notice title=bitti::no release binary for ${target:-this runner} ($PV_VERSION); building from source"
+if [ "$BT_VERSION" = source ] || ! release; then
+  [ "$BT_VERSION" = source ] || echo "::notice title=bitti::no release binary for ${target:-this runner} ($BT_VERSION); building from source"
   source_build
 fi
 "$root/bin/bitti" --version

@@ -6,7 +6,7 @@
 //! known), and says so on the console; bitti reads it from there and
 //! writes the scenario the way `from-session` does. The file is rewritten
 //! after every step, so stopping with Ctrl-C keeps what was done.
-//! `--extend <file.pv>` runs a scenario of that file to its end first and
+//! `--extend <file.bt>` runs a scenario of that file to its end first and
 //! puts what is done after it in after its last step.
 
 use std::time::{Duration, Instant};
@@ -15,14 +15,14 @@ use navigera::protocol::{Driver, SessionConfig};
 use serde_json::{json, Value};
 
 /// What the page says before each note on the console.
-const MARK: &str = "__pv_rec ";
+const MARK: &str = "__bt_rec ";
 
 /// The script every document gets: the notes, `MARK` + JSON.
 fn recorder() -> String {
     format!(
         r#"(() => {{
-  if (window.__pvRecorder) return;
-  window.__pvRecorder = true;
+  if (window.__btRecorder) return;
+  window.__btRecorder = true;
   const locate = {locate};
   const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
   // Locators read at once, unchecked, for when `locate` can't finish: the
@@ -214,8 +214,8 @@ fn watch(
     Ok((notes, here))
 }
 
-/// `bitti record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <s>]`,
-/// or `bitti record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>] …`.
+/// `bitti record <url> [--out <file.bt>] [--scenario <name>] [--headless] [--for <s>]`,
+/// or `bitti record --extend <file.bt> [--scenario <name>] [--base-url <url>] [--secrets <file>] …`.
 pub fn main(args: &[String]) -> Result<String, String> {
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
     let until = match flag("--for") {
@@ -230,7 +230,7 @@ pub fn main(args: &[String]) -> Result<String, String> {
     let url = args
         .iter()
         .find(|a| !a.starts_with("--") && !values.contains(a))
-        .ok_or("usage: bitti record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <seconds>]\n       bitti record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>]")?;
+        .ok_or("usage: bitti record <url> [--out <file.bt>] [--scenario <name>] [--headless] [--for <seconds>]\n       bitti record --extend <file.bt> [--scenario <name>] [--base-url <url>] [--secrets <file>]")?;
     let url = navigera::protocol::normalize_url(url);
     let out = flag("--out");
     let scenario = flag("--scenario").cloned().unwrap_or_else(|| "Recorded".to_string());
@@ -278,8 +278,8 @@ fn extend(
     headless: bool,
     until: Option<Duration>,
 ) -> Result<String, String> {
-    if !path.ends_with(".pv") {
-        return Err(format!("{path}: --extend takes a .pv file (a .feature's steps are in its step blocks)"));
+    if !path.ends_with(".bt") {
+        return Err(format!("{path}: --extend takes a .bt file (a .feature's steps are in its step blocks)"));
     }
     let suites = crate::load(&[std::path::PathBuf::from(path)])?;
     let mut suite = suites.into_iter().next().ok_or_else(|| format!("{path}: nothing to extend"))?;
@@ -385,13 +385,13 @@ mod tests {
             json!({"op": "set-checked", "checked": true, "n": 4, "at": 40, "url": "http://x/home", "locators": [{"kind": "label", "flags": ["--label", "Remember"]}]}),
         ];
         let h = history("http://x/login", notes, "http://x/home");
-        let pv = crate::from_session::render(&h, "recorded", "Signs in");
+        let bt = crate::from_session::render(&h, "recorded", "Signs in");
         assert!(
-            pv.ends_with(
+            bt.ends_with(
                 "scenario \"Signs in\"\n  goto /login\n  fill --role textbox --name Email ada\n  \
                  click --role button --name \"Sign in\"\n  expect url ends-with /home\n  check --label Remember\n"
             ),
-            "{pv}"
+            "{bt}"
         );
         assert!(recorder().contains("const locate = async function (el"), "the page gets navigera's locate");
     }
@@ -409,14 +409,14 @@ mod tests {
             // Checked after it was gone: the early one stays.
             note("a.2", 2, false, &json!([])),
         ];
-        let pv = crate::from_session::render(&history("http://x/", notes, "http://x/"), "recorded", "Buys");
-        assert!(pv.ends_with("  goto /\n  click --role button --name Accept\n  click --text \"Buy now\"\n"), "{pv}");
+        let bt = crate::from_session::render(&history("http://x/", notes, "http://x/"), "recorded", "Buys");
+        assert!(bt.ends_with("  goto /\n  click --role button --name Accept\n  click --text \"Buy now\"\n"), "{bt}");
         // A page that went away before the check: the early one is the step.
-        let pv = crate::from_session::render(
+        let bt = crate::from_session::render(
             &history("http://x/", vec![note("b.1", 1, true, &text)], "http://x/"),
             "r",
             "s",
         );
-        assert!(pv.ends_with("  click --text Accept\n"), "{pv}");
+        assert!(bt.ends_with("  click --text Accept\n"), "{bt}");
     }
 }

@@ -664,12 +664,12 @@ mod tests {
 
     #[test]
     fn html_puts_failures_first_escapes_and_needs_nothing_else() {
-        let dir = std::env::temp_dir().join(format!("pv-html-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bt-html-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let shot = dir.join("shot.png");
         std::fs::write(&shot, b"\x89PNG fake").unwrap();
         let pass = ScenarioResult {
-            file: PathBuf::from("/x/shop.pv"),
+            file: PathBuf::from("/x/shop.bt"),
             name: "Adds <one>".into(),
             line: 3,
             tags: vec!["smoke".into()],
@@ -729,15 +729,15 @@ mod tests {
         // Repeats: a pass count per scenario.
         let again = ScenarioResult { rep: 1, ..pass.clone() };
         let h = html(&[pass.clone(), again, fail], 1000.0, &dir);
-        assert!(h.contains("<tr class=ok><td>2/2</td><td>/x/shop.pv  Adds &lt;one&gt;</td></tr>"), "{h}");
+        assert!(h.contains("<tr class=ok><td>2/2</td><td>/x/shop.bt  Adds &lt;one&gt;</td></tr>"), "{h}");
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn a_traced_scenario_shows_its_steps_as_a_timeline() {
-        let dir = std::env::temp_dir().join(format!("pv-timeline-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bt-timeline-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let head = r#"{"scenario":"S","file":"s.pv","line":1,"passed":false,"ms":9.0}"#;
+        let head = r#"{"scenario":"S","file":"s.bt","line":1,"passed":false,"ms":9.0}"#;
         let a = r##"{"line":2,"text":"goto /","ms":5.0,"ok":true,"url":"http://x/","title":"T","console":[{"level":"error","text":"boom <b>"}],"network":["#1 GET 200 Document / 1 kB 3 ms"],"ax":"001-L2.ax.txt","shot":"001-L2.jpg"}"##;
         let b = r#"{"line":3,"text":"click --text Pay","ms":20.0,"ok":false,"error":"no element","url":"http://x/","title":"T","console":[],"network":[],"ax":"002-L3.ax.txt"}"#;
         std::fs::write(dir.join("trace.jsonl"), [head, a, b].join("\n")).unwrap();
@@ -770,7 +770,7 @@ mod tests {
 
     #[test]
     fn a_report_of_many_failures_stays_under_its_budget() {
-        let dir = std::env::temp_dir().join(format!("pv-budget-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bt-budget-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut results = Vec::new();
         for k in 0..12 {
@@ -798,7 +798,7 @@ mod tests {
     #[test]
     fn junit_escapes_and_counts() {
         let pass = ScenarioResult {
-            file: PathBuf::from("/x/shop.pv"),
+            file: PathBuf::from("/x/shop.bt"),
             name: "Adds <one>".into(),
             line: 3,
             tags: vec![],
@@ -838,7 +838,7 @@ mod tests {
         assert!(x.contains("<failure message=\"line 12: expected … saw &quot;$40.00&quot;\""), "{x}");
         // GitHub: the failing line, properties escaped, message on one line.
         let g = github(&fail_case());
-        assert!(g.starts_with("::error file=/x/shop.pv,line=12,title=Total & tax::expect"), "{g}");
+        assert!(g.starts_with("::error file=/x/shop.bt,line=12,title=Total & tax::expect"), "{g}");
         assert!(g.contains("%0Aexpected"), "{g}");
         let flaky =
             ScenarioResult { failure: None, retried: vec![fail_case().failure.unwrap()], attempt: 2, ..fail_case() };
@@ -852,7 +852,7 @@ mod tests {
 
     fn fail_case() -> ScenarioResult {
         ScenarioResult {
-            file: PathBuf::from("/x/shop.pv"),
+            file: PathBuf::from("/x/shop.bt"),
             name: "Total & tax".into(),
             line: 9,
             tags: vec![],
@@ -884,7 +884,7 @@ mod tests {
     #[test]
     fn printed_values_show_under_their_scenario() {
         let r = ScenarioResult {
-            file: PathBuf::from("p.pv"),
+            file: PathBuf::from("p.bt"),
             name: "Looks".into(),
             line: 1,
             tags: vec![],

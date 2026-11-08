@@ -5,7 +5,7 @@ browser in-process through [navigera](https://github.com/andrey-usa/navigera):
 no Node, no transpile step, no driver process, and no model at run time.
 
 ```text
-# tests/shop.pv
+# tests/shop.bt
 base http://127.0.0.1:8000
 
 before each
@@ -21,11 +21,11 @@ scenario "Adding a product counts it in the cart" @smoke
 
 ```console
 $ bitti run tests --junit report.xml
-PASS  tests/shop.pv:7  Adding a product counts it in the cart  (557 ms)
+PASS  tests/shop.bt:7  Adding a product counts it in the cart  (557 ms)
 1 passed, 0 failed in 0.9 s
 ```
 
-API tests are `.pv` files too: a scenario of `http` steps and their
+API tests are `.bt` files too: a scenario of `http` steps and their
 checks runs with no browser at all, in milliseconds ([API tests without a
 browser](#api-tests-without-a-browser)).
 
@@ -33,7 +33,7 @@ Status: pre-release. Everything below works in this build.
 
 ## The format
 
-- Top-level lines: `base <url>`, `set NAME = value`, `use other.pv`,
+- Top-level lines: `base <url>`, `set NAME = value`, `use other.bt`,
   `flow name(a, b)`, `step "<phrase>"` (a Gherkin step's steps, see
   below), `auth name [ttl 30m]`, `before all|each`, `after each|all`,
   `scenario "name" @tag…`. Steps are indented under them.
@@ -54,7 +54,7 @@ Status: pre-release. Everything below works in this build.
   page then sees as granted, denied or still to be asked. (A `set NAME = value` at the top of a file is
   a variable.)
 - A relative path a step reads (`upload`, `state load`, `eval --file`, `expect js --file`,
-  `init-script --file`, `route --body-file`, `route --har`) is found next to the `.pv`
+  `init-script --file`, `route --body-file`, `route --har`) is found next to the `.bt`
   file, as `use` and `for each` files are, so a suite runs the same from
   any directory. Files a step writes (`screenshot`, `state save`) land in
   the current directory.
@@ -63,7 +63,7 @@ Status: pre-release. Everything below works in this build.
   writes one; requests it has no entry for fail, or reach the network with
   `--not-found continue`), and `route "*/api/me" --modify --replace free
   pro` changes the real response (`--set-header 'Name: value'` too).
-  `tests/fixtures/har.pv` has both.
+  `tests/fixtures/har.bt` has both.
 - Words split like a shell's, with no expansion; inside double quotes
   `\"` and `\\` stand for themselves and `\n`, `\r` for a line break
   (a textarea's value). `${NAME}` and
@@ -89,7 +89,7 @@ Status: pre-release. Everything below works in this build.
   header <name>` a part of it (JSON indented), and `print "order ${id}"`
   a line with its variables filled in.
 - `exec [--timeout-ms <ms>] <program> <args…>` runs a program (no shell:
-  `sh -c "…"` or `pwsh -c "…"` for one) in the `.pv` file's directory,
+  `sh -c "…"` or `pwsh -c "…"` for one) in the `.bt` file's directory,
   with `BITTI_BASE_URL` set, for what a browser can't reach: seed a
   database (`psql`, `sqlplus`), call a script. Its exit code and output
   become `${exec.exit}`, `${exec.stdout}` and `${exec.stderr}`, and
@@ -113,7 +113,7 @@ Status: pre-release. Everything below works in this build.
   an API test of its own: see [API tests](#api-tests-without-a-browser); a
   relative URL takes the base URL). `--form` sends an urlencoded form,
   `--multipart` a `multipart/form-data` one (`@file` uploads the file beside
-  the `.pv`, `;type=image/png` after it sets its type), `--query` adds an
+  the `.bt`, `;type=image/png` after it sets its type), `--query` adds an
   encoded `name=value` to the URL, and `--user ada:${secret:PW}` or
   `--bearer ${secret:TOKEN}` sets the `Authorization` header (Basic or
   Bearer). The scenario's cookies go with it and
@@ -182,7 +182,7 @@ Status: pre-release. Everything below works in this build.
   expect text "Session expired"
   ```
 - `flow name(a, b)` at the top level holds steps; `run name x y` runs them
-  with `${a}` and `${b}` set. `use other.pv` takes another file's flows
+  with `${a}` and `${b}` set. `use other.bt` takes another file's flows
   and `set`s. A failure inside a flow names the flow's own line.
 - `optional <step>`: a step that may not apply (a cookie banner that only
   sometimes shows); its failure is noted, not fatal.
@@ -224,7 +224,7 @@ Status: pre-release. Everything below works in this build.
 | `--selector <css> count` `is`, `>`, `>=`, `<`, `<=` `<n>` | how many match (exactly one `--selector`) |
 | `${var}` + a comparison | a saved value |
 | `js "<expression>"` (or `eval`) [+ a comparison] | a script in the page: truthy, or its value compared |
-| `js --file <script.js>` [+ a comparison] | the same, from a file next to the `.pv` (an expression, or a function body that `return`s its answer): for a check across rows or anything too long to quote |
+| `js --file <script.js>` [+ a comparison] | the same, from a file next to the `.bt` (an expression, or a function body that `return`s its answer): for a check across rows or anything too long to quote |
 | `request <METHOD> <url glob> [status <n>]`, `no request <METHOD> <url glob>` | a request the page made in this scenario (`*` in the URL matches anything) |
 | `request … json <$.path>` + a comparison | a value in the last matching response's JSON: `$`, `.key`, `[0]`, `["key"]` (`$.items[0].sku`) |
 | `request … body` + a comparison | the last matching response's body, as text (`body contains "added to cart"`) |
@@ -232,7 +232,7 @@ Status: pre-release. Everything below works in this build.
 | `cookie <name>` [+ a comparison], `no cookie <name>`, `cookie <name> absent` | a cookie of the scenario's browser context |
 | `storage local\|session <key>` [+ a comparison \| `absent`] | Local or Session Storage |
 | `download <file glob>`, `no download …` | a finished download (then `${download.path}`, `${download.name}`: the latest match). Each scenario's downloads go to a directory of its own beside its evidence (`.bitti/runs/<time>/<scenario>/downloads`, kept only when something came), so a name never carries over from another scenario; a second file of the same name in one scenario arrives as `name (2).ext` |
-| `download <file glob> compare <expected file>` [`--key <columns>`] [compara flags…] | the download is the same table as the expected file beside the `.pv` ([compara](https://github.com/andrey-usa/compara) on the PATH, or `BITTI_COMPARA`): CSV, NDJSON or Parquet, either side; compara's flags (`-i`, `--trim`, `--tolerance`) pass through. A difference fails the step with compara's counts and the reports it kept beside the scenario's downloads: `--report html,json,rows` (the HTML report, the JSON summary of counts and column statistics, CSVs of the changed, added and removed rows) or `none`; the run's `--compare-report` (`compare_report` in `bitti.toml`, default `html`) when the step doesn't say, and compara's own `-o`, `--json` or `--export-dir` win |
+| `download <file glob> compare <expected file>` [`--key <columns>`] [compara flags…] | the download is the same table as the expected file beside the `.bt` ([compara](https://github.com/andrey-usa/compara) on the PATH, or `BITTI_COMPARA`): CSV, NDJSON or Parquet, either side; compara's flags (`-i`, `--trim`, `--tolerance`) pass through. A difference fails the step with compara's counts and the reports it kept beside the scenario's downloads: `--report html,json,rows` (the HTML report, the JSON summary of counts and column statistics, CSVs of the changed, added and removed rows) or `none`; the run's `--compare-report` (`compare_report` in `bitti.toml`, default `html`) when the step doesn't say, and compara's own `-o`, `--json` or `--export-dir` win |
 | `console` + a comparison, `no console "<t>"` | a console message (any level) |
 | `no errors` | no page exceptions or console errors |
 | `accessible` [`--selector <css>`] [`--tags wcag2a,wcag2aa,…`] [`--ignore <rule>,…`] | [axe-core](https://github.com/dequelabs/axe-core) (built in) finds no violation in the page, or under the selector: WCAG 2.0 and 2.1 A and AA by default; `--tags` replaces that set (`--tags wcag2a,wcag2aa,best-practice` to add axe's best practices); a failure names each rule, its impact, the first elements and what to fix |
@@ -240,8 +240,8 @@ Status: pre-release. Everything below works in this build.
 | `exit` [`is`] `<n>`, `stdout`/`stderr` + a comparison | what the last `exec` gave |
 | `status` [`is`] `<n>`, `body` + a comparison, `json <$.path>` [+ a comparison], `header <name>` [+ a comparison] | the last `http` answer; a JSON object or array compared with `is` is compared as JSON (key order and `1` vs `1.0` don't matter), with `contains` as a part of it (`json $ contains '{"role": "shopper"}'`: the keys it names, at any depth; for an array, items that some item matches) |
 | `json <$.path> count` + a comparison | how many items the array (or keys the object) at the path has |
-| `json [<$.path>] schema <file.json>[#<pointer>]` | the answer (or the value at the path) is valid against a JSON Schema beside the `.pv`, or one inside a larger document (`openapi.json#/components/schemas/Item`: an OpenAPI 3 document in JSON, its `$ref`s read in the whole document); a failure lists where it isn't (`$[1].price: expected number, got string "5"`). See [API tests](#api-tests-without-a-browser) for what it reads |
-| `json [<$.path>] snapshot <name>` [`--ignore <$.path>,…`] | the answer (or the value at the path) is what its baseline beside the `.pv` holds, `<file>.pv.snapshots/<name>.json`, compared as JSON; `--ignore $.id,$.items[*].created` leaves out what changes from run to run. With no baseline yet the run writes it and the step fails, so a person reads it first; `--update-snapshots` writes or replaces it. A difference names each path (`$.total: 38, was 36`) |
+| `json [<$.path>] schema <file.json>[#<pointer>]` | the answer (or the value at the path) is valid against a JSON Schema beside the `.bt`, or one inside a larger document (`openapi.json#/components/schemas/Item`: an OpenAPI 3 document in JSON, its `$ref`s read in the whole document); a failure lists where it isn't (`$[1].price: expected number, got string "5"`). See [API tests](#api-tests-without-a-browser) for what it reads |
+| `json [<$.path>] snapshot <name>` [`--ignore <$.path>,…`] | the answer (or the value at the path) is what its baseline beside the `.bt` holds, `<file>.bt.snapshots/<name>.json`, compared as JSON; `--ignore $.id,$.items[*].created` leaves out what changes from run to run. With no baseline yet the run writes it and the step fails, so a person reads it first; `--update-snapshots` writes or replaces it. A difference names each path (`$.total: 38, was 36`) |
 | `time` `<`, `<=`, `>`, `>=` `<time>` (`300ms`, `1.5s`) | how long the last `http` exchange took, redirects included |
 | `ax [<target>] matches` + the tree indented under it | the page's (or the target's) accessibility tree, as `navigera ax` prints it, holds those lines: partially (`button` matches `button "Place order"`) and in order, a line indented under another inside what that one matched, refs ignored, `/regex/` (spaces allowed) for a name or a value |
 | `screenshot <name> [<target>]` [`--full-page`] [`--threshold 0.2`] [`--max-diff-pixels <n>` \| `--max-diff-ratio <r>`] [`--mask <css>`]… | the viewport (or the element, or the whole page) as its baseline shows it, pixel by pixel; see below |
@@ -264,8 +264,8 @@ Status: pre-release. Everything below works in this build.
   count as one text on both sides, so a template keeps matching however
   navigera splits adjacent text into lines.
 
-  A screenshot's baseline is beside the `.pv` file, in
-  `<file>.pv.screenshots/<name>-<os>.png` (fonts differ between systems,
+  A screenshot's baseline is beside the `.bt` file, in
+  `<file>.bt.screenshots/<name>-<os>.png` (fonts differ between systems,
   so each OS keeps its own); keep it with the tests. With none yet the run
   writes it and the step fails, so a person looks at it first;
   `--update-snapshots` (or `--update-screenshots`) writes or replaces
@@ -316,7 +316,7 @@ scenario "An order can be placed and ships" @api
 
 ```console
 $ bitti run tests/api
-PASS  tests/api/orders.pv:6  An order can be placed and ships  (412 ms)
+PASS  tests/api/orders.bt:6  An order can be placed and ships  (412 ms)
 1 passed, 0 failed in 415 ms (no browser)
 ```
 
@@ -331,7 +331,7 @@ PASS  tests/api/orders.pv:6  An order can be placed and ships  (412 ms)
 - A failure shows the request and what came back:
 
   ```text
-  FAIL  orders.pv:6  An order can be placed and ships  (31 ms)
+  FAIL  orders.bt:6  An order can be placed and ships  (31 ms)
         line 10: expect json $ schema order.schema.json
         expected json $ to match schema order.schema.json; it doesn't: $.total: expected number, got string "36.00"
         last http: POST http://127.0.0.1:8000/api/orders -> 201 (9 ms, 61 B, application/json)
@@ -352,7 +352,7 @@ PASS  tests/api/orders.pv:6  An order can be placed and ships  (412 ms)
 
 ## Gherkin
 
-`.feature` files run as they are, beside `.pv` files (no generated code):
+`.feature` files run as they are, beside `.bt` files (no generated code):
 `Feature`, `Background` (before each scenario), `Scenario`/`Example`,
 `Scenario Outline` (or `Scenario Template`) with `Examples` (or
 `Scenarios`) tables, several allowed, each with its own tags (`<column>`
@@ -362,7 +362,7 @@ scenarios only), tags (a feature's go on all its scenarios), and
 `Given`/`When`/`Then`/`And`/`But`/`*` steps, all alike. English keywords
 only.
 
-A step is one of the run's own `step` blocks, from any `.pv` file it loads:
+A step is one of the run's own `step` blocks, from any `.bt` file it loads:
 
 ```text
 step "I sign in with {password}"
@@ -392,7 +392,7 @@ scenario.
 ## Running
 
 ```text
-bitti run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--grep-invert <text>]
+bitti run [<file.bt|file.feature|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--grep-invert <text>]
               [--tag <tag|expression>] [--last-failed] [--max-failures <n>|-x] [--forbid-only|--allow-only]
               [--workers <n|auto>|-j <n>] [--isolation context|browser] [--retries <n>] [--fail-on-flaky] [--shard <i/n>]
               [--repeat <n>] [--shuffle [<seed>]] [--slowmo <ms>]
@@ -401,14 +401,14 @@ bitti run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--grep
               [--electron <app> [--electron-arg <arg>]...] [--attach <port|ws://…>]
               [--secrets <file>] [--evidence <dir>] [--pause-on-failure] [--trace on-failure|all] [--video on-failure|all] [--update-snapshots]
               [--compare-report html,json,rows|none] [--config <file>] [--env <name>]
-bitti lint [<file.pv|file.feature|dir>...]
-bitti list [<file.pv|file.feature|dir>...]
+bitti lint [<file.bt|file.feature|dir>...]
+bitti list [<file.bt|file.feature|dir>...]
 bitti trace <dir> [<line>]
 bitti fix [<file>:<line>] [--use <n>] [--all [--min <p>]]
 bitti navigera <command…>
-bitti from-session <name> [--scenario <name>] [--out <file.pv>]
-bitti record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <seconds>]
-bitti record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>]
+bitti from-session <name> [--scenario <name>] [--out <file.bt>]
+bitti record <url> [--out <file.bt>] [--scenario <name>] [--headless] [--for <seconds>]
+bitti record --extend <file.bt> [--scenario <name>] [--base-url <url>] [--secrets <file>]
 bitti mcp [--headed] [--chromium <path>]
 bitti skill          # the agent skill (what an agent reads to write tests)
 bitti <command> --help   # that command's usage and options
@@ -564,7 +564,7 @@ bitti --version
   closest ones on the page as locators to paste in:
 
   ```text
-  FAIL  shop.pv:21  Accept the cookies  (611 ms)
+  FAIL  shop.bt:21  Accept the cookies  (611 ms)
         line 23: click --role button --name "Accept everything"
         click role="button" name="Accept everything": … no element …
         nearest on the page:
@@ -607,7 +607,7 @@ bitti --version
   line. Read it through, keep the expects that matter, add the ones the
   test is for. A session started by a plain `navigera` works too when that
   navigera has `history`.
-- `bitti record <url> --out t.pv` opens a browser to use by hand: each
+- `bitti record <url> --out t.bt` opens a browser to use by hand: each
   click, field change, check, select, upload and Enter becomes a step as
   you do it, with the most stable locator that finds the element (the same
   `locate` as `from-session`, run in the page at that moment; when the
@@ -619,7 +619,7 @@ bitti --version
   every step: close the browser or press Ctrl-C to stop. A click into a
   field isn't a step (its value is); typing in a field twice keeps the
   last value.
-- `bitti record --extend t.pv [--scenario <name>]` grows a scenario
+- `bitti record --extend t.bt [--scenario <name>]` grows a scenario
   instead: it runs that scenario (default: the file's last) to its end,
   `after each` left out, then hands you the browser there; what you do
   goes in after its last step, the same way, and the rest of the file stays
@@ -638,10 +638,10 @@ bitti --version
   and write (`paths`, `out`, the files `args` names) stays inside the
   working directory, as navigera's own tools' files do, and `args` can't
   name a `--chromium` to start; `NAVIGERA_MCP_ALLOW_FILES=1` lifts both.
-  A project's own `.pv` files still do what they say (`exec`, `[server]`).
+  A project's own `.bt` files still do what they say (`exec`, `[server]`).
 - `--pause-on-failure` stops at a failure with the browser as the failure
-  left it and prints how to look at that very tab (`navigera -s pv start
-  --attach ws://…/devtools/page/…`, then `navigera -s pv ax`); Enter goes
+  left it and prints how to look at that very tab (`navigera -s bt start
+  --attach ws://…/devtools/page/…`, then `navigera -s bt ax`); Enter goes
   on with the run. It runs one worker. With no terminal to press Enter in,
   it waits `BITTI_PAUSE_S` seconds (default 600, for an agent looking
   from elsewhere), and under CI (`CI` set) it doesn't pause unless that is

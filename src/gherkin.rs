@@ -1,7 +1,7 @@
 //! `.feature` files, run as they are: Gherkin's `Feature`, `Background`,
 //! `Scenario` (`Example`), `Scenario Outline` with `Examples`, tags and
 //! `Given/When/Then/And/But/*` steps. A step is one of the run's own
-//! `step "…"` blocks (in any `.pv` file it loads), else a phrase of the
+//! `step "…"` blocks (in any `.bt` file it loads), else a phrase of the
 //! built-in book; Cucumber JSON reports the steps one by one.
 //!
 //! ```text
@@ -355,7 +355,7 @@ pub fn resolve(suite: &mut Suite, defs: &[Flow]) -> Result<(), ParseError> {
             [] => {
                 let words = phrase(text).ok_or_else(|| {
                     err(format!(
-                        "no step matches {text:?}: write one in a .pv file (`step \"{}\"` and its steps indented under it), or use a built-in phrase",
+                        "no step matches {text:?}: write one in a .bt file (`step \"{}\"` and its steps indented under it), or use a built-in phrase",
                         text.replace('"', "'")
                     ))
                 })?;
@@ -513,7 +513,7 @@ Feature: Coupons
         let def = Flow {
             name: "step \"I am signed in as {role}\"".into(),
             params: vec!["role".into()],
-            file: "steps.pv".into(),
+            file: "steps.bt".into(),
             line: 1,
             steps: vec![],
         };

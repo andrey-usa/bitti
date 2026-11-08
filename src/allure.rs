@@ -125,7 +125,7 @@ mod tests {
 
     fn case() -> ScenarioResult {
         ScenarioResult {
-            file: PathBuf::from("/x/shop.pv"),
+            file: PathBuf::from("/x/shop.bt"),
             name: "Pays".into(),
             line: 3,
             tags: vec!["smoke".into()],

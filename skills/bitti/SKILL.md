@@ -1,11 +1,11 @@
 ---
 name: bitti
-description: Write and run plain-text web tests (.pv files) on real Chrome with bitti — each step is a navigera command line, each check an `expect` that retries. Use to turn what you did in a browser into a regression test, to check a web app after a change, or to automate a browser job, without writing test code.
+description: Write and run plain-text web tests (.bt files) on real Chrome with bitti — each step is a navigera command line, each check an `expect` that retries. Use to turn what you did in a browser into a regression test, to check a web app after a change, or to automate a browser job, without writing test code.
 ---
 
 # bitti
 
-`.pv` files of steps and checks, run on Chrome by one binary. The shortest
+`.bt` files of steps and checks, run on Chrome by one binary. The shortest
 way to a passing test: write the scenario from what the task says, `lint`
 it, run it, and fix what the failure names. Look at the page only when the
 failure doesn't say enough.
@@ -74,7 +74,7 @@ expect not --selector .toast visible
   `value`, `attr <name>` or `count`, or a state: `visible hidden enabled
   disabled checked unchecked focused editable empty`. `not` negates any.
 - `text "…"` is visible text anywhere on the page.
-- `js --file check.js` runs a script beside the `.pv` (a sum of rows, …):
+- `js --file check.js` runs a script beside the `.bt` (a sum of rows, …):
   an expression, or a body that `return`s. It holds on a true value, or
   compares like the rest.
 - Comments are whole lines starting with `#`.
@@ -119,13 +119,13 @@ scenario "A new user can be read back" @api
 Write the file and run it in one command:
 
 ```bash
-cat > cart.pv <<'EOF'
+cat > cart.bt <<'EOF'
 …
 EOF
-bitti lint cart.pv && bitti run cart.pv --base-url "$BASE_URL"
+bitti lint cart.bt && bitti run cart.bt --base-url "$BASE_URL"
 ```
 
-An Electron desktop app instead of a site: `bitti run app.pv --electron
+An Electron desktop app instead of a site: `bitti run app.bt --electron
 ./my-app` (the app's directory with Electron in its `node_modules`, or the
 app's executable). No `goto`: each scenario starts in a fresh app's first
 window; a window the app opens becomes the current tab. `expect js --main
@@ -137,13 +137,13 @@ seen, the page and its title, and, when an element wasn't found, the
 closest ones on the page as locators:
 
 ```text
-FAIL  cart.pv:3  Adding a product counts it in the cart  (5.2 s)
+FAIL  cart.bt:3  Adding a product counts it in the cart  (5.2 s)
       line 5: click --role button --name "Add to basket"
       click role="button" name="Add to basket": no element … within 5000 ms
       at http://127.0.0.1:8000/shop, title "Shop"
       nearest on the page:
         1. button "Add to cart"   --role button --name "Add to cart"   0.70
-      fix: bitti fix cart.pv:5 --use 1
+      fix: bitti fix cart.bt:5 --use 1
 ```
 
 Paste the locator in, or run the `fix` line (`--use 2` for the second: the
@@ -164,7 +164,7 @@ bitti navigera -s look --raw eval "document.querySelector('#total').textContent"
 
 `ax` lines become locators: `button "Pay" [ref=12]` is `--role button
 --name "Pay"`. After clicking through by ref (`--raw click 12`), `bitti
-from-session look --out shop.pv` writes what the session did as a scenario,
+from-session look --out shop.bt` writes what the session did as a scenario,
 refs turned into locators; add the expects the test is for.
 
 Tags pick and mark scenarios: `--tag "smoke and not slow"`; `@skip` and

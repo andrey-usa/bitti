@@ -43,7 +43,7 @@ pub enum Subject {
     Errors,
     /// A JavaScript expression in the page: truthy, or compared.
     Js(String),
-    /// `expect js --file <f.js>`: a script in a file beside the `.pv` (found
+    /// `expect js --file <f.js>`: a script in a file beside the `.bt` (found
     /// there as `eval --file` is), for a check too long to quote on one line.
     JsFile(String),
     /// `expect js --main <code>`: in an Electron app's main process (a
@@ -68,7 +68,7 @@ pub enum Subject {
     /// A finished download whose file name matches the glob.
     Download(String),
     /// `download <glob> compare <expected> <compara flags…>`: and compara
-    /// finds it the same as the expected file (beside the `.pv`).
+    /// finds it the same as the expected file (beside the `.bt`).
     DownloadCompare {
         glob: String,
         expected: String,
@@ -89,22 +89,22 @@ pub enum Subject {
     Http(HttpRead),
     /// `json [<$.path>] schema <file.json>`: the last `http` answer's JSON
     /// (or the value at the path) is valid against a JSON Schema beside
-    /// the `.pv` (see [`crate::schema`]).
+    /// the `.bt` (see [`crate::schema`]).
     JsonSchema {
         path: String,
         file: String,
     },
     /// `json [<$.path>] snapshot <name> [--ignore <$.path>,…]`: the last
     /// `http` answer's JSON (or the value at the path), the `--ignore`d
-    /// values left out, is what its baseline beside the `.pv` holds
-    /// (`<file>.pv.snapshots/<name>.json`).
+    /// values left out, is what its baseline beside the `.bt` holds
+    /// (`<file>.bt.snapshots/<name>.json`).
     JsonSnapshot {
         path: String,
         name: String,
         ignore: Vec<String>,
     },
     /// `screenshot <name> [<target>]`: the page (or an element) as its
-    /// baseline PNG beside the `.pv` file shows it.
+    /// baseline PNG beside the `.bt` file shows it.
     Screenshot(Shot),
     /// A measure of the current page's load (see [`METRICS`]): its value in
     /// milliseconds (`cls`: the layout shift score).

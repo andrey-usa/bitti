@@ -65,20 +65,20 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("bitti-watch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("a.pv"), "scenario \"a\"\n  goto /\n").unwrap();
-        std::fs::write(dir.join("b.pv"), "scenario \"b\"\n  goto /\n").unwrap();
+        std::fs::write(dir.join("a.bt"), "scenario \"a\"\n  goto /\n").unwrap();
+        std::fs::write(dir.join("b.bt"), "scenario \"b\"\n  goto /\n").unwrap();
         let paths = vec![dir.clone()];
         let before = stamps(&paths);
         assert_eq!(before.len(), 2);
         assert!(changed(&before, &stamps(&paths)).is_empty());
-        std::fs::write(dir.join("b.pv"), "scenario \"b changed\"\n  goto /\n").unwrap();
-        std::fs::write(dir.join("c.pv"), "scenario \"c\"\n  goto /\n").unwrap();
+        std::fs::write(dir.join("b.bt"), "scenario \"b changed\"\n  goto /\n").unwrap();
+        std::fs::write(dir.join("c.bt"), "scenario \"c\"\n  goto /\n").unwrap();
         std::fs::write(dir.join("notes.txt"), "not a scenario").unwrap();
         let names: Vec<String> = changed(&before, &stamps(&paths))
             .iter()
             .map(|f| f.file_name().unwrap().to_string_lossy().to_string())
             .collect();
-        assert_eq!(names, ["b.pv", "c.pv"]);
+        assert_eq!(names, ["b.bt", "c.bt"]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

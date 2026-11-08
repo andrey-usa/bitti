@@ -286,7 +286,7 @@ fn proposals(before: &Value, after: &Value) -> Vec<String> {
     out
 }
 
-/// The history as a `.pv` file with one scenario.
+/// The history as a `.bt` file with one scenario.
 pub fn render(history: &[Value], session: &str, scenario: &str) -> String {
     let first = history.iter().find_map(|e| match serde_json::from_value::<Command>(e["command"].clone()) {
         Ok(Command::Goto { url, .. } | Command::Open { url: Some(url) }) => Some(url),
@@ -404,14 +404,14 @@ fn quote_always(s: &str) -> String {
     }
 }
 
-/// `bitti from-session <name> [--scenario <name>] [--out <file.pv>]`.
+/// `bitti from-session <name> [--scenario <name>] [--out <file.bt>]`.
 pub fn main(args: &[String]) -> Result<String, String> {
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
     let values: Vec<&String> = [flag("--scenario"), flag("--out")].into_iter().flatten().collect();
     let session = args
         .iter()
         .find(|a| !a.starts_with("--") && !values.contains(a))
-        .ok_or("usage: bitti from-session <navigera session> [--scenario <name>] [--out <file.pv>]")?;
+        .ok_or("usage: bitti from-session <navigera session> [--scenario <name>] [--out <file.bt>]")?;
     let scenario = flag("--scenario").cloned().unwrap_or_else(|| format!("What session {session} did"));
     let text = render(&history(session)?, session, &scenario);
     match flag("--out") {
@@ -447,7 +447,7 @@ mod tests {
             json!({"command": {"op": "goto", "url": "https://other.test/x"}, "url": "https://other.test/x"}),
             json!({"command": {"op": "wait", "download": "*.csv", "timeout_ms": 9000.0}, "url": "https://other.test/x"}),
         ];
-        let pv = render(&h, "work", "Signs in");
+        let bt = render(&h, "work", "Signs in");
         let want = "base http://127.0.0.1:8000\n\nscenario \"Signs in\"\n  goto /login\n  \
                     click --role button --name \"Accept all\"\n  fill --role textbox --name Email ada@example.com\n  \
                     fill --label Password ${secret:PASSWORD}\n  fill --role textbox --name \"Token Gamma\" ${secret:TOKEN_GAMMA}\n  \
@@ -456,12 +456,12 @@ mod tests {
                     # expect text \"3 new orders\"   (has numbers: may change between runs)\n  # left out: ref 50: no locator found it again\n  \
                     # left out: mouse click at coordinates (kept out: they move with the layout)\n  \
                     goto https://other.test/x\n  wait --timeout-ms 9000 --download *.csv\n";
-        assert!(pv.ends_with(want), "{pv}");
-        assert!(pv.contains("${secret:PASSWORD}, ${secret:TOKEN_GAMMA}: give them with --secrets"), "{pv}");
-        assert!(!pv.contains("s3cret") && !pv.contains("hunter2"), "{pv}");
+        assert!(bt.ends_with(want), "{bt}");
+        assert!(bt.contains("${secret:PASSWORD}, ${secret:TOKEN_GAMMA}: give them with --secrets"), "{bt}");
+        assert!(!bt.contains("s3cret") && !bt.contains("hunter2"), "{bt}");
         // What it writes reads back as a scenario.
-        let s = crate::suite::parse(std::path::Path::new("t.pv"), &pv);
-        assert!(s.is_ok(), "{pv}\n{:?}", s.err());
+        let s = crate::suite::parse(std::path::Path::new("t.bt"), &bt);
+        assert!(s.is_ok(), "{bt}\n{:?}", s.err());
         assert_eq!(origin("https://a.test:81/p?q"), Some("https://a.test:81"));
         assert!(render(&[], "s", "x").contains("history is empty"));
     }

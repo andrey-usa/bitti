@@ -51,7 +51,7 @@ The first release, still to be named.
   and `--html` shows a traced scenario's steps as a timeline that opens
   to them.
 
-- Plain-text web tests (`.pv`) and Gherkin `.feature` files that run on real
+- Plain-text web tests (`.bt`) and Gherkin `.feature` files that run on real
   Chrome through navigera, in one native binary with no Node.
 - `bitti run` (workers, a browser context per scenario, retries,
   `--repeat` and `--shuffle`, traces), `lint` and `list`.
@@ -75,7 +75,7 @@ The first release, still to be named.
 - `expect request … body` + a comparison: the last matching response's
   body as text, for a response that isn't JSON or a check on its wording.
 - `expect js --file <script.js>` [+ a comparison]: a check from a file next
-  to the `.pv` (an expression, or a function body that `return`s its
+  to the `.bt` (an expression, or a function body that `return`s its
   answer), for one across rows or too long to quote on a line.
 - `bitti <command> --help` prints that command's usage and options.
 - `print <command>`: a step that shows a read command's result (a value,
@@ -98,7 +98,7 @@ The first release, still to be named.
   scenario name says where the first is; `use` of a missing file says
   where it is looked for, without `(os error 2)`.
 - `if expect text "…"` is the same as `if text "…"`: the word is optional.
-- An `if` on `js --file` finds its script next to the `.pv`, as `expect`
+- An `if` on `js --file` finds its script next to the `.bt`, as `expect`
   does, from any directory.
 - An `expect` that cuts a long value says how many characters it left out
   and that a `print` step shows the value whole; a quote left open says

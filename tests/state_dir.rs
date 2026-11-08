@@ -10,7 +10,7 @@ struct Dir(std::path::PathBuf);
 
 impl Dir {
     fn new(name: &str) -> Dir {
-        let path = std::env::temp_dir().join(format!("pv-state-{name}-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("bt-state-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).unwrap();
         Dir(path)
@@ -35,9 +35,9 @@ fn bitti(dir: &std::path::Path, args: &[&str]) -> (Option<i32>, String) {
 fn a_linked_state_directory_is_refused() {
     let project = Dir::new("project");
     let elsewhere = Dir::new("elsewhere");
-    std::fs::write(project.path().join("t.pv"), "scenario \"x\"\n  goto /\n").unwrap();
+    std::fs::write(project.path().join("t.bt"), "scenario \"x\"\n  goto /\n").unwrap();
     std::os::unix::fs::symlink(elsewhere.path(), project.path().join(".bitti")).unwrap();
-    for args in [&["run", "t.pv"][..], &["fix", "t.pv:2"], &["lint", "t.pv"]] {
+    for args in [&["run", "t.bt"][..], &["fix", "t.bt:2"], &["lint", "t.bt"]] {
         let (code, err) = bitti(project.path(), args);
         assert_eq!(code, Some(2), "{args:?}: {err}");
         assert!(err.contains(".bitti is a link"), "{args:?}: {err}");
@@ -50,7 +50,7 @@ fn a_linked_state_directory_is_refused() {
     std::fs::remove_file(project.path().join(".bitti")).unwrap();
     std::fs::create_dir(project.path().join(".bitti")).unwrap();
     std::os::unix::fs::symlink(elsewhere.path(), project.path().join(".bitti/runs")).unwrap();
-    let (code, err) = bitti(project.path(), &["run", "t.pv"]);
+    let (code, err) = bitti(project.path(), &["run", "t.bt"]);
     assert_eq!(code, Some(2), "{err}");
     assert!(err.contains(".bitti/runs is a link"), "{err}");
     assert_eq!(std::fs::read_dir(elsewhere.path()).unwrap().count(), 0);

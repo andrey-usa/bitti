@@ -132,7 +132,7 @@ pub fn render(text: &str, only: Option<usize>, dir: &Path) -> String {
             s["ms"].as_f64().unwrap_or(0.0),
             s["text"].as_str().unwrap_or("")
         );
-        // As the run printed it: the page and its title, the error in a .pv
+        // As the run printed it: the page and its title, the error in a .bt
         // file's terms (the trace keeps navigera's own text).
         let url = s["url"].as_str().unwrap_or("");
         let here = crate::report::page_at(url, s["title"].as_str().unwrap_or(""));
@@ -142,7 +142,7 @@ pub fn render(text: &str, only: Option<usize>, dir: &Path) -> String {
             place = here;
         }
         if let Some(e) = s["error"].as_str() {
-            for l in crate::runner::pv_terms(e).lines() {
+            for l in crate::runner::bt_terms(e).lines() {
                 let _ = writeln!(out, "                    {l}");
             }
         }
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn steps_read_back_with_where_they_were_and_what_came() {
-        let head = json!({"scenario": "Pays", "file": "shop.pv", "line": 3, "passed": false, "ms": 340.0});
+        let head = json!({"scenario": "Pays", "file": "shop.bt", "line": 3, "passed": false, "ms": 340.0});
         let console: Vec<Value> = (0..7).map(|k| json!({"level": "error", "text": format!("boom {k}")})).collect();
         let a = step(
             4,
@@ -245,7 +245,7 @@ mod tests {
         );
         let text = [head, a, b].iter().map(|v| v.to_string()).collect::<Vec<_>>().join("\n");
         let all = render(&text, None, Path::new("ev/shop"));
-        assert!(all.starts_with("FAIL shop.pv:3  \"Pays\""), "{all}");
+        assert!(all.starts_with("FAIL shop.bt:3  \"Pays\""), "{all}");
         assert!(all.contains("    4  ok        120 ms  goto /cart"), "{all}");
         assert!(all.contains("at http://x/cart, title \"Cart\""), "{all}");
         assert!(all.contains("net #1 GET 200"), "{all}");
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn a_step_that_is_not_there_is_said_and_a_missing_directory_too() {
-        let head = json!({"scenario": "S", "file": "s.pv", "line": 1, "passed": true, "ms": 1.0});
+        let head = json!({"scenario": "S", "file": "s.bt", "line": 1, "passed": true, "ms": 1.0});
         let mut missed =
             step(4, "optional expect text \"x\"", 5.0, None, (String::new(), String::new()), vec![], vec![]);
         missed["optional_missed"] = json!(true);

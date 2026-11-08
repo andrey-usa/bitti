@@ -4,7 +4,7 @@
 # a volume that outlives the pod, before the pod goes). The image: `docker build -f bitti/Dockerfile`
 # (see bitti's README), pushed where the cluster pulls from.
 #
-#   kubectl create configmap pv-tests --from-file=tests/
+#   kubectl create configmap bt-tests --from-file=tests/
 #   kubectl apply -f job.yaml && kubectl logs -f job/bitti
 apiVersion: batch/v1
 kind: Job
@@ -44,7 +44,7 @@ spec:
             - { name: shm, mountPath: /dev/shm }
       volumes:
         - name: tests
-          configMap: { name: pv-tests }
+          configMap: { name: bt-tests }
         - name: work
           emptyDir: {}
         - name: tmp

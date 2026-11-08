@@ -2,7 +2,7 @@
 and passes after, `/late` shows its text after `?ms=`, `/m1` has what the
 newer expect subjects read, `/login` signs in (counted at `/logins`), and
 `/note?x=` records what `before/after all` did (`/notes`); `/api/…` is the
-API `api.pv` tests with no browser."""
+API `api.bt` tests with no browser."""
 import email
 import json
 import sys
@@ -111,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
         body = raw.decode(errors="replace")
-        # The API a scenario with no browser tests (`api.pv`).
+        # The API a scenario with no browser tests (`api.bt`).
         if u.path == "/api/login":
             if self.headers.get("Content-Type") != "application/x-www-form-urlencoded":
                 return self.answer(415, '{"error": "send a form"}')
