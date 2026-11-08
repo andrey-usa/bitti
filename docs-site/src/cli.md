@@ -1,22 +1,22 @@
 # CLI usage
 
-> **Name:** this project was renamed **primavera → bitti** on
+> **Name:** this project was renamed **bitti → bitti** on
 > 2026-11-08 (bitti is Kazakh *бітті* — "it is done, finished"). Until the
-> code-rename release lands, the binary is still invoked as `primavera`
-> and its messages still say `primavera`; the pages below are verbatim
+> code-rename release lands, the binary is still invoked as `bitti`
+> and its messages still say `bitti`; the pages below are verbatim
 > from the current README and `--help`, so they use the old name.
 
 Verbatim usage text printed by the current build:
 
 ```text
-primavera: plain-text web tests on real Chrome (through navigera)
+bitti: plain-text web tests on real Chrome (through navigera)
 
 usage:
-  primavera run [<file.pv|dir>...] [options]   run scenarios (default: the current directory)
-  primavera lint [<file.pv|dir>...]             check files without a browser
-  primavera list [<file.pv|dir>...]             the scenarios a run would take
-  primavera skill                               the agent skill (the format and commands, for an AI agent)
-  primavera --version
+  bitti run [<file.bt|dir>...] [options]   run scenarios (default: the current directory)
+  bitti lint [<file.bt|dir>...]             check files without a browser
+  bitti list [<file.bt|dir>...]             the scenarios a run would take
+  bitti skill                               the agent skill (the format and commands, for an AI agent)
+  bitti --version
 
 run options:
   --base-url <url>      where relative URLs (`goto /cart`) point (else `base` in the file, PRIMAVERA_BASE_URL)
@@ -39,7 +39,7 @@ run options:
   --wait-ms <ms>        how long a step waits for its element (navigera's default 5000)
   --headed              show the browser
   --chromium <path>     the browser to run
-  --evidence <dir>      failure screenshots (default .primavera/runs/<time>)
+  --evidence <dir>      failure screenshots (default .bitti/runs/<time>)
   --pause-on-failure    keep the browser at a failure, open to `navigera --attach`, until Enter (one worker)
 
 exit codes: 0 all passed, 1 a scenario failed, 2 a file or an argument is wrong, 3 the browser didn't start

@@ -1,4 +1,4 @@
-//! Scenario files (`.pv`): plain text, one step per line.
+//! Scenario files (`.bt`): plain text, one step per line.
 //!
 //! ```text
 //! # comment
@@ -163,7 +163,7 @@ pub struct Suite {
     pub scenarios: Vec<Scenario>,
     pub flows: BTreeMap<String, Flow>,
     pub auths: BTreeMap<String, Auth>,
-    /// `use <file.pv>`: files whose flows and `set`s this one takes.
+    /// `use <file.bt>`: files whose flows and `set`s this one takes.
     pub uses: Vec<(usize, PathBuf)>,
 }
 
@@ -523,7 +523,7 @@ pub fn parse(file: &Path, text: &str) -> Result<Suite, ParseError> {
                 block = Block::None;
             }
             Some("use") => {
-                let path = words.get(1).ok_or_else(|| err(line_no, "expected `use <file.pv>`".into()))?;
+                let path = words.get(1).ok_or_else(|| err(line_no, "expected `use <file.bt>`".into()))?;
                 let dir = file.parent().unwrap_or(Path::new("."));
                 suite.uses.push((line_no, dir.join(path)));
                 block = Block::None;
@@ -769,7 +769,7 @@ pub fn resolve(suites: &mut [Suite]) -> Result<(), ParseError> {
 }
 
 /// Files a step reads (`upload`, `state load`, `eval --file`, `init-script
-/// --file`, `route --body-file`) are found next to the `.pv` file, as `use`
+/// --file`, `route --body-file`) are found next to the `.bt` file, as `use`
 /// and `for each` are, so a suite runs the same from any directory. Absolute
 /// paths, `-` (stdin) and paths that start with a variable are left alone.
 fn anchor_inputs(action: &mut Action, dir: &Path) {
@@ -910,7 +910,7 @@ fn parse_words(words: &[String]) -> Result<Action, String> {
     }
 }
 
-/// The `.pv` files under each path (a file is taken as is).
+/// The `.bt` files under each path (a file is taken as is).
 pub fn discover(paths: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
@@ -923,7 +923,7 @@ pub fn discover(paths: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {
             }
             if p.is_dir() {
                 walk(&p, out)?;
-            } else if p.extension().and_then(|e| e.to_str()) == Some("pv") {
+            } else if p.extension().and_then(|e| e.to_str()) == Some("bt") {
                 out.push(p);
             }
         }
@@ -975,7 +975,7 @@ mod tests {
     #[test]
     fn a_file_parses_into_blocks_and_steps() {
         let text = "# shop\nbase http://127.0.0.1:8000\nset coupon = SAVE10\n\nbefore each\n  goto /shop\n\nscenario \"Add one\" @smoke @cart\n  click --text \"Add to cart\"\n  expect --selector #cart-count text is 1\n  save n = get text --selector #cart-count\n\nscenario \"Docs\"\n  goto /docs\n";
-        let s = parse(Path::new("t.pv"), text).unwrap();
+        let s = parse(Path::new("t.bt"), text).unwrap();
         assert_eq!(s.base.as_deref(), Some("http://127.0.0.1:8000"));
         assert_eq!(s.vars["coupon"], "SAVE10");
         assert_eq!(s.before_each.len(), 1);
@@ -988,23 +988,23 @@ mod tests {
 
     #[test]
     fn mistakes_are_reported_with_their_line() {
-        let e = parse(Path::new("t.pv"), "scenario \"A\"\n  click 12\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"A\"\n  click 12\n").unwrap_err();
         assert_eq!(e.line, 2);
         assert!(e.message.contains("refs"), "{e}");
-        let e = parse(Path::new("t.pv"), "  goto /\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "  goto /\n").unwrap_err();
         assert!(e.message.contains("outside"), "{e}");
-        let e = parse(Path::new("t.pv"), "scenario \"A\"\n  goto /\nscenario \"A\"\n  goto /\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"A\"\n  goto /\nscenario \"A\"\n  goto /\n").unwrap_err();
         assert_eq!(e.line, 3);
-        let e = parse(Path::new("t.pv"), "scenario \"Empty\"\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"Empty\"\n").unwrap_err();
         assert!(e.message.contains("no steps"), "{e}");
-        let e = parse(Path::new("t.pv"), "scenario \"A\"\n  expect url sounds-like x\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"A\"\n  expect url sounds-like x\n").unwrap_err();
         assert_eq!(e.line, 2);
     }
 
     #[test]
     fn flows_rows_and_optional_steps() {
         let text = "flow sign-in(email, password)\n  goto /login\n  fill --label Email ${email}\n\nscenario \"Ship to ${country}\"\n  examples\n    | country | fee |\n    | Canada  | $9  |\n    | Mexico  | $12 |\n  run sign-in a@b.c pw\n  optional click --selector #banner\n  expect text ${fee}\n";
-        let mut s = parse(Path::new("t.pv"), text).unwrap();
+        let mut s = parse(Path::new("t.bt"), text).unwrap();
         assert_eq!(s.flows["sign-in"].params, ["email", "password"]);
         assert_eq!(
             s.scenarios.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
@@ -1017,22 +1017,22 @@ mod tests {
         assert!(matches!(&s.scenarios[0].steps[1].action, Action::Optional(_)));
         resolve(std::slice::from_mut(&mut s)).unwrap();
         // A wrong flow call is a file error, with its line.
-        let mut bad = parse(Path::new("t.pv"), "flow f(a)\n  goto /\nscenario \"x\"\n  run f\n").unwrap();
+        let mut bad = parse(Path::new("t.bt"), "flow f(a)\n  goto /\nscenario \"x\"\n  run f\n").unwrap();
         let e = resolve(std::slice::from_mut(&mut bad)).unwrap_err();
         assert_eq!(e.line, 4);
         assert!(e.message.contains("takes 1 argument"), "{e}");
-        let mut bad = parse(Path::new("t.pv"), "scenario \"x\"\n  run nowhere\n").unwrap();
+        let mut bad = parse(Path::new("t.bt"), "scenario \"x\"\n  run nowhere\n").unwrap();
         assert!(resolve(std::slice::from_mut(&mut bad)).unwrap_err().message.contains("no flow named"));
         // Rows that would give two scenarios one name.
         let e = parse(
-            Path::new("t.pv"),
+            Path::new("t.bt"),
             "scenario \"Same ${a}\"\n  examples\n    | a | b |\n    | 1 | x |\n    | 1 | y |\n  goto /\n",
         )
         .unwrap_err();
         assert!(e.message.contains("two data rows"), "{e}");
         // A name without a column gets the row's number.
         let s =
-            parse(Path::new("t.pv"), "scenario \"Plain\"\n  examples\n    | a |\n    | 1 |\n    | 2 |\n  goto /${a}\n")
+            parse(Path::new("t.bt"), "scenario \"Plain\"\n  examples\n    | a |\n    | 1 |\n    | 2 |\n  goto /${a}\n")
                 .unwrap();
         assert_eq!(s.scenarios[1].name, "Plain [2]");
     }
@@ -1045,7 +1045,7 @@ mod tests {
                     upload --frame iframe e.txt\n  optional state load s.json\n  eval --file x.js\n  \
                     route **/api --body-file body.json\n  upload --file ${download.path}\n  eval -\n  \
                     fill --selector a.txt b.txt\n";
-        let suite = parse(&dir.join("t.pv"), text).unwrap();
+        let suite = parse(&dir.join("t.bt"), text).unwrap();
         let at = |p: &str| dir.join(p).to_string_lossy().into_owned();
         let words: Vec<Vec<String>> = suite.scenarios[0]
             .steps
@@ -1079,12 +1079,12 @@ mod tests {
         assert_eq!(rows[0]["password"], "p,w");
         assert_eq!(rows[1]["email"], "bo \"b\"");
         assert!(csv_rows("a,b\n1\n").is_err());
-        let dir = std::env::temp_dir().join(format!("pv-use-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bt-use-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("flows")).unwrap();
-        std::fs::write(dir.join("flows/auth.pv"), "set who = ada\nflow hello\n  goto /\n").unwrap();
+        std::fs::write(dir.join("flows/auth.bt"), "set who = ada\nflow hello\n  goto /\n").unwrap();
         std::fs::write(dir.join("logins.csv"), "user\nada\nbo\n").unwrap();
-        let main = dir.join("main.pv");
-        std::fs::write(&main, "use flows/auth.pv\nscenario \"Hi ${user}\" for each logins.csv @data\n  run hello\n")
+        let main = dir.join("main.bt");
+        std::fs::write(&main, "use flows/auth.bt\nscenario \"Hi ${user}\" for each logins.csv @data\n  run hello\n")
             .unwrap();
         let mut s = parse(&main, &std::fs::read_to_string(&main).unwrap()).unwrap();
         resolve(std::slice::from_mut(&mut s)).unwrap();
@@ -1097,7 +1097,7 @@ mod tests {
     #[test]
     fn lint_finds_variables_nothing_sets() {
         let text = "set a = 1\nflow f\n  save got = get text --selector h1\nscenario \"x\"\n  goto /${a}\n  goto /${row}\n  run f\n  expect ${got} is ${b:-2}\n  expect ${missing} is 1\n  save later = get title\n  goto /${later}\n";
-        let s = parse(Path::new("t.pv"), text).unwrap();
+        let s = parse(Path::new("t.bt"), text).unwrap();
         let un = unset_vars(&s, &s.scenarios[0], &[]);
         assert_eq!(un, [(6, "row".to_string()), (9, "missing".to_string())]);
         assert_eq!(unset_vars(&s, &s.scenarios[0], &["row".into(), "missing".into()]), []);
@@ -1107,16 +1107,16 @@ mod tests {
     #[test]
     fn if_blocks_nest_by_indentation() {
         let text = "scenario \"x\"\n  goto /\n  if --selector \"#banner\" visible\n    click --selector \"#close\"\n    if text \"More\"\n      click --text More\n  expect title is t\n";
-        let s = parse(Path::new("t.pv"), text).unwrap();
+        let s = parse(Path::new("t.bt"), text).unwrap();
         let steps = &s.scenarios[0].steps;
         assert_eq!(steps.len(), 3);
         let Action::If { cond, steps: inner } = &steps[1].action else { panic!("{:?}", steps[1]) };
         assert_eq!(cond.timeout_ms, Some(0));
         assert_eq!(inner.len(), 2);
         assert!(matches!(&inner[1].action, Action::If { steps, .. } if steps.len() == 1));
-        let e = parse(Path::new("t.pv"), "scenario \"x\"\n  goto /\n    click --text a\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"x\"\n  goto /\n    click --text a\n").unwrap_err();
         assert_eq!(e.line, 3);
-        let e = parse(Path::new("t.pv"), "scenario \"x\"\n  if text a\n  goto /\n").unwrap_err();
+        let e = parse(Path::new("t.bt"), "scenario \"x\"\n  if text a\n  goto /\n").unwrap_err();
         assert!(e.message.contains("needs the steps"), "{e}");
     }
 }

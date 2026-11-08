@@ -424,12 +424,12 @@ mod tests {
 
     #[test]
     fn html_puts_failures_first_escapes_and_needs_nothing_else() {
-        let dir = std::env::temp_dir().join(format!("pv-html-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bt-html-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let shot = dir.join("shot.png");
         std::fs::write(&shot, b"\x89PNG fake").unwrap();
         let pass = ScenarioResult {
-            file: PathBuf::from("/x/shop.pv"),
+            file: PathBuf::from("/x/shop.bt"),
             name: "Adds <one>".into(),
             line: 3,
             tags: vec!["smoke".into()],
@@ -469,7 +469,7 @@ mod tests {
     #[test]
     fn junit_escapes_and_counts() {
         let pass = ScenarioResult {
-            file: PathBuf::from("/x/shop.pv"),
+            file: PathBuf::from("/x/shop.bt"),
             name: "Adds <one>".into(),
             line: 3,
             tags: vec![],
@@ -504,7 +504,7 @@ mod tests {
         assert!(x.contains("<failure message=\"line 12: expected … saw &quot;$40.00&quot;\""), "{x}");
         // GitHub: the failing line, properties escaped, message on one line.
         let g = github(&fail_case());
-        assert!(g.starts_with("::error file=/x/shop.pv,line=12,title=Total & tax::expect"), "{g}");
+        assert!(g.starts_with("::error file=/x/shop.bt,line=12,title=Total & tax::expect"), "{g}");
         assert!(g.contains("%0Aexpected"), "{g}");
         let flaky =
             ScenarioResult { failure: None, retried: vec![fail_case().failure.unwrap()], attempt: 2, ..fail_case() };
@@ -518,7 +518,7 @@ mod tests {
 
     fn fail_case() -> ScenarioResult {
         ScenarioResult {
-            file: PathBuf::from("/x/shop.pv"),
+            file: PathBuf::from("/x/shop.bt"),
             name: "Total & tax".into(),
             line: 9,
             tags: vec![],

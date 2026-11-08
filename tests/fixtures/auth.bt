@@ -1,12 +1,12 @@
 auth shopper
   goto /login
-  fill --label Password ${secret:PV_TEST_PW}
+  fill --label Password ${secret:BT_TEST_PW}
   click --role button --name "Sign in"
   expect text "Signed in"
 
 auth keeper ttl 1h
   goto /login
-  fill --label Password ${secret:PV_TEST_PW}
+  fill --label Password ${secret:BT_TEST_PW}
   click --role button --name "Sign in"
   expect text "Signed in"
 

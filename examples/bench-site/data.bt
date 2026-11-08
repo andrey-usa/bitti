@@ -1,5 +1,5 @@
 # Data rows, flows from another file, optional steps, page-state checks.
-use flows/account.pv
+use flows/account.bt
 
 scenario "Searching for ${term} shows only ${what}" @search
   examples

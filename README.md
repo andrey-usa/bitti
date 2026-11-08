@@ -5,7 +5,7 @@ browser in-process through [navigera](https://github.com/andrey-usa/navigera):
 no Node, no transpile step, no driver process, and no model at run time.
 
 ```text
-# tests/shop.pv
+# tests/shop.bt
 base http://127.0.0.1:8000
 
 before each
@@ -21,7 +21,7 @@ scenario "Adding a product counts it in the cart" @smoke
 
 ```console
 $ bitti run tests --junit report.xml
-PASS  tests/shop.pv:7  Adding a product counts it in the cart  (557 ms)
+PASS  tests/shop.bt:7  Adding a product counts it in the cart  (557 ms)
 1 passed, 0 failed in 0.9 s
 ```
 
@@ -30,7 +30,7 @@ milestones are in agent-guidance `plans/prova.md`.
 
 ## The format
 
-- Top-level lines: `base <url>`, `set NAME = value`, `use other.pv`,
+- Top-level lines: `base <url>`, `set NAME = value`, `use other.bt`,
   `flow name(a, b)`, `auth name [ttl 30m]`, `before all|each`, `after
   each|all`, `scenario "name" @tag…`. Steps are indented under them.
 - A step is a navigera command line, written exactly as you would type it
@@ -41,7 +41,7 @@ milestones are in agent-guidance `plans/prova.md`.
   `--selector`, `--nth`). Refs from `ax` are refused: they change between
   runs.
 - A relative path a step reads (`upload`, `state load`, `eval --file`,
-  `init-script --file`, `route --body-file`) is found next to the `.pv`
+  `init-script --file`, `route --body-file`) is found next to the `.bt`
   file, as `use` and `for each` files are, so a suite runs the same from
   any directory. Files a step writes (`screenshot`, `state save`) land in
   the current directory.
@@ -61,7 +61,7 @@ milestones are in agent-guidance `plans/prova.md`.
   a secret, the environment): it is filled in once, when a scenario starts.
 - `save NAME = <command>` keeps a command's result (`get text …`).
 - `flow name(a, b)` at the top level holds steps; `run name x y` runs them
-  with `${a}` and `${b}` set. `use other.pv` takes another file's flows
+  with `${a}` and `${b}` set. `use other.bt` takes another file's flows
   and `set`s. A failure inside a flow names the flow's own line.
 - `optional <step>`: a step that may not apply (a cookie banner that only
   sometimes shows); its failure is noted, not fatal.
@@ -115,14 +115,14 @@ milestones are in agent-guidance `plans/prova.md`.
 ## Running
 
 ```text
-bitti run [<file.pv|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--tag <tag>]
+bitti run [<file.bt|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--tag <tag>]
               [--workers <n|auto>] [--isolation context|browser] [--retries <n>] [--fail-on-flaky] [--shard <i/n>]
               [--repeat <n>] [--shuffle [<seed>]]
               [--reporter console|jsonl|github] [--junit <file>] [--html <file>] [--json]
               [--timeout-ms <ms>] [--wait-ms <ms>] [--headed] [--chromium <path>]
               [--secrets <file>] [--pause-on-failure]
-bitti lint [<file.pv|dir>...]
-bitti list [<file.pv|dir>...]
+bitti lint [<file.bt|dir>...]
+bitti list [<file.bt|dir>...]
 ```
 
 - Every scenario starts in a fresh browser context (navigera `reset
@@ -158,15 +158,15 @@ bitti list [<file.pv|dir>...]
   closest ones on the page as locators to paste in:
 
   ```text
-  FAIL  shop.pv:21  Accept the cookies  (611 ms)
+  FAIL  shop.bt:21  Accept the cookies  (611 ms)
         line 23: click --role button --name "Accept everything"
         click role="button" name="Accept everything": … no element …
         nearest on the page:
           1. button "Accept all"   --role button --name "Accept all"   0.63
   ```
 - `--pause-on-failure` stops at a failure with the browser as the failure
-  left it and prints how to look at that very tab (`navigera -s pv start
-  --attach ws://…/devtools/page/…`, then `navigera -s pv ax`); Enter goes
+  left it and prints how to look at that very tab (`navigera -s bt start
+  --attach ws://…/devtools/page/…`, then `navigera -s bt ax`); Enter goes
   on with the run. It runs one worker. With no terminal to press Enter in,
   it waits `BITTI_PAUSE_S` seconds (default 600, for an agent looking
   from elsewhere), and under CI (`CI` set) it doesn't pause unless that is

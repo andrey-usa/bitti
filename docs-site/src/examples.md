@@ -1,18 +1,18 @@
 # Worked examples
 
-> **Name:** this project was renamed **primavera → bitti** on
+> **Name:** this project was renamed **bitti → bitti** on
 > 2026-11-08 (bitti is Kazakh *бітті* — "it is done, finished"). Until the
-> code-rename release lands, the binary is still invoked as `primavera`
-> and its messages still say `primavera`; the pages below are verbatim
+> code-rename release lands, the binary is still invoked as `bitti`
+> and its messages still say `bitti`; the pages below are verbatim
 > from the current README and `--help`, so they use the old name.
 
 From `examples/bench-site/` in the repo (they run against navigera's bench site).
 
-## `shop.pv`
+## `shop.bt`
 
 ```text
 # navigera's bench site (navigera/bench/site/server.py): a small shop.
-# primavera run examples/bench-site --base-url http://127.0.0.1:<port>
+# bitti run examples/bench-site --base-url http://127.0.0.1:<port>
 
 before each
   goto /shop
@@ -48,7 +48,7 @@ scenario "A coupon in a web component lowers the total" @cart
   expect text "Discount (SAVE10)"
 ```
 
-## `account.pv`
+## `account.bt`
 
 ```text
 set email = demo@acme.test
@@ -78,11 +78,11 @@ scenario "The returns FAQ opens"
   expect --selector "#returns-faq" attr open is ""
 ```
 
-## `data.pv`
+## `data.bt`
 
 ```text
 # Data rows, flows from another file, optional steps, page-state checks.
-use flows/account.pv
+use flows/account.bt
 
 scenario "Searching for ${term} shows only ${what}" @search
   examples
@@ -107,7 +107,7 @@ scenario "A signed-in cart is kept by the server"
   expect no request GET /api/tracking*
 ```
 
-## `flows/account.pv`
+## `flows/account.bt`
 
 ```text
 # Flows other files `use`.

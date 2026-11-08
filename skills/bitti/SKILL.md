@@ -1,11 +1,11 @@
 ---
 name: bitti
-description: Write and run plain-text web tests (.pv files) on real Chrome with bitti — each step is a navigera command line, each check an `expect` that retries. Use to turn what you did in a navigera session into a regression test, to check a web app after a change, or to automate a browser job, without writing Playwright code.
+description: Write and run plain-text web tests (.bt files) on real Chrome with bitti — each step is a navigera command line, each check an `expect` that retries. Use to turn what you did in a navigera session into a regression test, to check a web app after a change, or to automate a browser job, without writing Playwright code.
 ---
 
 # bitti
 
-One native binary runs `.pv` scenario files on Chrome through navigera,
+One native binary runs `.bt` scenario files on Chrome through navigera,
 in-process. Every step is a line you could run as `navigera -s work <step>`,
 so explore with navigera first, then paste the steps that worked.
 
@@ -26,7 +26,7 @@ scenario "Adding a product counts it in the cart" @smoke
   expect text "Your cart"
 ```
 
-- Top level: `base`, `set NAME = value`, `use other.pv`, `flow name(a, b)`,
+- Top level: `base`, `set NAME = value`, `use other.bt`, `flow name(a, b)`,
   `auth name [ttl 30m]`, `before all|each`, `after each|all`,
   `scenario "name" @tags`. Steps are indented.
 - Steps: any navigera command (`goto`, `click`, `fill`, `select`, `press`,
@@ -36,7 +36,7 @@ scenario "Adding a product counts it in the cart" @smoke
   `--testid total`, `--placeholder`, `--selector <css>`, `--nth`.
   Frames and open shadow roots are searched for you.
 - Relative files a step reads (`upload --file`, `state load`, `eval
-  --file`, `route --body-file`) are found next to the `.pv` file.
+  --file`, `route --body-file`) are found next to the `.bt` file.
 - `save NAME = <command>` keeps a result (`save id = get text --testid order`).
 - `run name x y` runs a `flow`; `optional <step>` may fail without failing;
   `if <expect clause>` runs the steps indented under it when it holds now.
@@ -88,9 +88,9 @@ bitti run tests/ --workers 4 --retries 1 --junit report.xml
 bitti run tests/ --html report.html   # one page: failures first, steps, times, screenshots
 bitti run tests/ --reporter jsonl       # one JSON object per scenario (console to stderr)
 bitti run tests/ --repeat 20 --shuffle  # flake hunt: pass counts per scenario
-bitti run job.pv --var month=2026-09 --json   # print what was saved
+bitti run job.bt --var month=2026-09 --json   # print what was saved
 bitti run tests/ --secrets .env.test   # NAME=value lines for ${secret:NAME}
-bitti run tests/x.pv --pause-on-failure  # keeps the failing tab; prints how to attach
+bitti run tests/x.bt --pause-on-failure  # keeps the failing tab; prints how to attach
 ```
 
 Exit codes: 0 passed, 1 failed, 2 a file or argument is wrong, 3 the browser

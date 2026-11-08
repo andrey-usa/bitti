@@ -1,14 +1,14 @@
-# The .pv format
+# The .bt format
 
-> **Name:** this project was renamed **primavera → bitti** on
+> **Name:** this project was renamed **bitti → bitti** on
 > 2026-11-08 (bitti is Kazakh *бітті* — "it is done, finished"). Until the
-> code-rename release lands, the binary is still invoked as `primavera`
-> and its messages still say `primavera`; the pages below are verbatim
+> code-rename release lands, the binary is still invoked as `bitti`
+> and its messages still say `bitti`; the pages below are verbatim
 > from the current README and `--help`, so they use the old name.
 
 ## The format
 
-- Top-level lines: `base <url>`, `set NAME = value`, `use other.pv`,
+- Top-level lines: `base <url>`, `set NAME = value`, `use other.bt`,
   `flow name(a, b)`, `auth name [ttl 30m]`, `before all|each`, `after
   each|all`, `scenario "name" @tag…`. Steps are indented under them.
 - A step is a navigera command line, written exactly as you would type it
@@ -32,7 +32,7 @@
   `"${GREETING:-hello there}"` (words split before `${…}` is filled in).
 - `save NAME = <command>` keeps a command's result (`get text …`).
 - `flow name(a, b)` at the top level holds steps; `run name x y` runs them
-  with `${a}` and `${b}` set. `use other.pv` takes another file's flows
+  with `${a}` and `${b}` set. `use other.bt` takes another file's flows
   and `set`s. A failure inside a flow names the flow's own line.
 - `optional <step>`: a step that may not apply (a cookie banner that only
   sometimes shows); its failure is noted, not fatal.
@@ -43,7 +43,7 @@
   scenario starts it signed in. The block runs once per run, in a browser
   context of its own, the first time a scenario needs it (the other
   workers wait for it), and its cookies and storage are saved under
-  `.primavera/auth/` (keep that out of git); with a `ttl` the saved state
+  `.bitti/auth/` (keep that out of git); with a `ttl` the saved state
   is reused by later runs until it is that old.
 - `before all` runs once for the file, before its first scenario; what it
   saves every scenario of the file sees. If it fails, none of them run.

@@ -372,7 +372,7 @@ impl Runner {
         // The tab itself, so the look is at the page the failure left.
         let ws = self.driver.session().page_endpoint().unwrap_or_else(|| self.driver.session().endpoint());
         eprintln!(
-            "PAUSED  {}:{}  the browser stays as the failure left it; look at it with\n        navigera -s pv start --attach {ws}\n        navigera -s pv ax\n        Enter goes on with the run (Ctrl-C stops it)",
+            "PAUSED  {}:{}  the browser stays as the failure left it; look at it with\n        navigera -s bt start --attach {ws}\n        navigera -s bt ax\n        Enter goes on with the run (Ctrl-C stops it)",
             suite.file.display(),
             f.line
         );

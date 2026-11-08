@@ -21,9 +21,9 @@ const USAGE: &str = "\
 bitti: plain-text web tests on real Chrome (through navigera)
 
 usage:
-  bitti run [<file.pv|dir>...] [options]   run scenarios (default: the current directory)
-  bitti lint [<file.pv|dir>...]             check files without a browser
-  bitti list [<file.pv|dir>...]             the scenarios a run would take
+  bitti run [<file.bt|dir>...] [options]   run scenarios (default: the current directory)
+  bitti lint [<file.bt|dir>...]             check files without a browser
+  bitti list [<file.bt|dir>...]             the scenarios a run would take
   bitti skill                               the agent skill (the format and commands, for an AI agent)
   bitti --version
 
@@ -252,7 +252,7 @@ fn secrets_file(text: &str) -> Result<BTreeMap<String, String>, String> {
 fn load(paths: &[PathBuf]) -> Result<Vec<suite::Suite>, String> {
     let files = suite::discover(paths).map_err(|e| format!("reading {:?}: {e}", paths))?;
     if files.is_empty() {
-        return Err("no .pv files found".into());
+        return Err("no .bt files found".into());
     }
     let mut suites = Vec::new();
     let mut errors = Vec::new();
