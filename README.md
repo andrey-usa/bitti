@@ -125,9 +125,9 @@ Status: 0.1.0. Everything below works in this build.
   and `save id = json
   $.id` (or `header <name>`) keeps a value. A 4xx or 5xx fails the step,
   with the start of the body, unless a step indented under it checks
-  `status`; a timeout fails it whatever is under it. Redirects are followed
+  `status`. A timeout fails it whatever is under it. Redirects are followed
   (up to 20, a cookie set on the way going to the next hop and to the
-  browser); `--no-follow` gives the 3xx itself. `--insecure` accepts a
+  browser). `--no-follow` gives the 3xx itself. `--insecure` accepts a
   certificate nothing vouches for (a local server's own). The client is
   built in (rustls, the operating system's certificates, the proxy from
   `https_proxy`/`http_proxy`/`no_proxy`): no process per request, and
@@ -136,7 +136,7 @@ Status: 0.1.0. Everything below works in this build.
   line.
 
   `--graphql <query>` (or `--graphql-file <f>`) with `--variables <json>`
-  and `--operation <name>` sends a GraphQL request as its JSON body; an
+  and `--operation <name>` sends a GraphQL request as its JSON body. An
   answer with `errors` (GraphQL sends them with a 200) fails the step,
   unless a step under it checks `json $.errors`.
 
@@ -161,7 +161,7 @@ Status: 0.1.0. Everything below works in this build.
   ```
 - `pause` stops the run there, the browser as the steps before left it,
   open to a second navigera session (the command to attach is printed),
-  until Enter; with no terminal it waits `BITTI_PAUSE_S` seconds, and
+  until Enter. With no terminal it waits `BITTI_PAUSE_S` seconds, and
   under CI not at all unless that is set. A run with a `pause` in it runs
   one worker.
 - `clock install [--time 2024-02-02T08:00:00] [--paused]` puts the page's
@@ -171,7 +171,7 @@ Status: 0.1.0. Everything below works in this build.
   due on the way in order; `clock fast-forward`, `clock set <time>`,
   `clock pause-at <time>` and `clock resume` do the rest. A session
   timeout, a countdown or a date-dependent page is tested in
-  milliseconds; the next scenario starts on real time.
+  milliseconds, and the next scenario starts on real time.
 
   ```text
   clock install --time 2024-02-02T08:00:00 --paused
@@ -193,10 +193,10 @@ Status: 0.1.0. Everything below works in this build.
   scenario starts it signed in. The block runs once per run, in a browser
   context of its own, the first time a scenario needs it (the other
   workers wait for it), and its cookies and storage are saved under
-  `.bitti/auth/` (keep that out of git); with a `ttl` the saved state
+  `.bitti/auth/` (keep that out of git). With a `ttl`, the saved state
   is reused by later runs until it is that old.
-- `before all` runs once for the file, before its first scenario; what it
-  saves every scenario of the file sees. If it fails, none of them run.
+- `before all` runs once for the file, before its first scenario, and every
+  scenario of the file sees what it saves. If it fails, none of them run.
   `after all` runs once after the last one (a failure there is reported as
   `(after all)`).
 - `handoff until <expect clause>`: the steps only a person can do (2FA, a
@@ -266,8 +266,8 @@ Status: 0.1.0. Everything below works in this build.
 
   A screenshot's baseline is beside the `.bt` file, in
   `<file>.bt.screenshots/<name>-<os>.png` (fonts differ between systems,
-  so each OS keeps its own); keep it with the tests. With none yet the run
-  writes it and the step fails, so a person looks at it first;
+  so each OS keeps its own). Keep it with the tests. With none yet the run
+  writes it and the step fails, so a person looks at it first.
   `--update-snapshots` (or `--update-screenshots`) writes or replaces
   baselines and passes. While it
   is taken, animations and transitions stop, the caret hides and each
@@ -277,7 +277,7 @@ Status: 0.1.0. Everything below works in this build.
   iframe too. Two pixels differ when their
   colour distance is over `--threshold` (0 to 1). `--max-diff-pixels` and
   `--max-diff-ratio` (a share of the pixels, 0 to 1) set how many may
-  differ; when both are given both must hold, and with neither none may. A
+  differ. When both are given, both must hold, and with neither, none may. A
   mismatch writes this run's image and a diff (the differing pixels red) to
   the evidence directory and names both.
 
@@ -371,7 +371,7 @@ step "I sign in with {password}"
 ```
 
 `{name}` takes a `"…"` or `'…'` value or one word and is `${name}` in the
-steps under it; a line two `step` blocks match is an error. Else it is a
+steps under it. A line two `step` blocks match is an error. Else it is a
 phrase of the built-in book: `I open "/cart"` (`go to`, `navigate to`,
 `visit`, `am on`), `I click "Apply"` (`click on`; by visible text), `I fill
 "Email" with "a@b.c"` (`fill in`, `enter`; by label), `I type "x" into
@@ -385,7 +385,7 @@ step nothing matches is a file error that says how to write it. Data tables and 
 step aren't supported yet.
 
 `--cucumber <file>` writes Cucumber JSON for the `.feature` files, step by
-step (passed, failed, skipped, with times), for test-management importers;
+step (passed, failed, skipped, with times), for test-management importers.
 `--junit`, `--html`, `--allure` and the console report them like any
 scenario.
 
@@ -425,14 +425,14 @@ bitti --version
 - Some tags say how a scenario runs: `@skip` and `@fixme` aren't run and
   are reported as skipped (`SKIP`, JUnit `<skipped/>`, Allure `skipped`);
   `@slow` gives each check three times its time; `@only` runs only the
-  scenarios that have it, a focus while working on one, and is an error
+  scenarios that have it, a focus while working on one. It is an error
   with `--forbid-only`, which is on by itself under CI (`CI` set), so a
   focus left in by mistake doesn't pass a build on a few scenarios
   (`--allow-only` runs just those anyway).
 - `--max-failures <n>` starts no scenario once n have failed (`-x`: at the
   first), and says how many were not run; the run fails.
 - `--last-failed` (`--lf`) runs only the scenarios that failed in the last
-  run in this directory (`.bitti/last-run.json`); with none, it says
+  run in this directory (`.bitti/last-run.json`). With none, it says
   so and exits 0.
 - `--scenario-timeout-ms <ms>` (`scenario_timeout_ms` in `bitti.toml`)
   is the most one scenario's steps may take: no step starts once it is
@@ -456,14 +456,14 @@ bitti --version
   instead of a new browser's few hundred. `--workers n` runs n at once,
   each in a browser context of one shared browser (about 40% less memory
   at 4 workers than a browser each; `--isolation browser` gives each its
-  own); the longest start first (by `.bitti/timings.json`, which each
+  own). The longest start first (by `.bitti/timings.json`, which each
   run updates; the first run goes in file order).
 - `--engine lightpanda` (or `engine = "lightpanda"` in a profile, or
   `NAVIGERA_ENGINE=lightpanda`) runs on
   [Lightpanda](https://github.com/lightpanda-io/browser) (`$LIGHTPANDA_BIN`
   or `lightpanda` on the PATH), a new Lightpanda for each scenario (it has
-  one context per process): less memory, no layout. A smoke tier, not a
-  replacement: hover-revealed elements, new tabs, screenshots and `ax`
+  one context per process): less memory, no layout. It is a smoke tier, not
+  a replacement: hover-revealed elements, new tabs, screenshots and `ax`
   pixels need Chrome. On the 40-scenario suite's 25 site scenarios it
   passes 22, and is not faster: 22 s against Chrome's 11 s at one worker
   (half of it the three failures' waits).
@@ -487,14 +487,14 @@ bitti --version
   DevTools port: the build a developer has open (`npm start --
   --remote-debugging-port=9222`), or a Chrome they started. In an app, the
   scenarios run one after the other in the one app, each going on where
-  the one before left it, and the app keeps running after the run; in a
+  the one before left it, and the app keeps running after the run. In a
   browser, each scenario gets a clean context of its own. One worker. The
   example: `tests/fixtures/electron-attached`.
 - `--html report.html` writes the run as one page that needs nothing
   else to open: failed scenarios first and open, each with its steps and
   their times, the failure (message, where the page was, what came
   closest, the note) and its screenshot in the page (up to 2 MB; a
-  bigger one is linked); flaky ones show how their first try failed.
+  bigger one is linked). Flaky ones show how their first try failed.
   Secrets are masked as in the console. A screenshot two scenarios share
   (a failed `before all`) is in the page once; a bigger one, and any once
   the page holds 10 MB of them (failures first), is a link relative to the
@@ -512,7 +512,7 @@ bitti --version
   still), into `video/` in the scenario's evidence; `video/index.html`
   plays the frames at their pace. The console and JSON lines name it and
   `--html` links it. A passing scenario's video is dropped under
-  `on-failure`; recording cost no measurable time on the examples.
+  `on-failure`. Recording cost no measurable time on the examples.
 - `--trace on-failure` (or `all`) records each step of a scenario: where
   the page was, the console messages and the requests it brought, in
   `trace.jsonl` beside the scenario's screenshot, with the page's ax tree
@@ -544,7 +544,7 @@ bitti --version
   scenario's status, time and failure; the time is the longest shard's.
   Exit 1 when a scenario failed (`--fail-on-flaky` counts a flaky one),
   2 when there are no results.
-- `--retries n` runs a failing scenario again; one that passes then is
+- `--retries n` runs a failing scenario again. One that passes then is
   reported FLAKY with how its first try failed. `--fail-on-flaky` fails
   the run on one. `--shard i/n` takes every n-th scenario, for CI matrix
   jobs.
@@ -576,7 +576,7 @@ bitti --version
   `NAVIGERA_DECIDER_URL`), bitti also asks it which element the step
   meant (navigera's `find`, on the failing page) and adds its pick, marked
   `(decider)`: first when the model is at least 0.5 sure, else last (the
-  list stays at three); one call per such failure, none otherwise. The
+  list stays at three). There is one call per such failure and none otherwise. The
   list covers frames too: a step with `--frame` keeps it, and `fix` changes
   only the locator.
 - `bitti fix <file>:<line> [--use <n>]` puts the last run's n-th
@@ -624,7 +624,7 @@ bitti --version
   `after each` left out, then hands you the browser there; what you do
   goes in after its last step, the same way, and the rest of the file stays
   as it was. A scenario that fails before its end is not extended: fix it
-  first. `--headless` and `--for <s>` work as for `record`; a `.feature`
+  first. `--headless` and `--for <s>` work as for `record`. A `.feature`
   is refused (its steps live in its `step` blocks).
 - `bitti mcp` is the same loop for an agent over MCP (stdio): navigera's
   browser tools (`browser_navigate`, `browser_snapshot`, `browser_click`,
@@ -652,7 +652,7 @@ bitti --version
 ## Config: `bitti.toml`
 
 A `bitti.toml` in the current directory (or `--config <file>`) holds
-what a run takes by default; flags on the command line win over it.
+what a run takes by default. Flags on the command line win over it.
 Paths in it are from its own directory.
 
 ```toml
@@ -682,11 +682,11 @@ region = "eu"
 ```
 
 The `[server]` starts before the browser and is ready when its `url`
-answers (any status under 500); its output goes to `.bitti/server.log`,
+answers (any status under 500). Its output goes to `.bitti/server.log`,
 and it is stopped with everything it started when the run ends. One that
 exits or doesn't answer in time ends the run with exit 3 and the end of its
 log. Other keys: `timeout_ms`, `wait_ms`, `isolation`, `fail_on_flaky`,
-`headed`, `slowmo`, `max_failures`, `forbid_only`; an unknown key is an
+`headed`, `slowmo`, `max_failures`, `forbid_only`. An unknown key is an
 error.
 
 ## GitHub Actions
@@ -700,10 +700,10 @@ error.
 ```
 
 It runs on the runner's Chrome (Linux, macOS, Windows). `version` picks a
-release (`latest` by default, or a tag); with no release binary for the
-runner it builds bitti from the action's own commit (`source` asks for
+release (`latest` by default, or a tag). With no release binary for the
+runner, it builds bitti from the action's own commit (`source` asks for
 that), with navigera at `navigera-ref`. Failures are annotations on the
-lines that failed; the `evidence` output is the directory holding their
+lines that failed. The `evidence` output is the directory holding their
 screenshots, for `actions/upload-artifact`.
 
 ## Container
@@ -727,7 +727,7 @@ and evidence in `/work/out`, a memory-backed `/dev/shm`.
 ## Building
 
 bitti links navigera as a library, checked out beside it. CI builds
-against navigera's `master`; a release builds against the navigera tag it
+against navigera's `master`. A release builds against the navigera tag it
 names:
 
 ```text
