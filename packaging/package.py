@@ -270,7 +270,7 @@ def main() -> None:
     ap.add_argument("--license-file", default="LICENSE")
     ap.add_argument("--readme", default="README.md")
     ap.add_argument("--keywords", default="")
-    ap.add_argument("--npm-name", default="", help="npm: the main package's name when it differs from --name (npm refuses an unscoped name too close to an existing one: --scope bitti --npm-name @bitti/bitti); the command stays --name")
+    ap.add_argument("--npm-name", default="", help="npm: the main package's name when it differs from --name (npm refuses an unscoped name too close to an existing one: --scope getbitti --npm-name @getbitti/bitti); the command stays --name")
     ap.add_argument("--scope", default="", help="npm: name the platform packages @<scope>/<os>-<cpu> (the main package keeps its name)")
     ap.add_argument("--mcp-name", default="", help="npm: the server's MCP Registry name (io.github.<owner>/<name>)")
     args = ap.parse_args()
