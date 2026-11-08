@@ -55,7 +55,7 @@ bitti list [<file.bt|dir>...]
   left it and prints how to look at that very tab (`navigera -s bt start
   --attach ws://…/devtools/page/…`, then `navigera -s bt ax`); Enter goes
   on with the run. It runs one worker. With no terminal to press Enter in,
-  it waits `PRIMAVERA_PAUSE_S` seconds (default 600, for an agent looking
+  it waits `BITTI_PAUSE_S` seconds (default 600, for an agent looking
   from elsewhere), and under CI (`CI` set) it doesn't pause unless that is
   set.
 - Exit codes: 0 passed, 1 a scenario failed, 2 a file or argument is wrong,

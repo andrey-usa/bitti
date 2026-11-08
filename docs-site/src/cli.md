@@ -19,7 +19,7 @@ usage:
   bitti --version
 
 run options:
-  --base-url <url>      where relative URLs (`goto /cart`) point (else `base` in the file, PRIMAVERA_BASE_URL)
+  --base-url <url>      where relative URLs (`goto /cart`) point (else `base` in the file, BITTI_BASE_URL)
   --var <name=value>    a variable for ${name} (repeatable)
   --secrets <file>      NAME=value lines for ${secret:NAME} (the environment comes first); masked in output
   --grep <text>         only scenarios whose name contains it
