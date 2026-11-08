@@ -1,0 +1,11 @@
+[book]
+title = "bitti"
+authors = ["andrey-usa"]
+language = "en"
+description = "Plain-text web tests on real Chrome through navigera — one native binary, no Node, no driver process."
+[build]
+build-dir = "book"
+
+[output.html]
+site-url = "/bitti/"
+git-repository-url = "https://github.com/andrey-usa/bitti"
