@@ -1,4 +1,4 @@
-//! primavera: plain-text web tests on real Chrome, run by one native binary
+//! bitti: plain-text web tests on real Chrome, run by one native binary
 //! through navigera. See README.md.
 
 mod expect;
@@ -15,20 +15,20 @@ use std::sync::{mpsc, Condvar, Mutex};
 use std::time::Instant;
 
 /// The agent skill: the format and the commands, for an agent writing tests.
-const SKILL_MD: &str = include_str!("../skills/primavera/SKILL.md");
+const SKILL_MD: &str = include_str!("../skills/bitti/SKILL.md");
 
 const USAGE: &str = "\
-primavera: plain-text web tests on real Chrome (through navigera)
+bitti: plain-text web tests on real Chrome (through navigera)
 
 usage:
-  primavera run [<file.pv|dir>...] [options]   run scenarios (default: the current directory)
-  primavera lint [<file.pv|dir>...]             check files without a browser
-  primavera list [<file.pv|dir>...]             the scenarios a run would take
-  primavera skill                               the agent skill (the format and commands, for an AI agent)
-  primavera --version
+  bitti run [<file.pv|dir>...] [options]   run scenarios (default: the current directory)
+  bitti lint [<file.pv|dir>...]             check files without a browser
+  bitti list [<file.pv|dir>...]             the scenarios a run would take
+  bitti skill                               the agent skill (the format and commands, for an AI agent)
+  bitti --version
 
 run options:
-  --base-url <url>      where relative URLs (`goto /cart`) point (else `base` in the file, PRIMAVERA_BASE_URL)
+  --base-url <url>      where relative URLs (`goto /cart`) point (else `base` in the file, BITTI_BASE_URL)
   --var <name=value>    a variable for ${name} (repeatable)
   --secrets <file>      NAME=value lines for ${secret:NAME} (the environment comes first); masked in output
   --grep <text>         only scenarios whose name contains it
@@ -49,7 +49,7 @@ run options:
   --wait-ms <ms>        how long a step waits for its element (navigera's default 5000)
   --headed              show the browser
   --chromium <path>     the browser to run
-  --evidence <dir>      failure screenshots and downloads (default .primavera/runs/<time>)
+  --evidence <dir>      failure screenshots and downloads (default .bitti/runs/<time>)
   --pause-on-failure    keep the browser at a failure, open to `navigera --attach`, until Enter (one worker)
 
 exit codes: 0 all passed, 1 a scenario failed, 2 a file or an argument is wrong, 3 the browser didn't start
@@ -80,7 +80,7 @@ fn parse_args() -> Result<Args, String> {
     let stamp =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or_default();
     let mut opts = runner::Options {
-        base: std::env::var("PRIMAVERA_BASE_URL").ok().filter(|v| !v.is_empty()),
+        base: std::env::var("BITTI_BASE_URL").ok().filter(|v| !v.is_empty()),
         vars: BTreeMap::new(),
         headed: false,
         chromium: None,
@@ -88,7 +88,7 @@ fn parse_args() -> Result<Args, String> {
         wait_ms: None,
         grep: None,
         tags: Vec::new(),
-        evidence: PathBuf::from(format!(".primavera/runs/{stamp}")),
+        evidence: PathBuf::from(format!(".bitti/runs/{stamp}")),
         run_id: format!("{stamp}-{}", std::process::id()),
         secrets: BTreeMap::new(),
         pause: false,
@@ -290,7 +290,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         "--version" | "-V" | "version" => {
-            println!("primavera {}", env!("CARGO_PKG_VERSION"));
+            println!("bitti {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         "lint" => match load(&args.paths) {
@@ -693,12 +693,12 @@ fn worker(
     }
 }
 
-/// How long each scenario took last time (`.primavera/timings.json`), to
+/// How long each scenario took last time (`.bitti/timings.json`), to
 /// start the slow ones first.
 struct Timings;
 
 impl Timings {
-    const PATH: &'static str = ".primavera/timings.json";
+    const PATH: &'static str = ".bitti/timings.json";
 
     fn load() -> BTreeMap<String, f64> {
         std::fs::read_to_string(Self::PATH).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
@@ -709,7 +709,7 @@ impl Timings {
         for r in results {
             all.insert(r.key(), (r.ms * 10.0).round() / 10.0);
         }
-        if std::fs::create_dir_all(".primavera").is_ok() {
+        if std::fs::create_dir_all(".bitti").is_ok() {
             let _ = std::fs::write(Self::PATH, serde_json::to_string_pretty(&all).unwrap_or_default());
         }
     }

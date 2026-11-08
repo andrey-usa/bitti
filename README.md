@@ -1,4 +1,4 @@
-# primavera
+# bitti
 
 Plain-text web tests that run on real Chrome. One native binary drives the
 browser in-process through [navigera](https://github.com/andrey-usa/navigera):
@@ -20,12 +20,12 @@ scenario "Adding a product counts it in the cart" @smoke
 ```
 
 ```console
-$ primavera run tests --junit report.xml
+$ bitti run tests --junit report.xml
 PASS  tests/shop.pv:7  Adding a product counts it in the cart  (557 ms)
 1 passed, 0 failed in 0.9 s
 ```
 
-Status: **M1 in progress** (working name). The plan, the language and the
+Status: **M1 in progress**. The plan, the language and the
 milestones are in agent-guidance `plans/prova.md`.
 
 ## The format
@@ -72,7 +72,7 @@ milestones are in agent-guidance `plans/prova.md`.
   scenario starts it signed in. The block runs once per run, in a browser
   context of its own, the first time a scenario needs it (the other
   workers wait for it), and its cookies and storage are saved under
-  `.primavera/auth/` (keep that out of git); with a `ttl` the saved state
+  `.bitti/auth/` (keep that out of git); with a `ttl` the saved state
   is reused by later runs until it is that old.
 - `before all` runs once for the file, before its first scenario; what it
   saves every scenario of the file sees. If it fails, none of them run.
@@ -104,7 +104,7 @@ milestones are in agent-guidance `plans/prova.md`.
 | `request … count` + a comparison | how many matching requests |
 | `cookie <name>` [+ a comparison], `no cookie <name>`, `cookie <name> absent` | a cookie of the scenario's browser context |
 | `storage local\|session <key>` [+ a comparison \| `absent`] | Local or Session Storage |
-| `download <file glob>`, `no download …` | a finished download (then `${download.path}`, `${download.name}`: the latest match). Each scenario's downloads go to a directory of its own beside its evidence (`.primavera/runs/<time>/<scenario>/downloads`, kept only when something came), so a name never carries over from another scenario; a second file of the same name in one scenario arrives as `name (2).ext` |
+| `download <file glob>`, `no download …` | a finished download (then `${download.path}`, `${download.name}`: the latest match). Each scenario's downloads go to a directory of its own beside its evidence (`.bitti/runs/<time>/<scenario>/downloads`, kept only when something came), so a name never carries over from another scenario; a second file of the same name in one scenario arrives as `name (2).ext` |
 | `console` + a comparison, `no console "<t>"` | a console message (any level) |
 | `no errors` | no page exceptions or console errors |
 | `not …` | any of them, negated |
@@ -115,14 +115,14 @@ milestones are in agent-guidance `plans/prova.md`.
 ## Running
 
 ```text
-primavera run [<file.pv|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--tag <tag>]
+bitti run [<file.pv|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--tag <tag>]
               [--workers <n|auto>] [--isolation context|browser] [--retries <n>] [--fail-on-flaky] [--shard <i/n>]
               [--repeat <n>] [--shuffle [<seed>]]
               [--reporter console|jsonl|github] [--junit <file>] [--html <file>] [--json]
               [--timeout-ms <ms>] [--wait-ms <ms>] [--headed] [--chromium <path>]
               [--secrets <file>] [--pause-on-failure]
-primavera lint [<file.pv|dir>...]
-primavera list [<file.pv|dir>...]
+bitti lint [<file.pv|dir>...]
+bitti list [<file.pv|dir>...]
 ```
 
 - Every scenario starts in a fresh browser context (navigera `reset
@@ -131,7 +131,7 @@ primavera list [<file.pv|dir>...]
   instead of a new browser's few hundred. `--workers n` runs n at once,
   each in a browser context of one shared browser (about 40% less memory
   at 4 workers than a browser each; `--isolation browser` gives each its
-  own); the longest (from `.primavera/timings.json`) start first.
+  own); the longest (from `.bitti/timings.json`) start first.
 - `--html report.html` writes the run as one page that needs nothing
   else to open: failed scenarios first and open, each with its steps and
   their times, the failure (message, where the page was, what came
@@ -152,7 +152,7 @@ primavera list [<file.pv|dir>...]
   Actions). `--json` prints
   what the scenarios saved, for a pipeline's next step.
 - A failure prints the step, what was expected and seen, where the page
-  was, a screenshot (under `.primavera/runs/`), and a note when an earlier
+  was, a screenshot (under `.bitti/runs/`), and a note when an earlier
   click changed nothing on the page (navigera's `no_effect`), the usual
   reason the next check fails. When the element isn't there, it lists the
   closest ones on the page as locators to paste in:
@@ -168,7 +168,7 @@ primavera list [<file.pv|dir>...]
   left it and prints how to look at that very tab (`navigera -s pv start
   --attach ws://…/devtools/page/…`, then `navigera -s pv ax`); Enter goes
   on with the run. It runs one worker. With no terminal to press Enter in,
-  it waits `PRIMAVERA_PAUSE_S` seconds (default 600, for an agent looking
+  it waits `BITTI_PAUSE_S` seconds (default 600, for an agent looking
   from elsewhere), and under CI (`CI` set) it doesn't pause unless that is
   set.
 - Exit codes: 0 passed, 1 a scenario failed, 2 a file or argument is wrong,
@@ -176,17 +176,17 @@ primavera list [<file.pv|dir>...]
 
 ## Building
 
-primavera links navigera as a library, checked out beside it:
+bitti links navigera as a library, checked out beside it:
 
 ```text
 work/
   navigera/     github.com/andrey-usa/navigera (or navigera-private)
-  primavera/    this repository
+  bitti/        this repository
 ```
 
 ```console
-$ cd primavera && cargo build --release
-$ ./target/release/primavera run examples --base-url http://127.0.0.1:<port>
+$ cd bitti && cargo build --release
+$ ./target/release/bitti run examples --base-url http://127.0.0.1:<port>
 ```
 
 `examples/bench-site` runs against navigera's bench site

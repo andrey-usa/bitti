@@ -134,7 +134,7 @@ impl ScenarioResult {
         self.passed() && !self.retried.is_empty()
     }
 
-    /// `file::name`, the key of `.primavera/timings.json`.
+    /// `file::name`, the key of `.bitti/timings.json`.
     pub fn key(&self) -> String {
         format!("{}::{}", self.file.display(), self.base_name())
     }
@@ -378,17 +378,14 @@ impl Runner {
         );
         if enter(None).is_err() {
             // No one can press Enter: an agent looking from elsewhere gets
-            // a while (PRIMAVERA_PAUSE_S, default 600 s); CI none.
+            // a while (BITTI_PAUSE_S, default 600 s); CI none.
             let ci = std::env::var("CI").is_ok_and(|v| !v.is_empty() && v != "false");
-            let secs: u64 = std::env::var("PRIMAVERA_PAUSE_S").ok().and_then(|v| v.parse().ok()).unwrap_or(if ci {
-                0
-            } else {
-                600
-            });
+            let secs: u64 =
+                std::env::var("BITTI_PAUSE_S").ok().and_then(|v| v.parse().ok()).unwrap_or(if ci { 0 } else { 600 });
             if secs == 0 {
-                eprintln!("        (no terminal input, and CI: not pausing; PRIMAVERA_PAUSE_S=<s> to pause anyway)");
+                eprintln!("        (no terminal input, and CI: not pausing; BITTI_PAUSE_S=<s> to pause anyway)");
             } else {
-                eprintln!("        (no terminal input here: going on in {secs} s; PRIMAVERA_PAUSE_S sets how long)");
+                eprintln!("        (no terminal input here: going on in {secs} s; BITTI_PAUSE_S sets how long)");
                 std::thread::sleep(Duration::from_secs(secs));
             }
         }
@@ -523,7 +520,7 @@ impl Runner {
         // Keyed by where it signs in: another base URL, another state.
         let base = self.opts.base.clone().or_else(|| suite.base.clone()).unwrap_or_default();
         let key = base.bytes().fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
-        let dir = std::path::absolute(".primavera/auth").unwrap_or_else(|_| PathBuf::from(".primavera/auth"));
+        let dir = std::path::absolute(".bitti/auth").unwrap_or_else(|_| PathBuf::from(".bitti/auth"));
         let path = dir.join(format!("{name}-{:08x}.json", key as u32));
         let reusable = auth.ttl_s.is_some_and(|ttl| {
             std::fs::metadata(&path)
@@ -785,8 +782,7 @@ impl Runner {
                     RequestRead::Json(path) => match hits.last() {
                         None => (false, none()),
                         Some(n) => {
-                            let file =
-                                std::env::temp_dir().join(format!("primavera-body-{}-{n}.json", std::process::id()));
+                            let file = std::env::temp_dir().join(format!("bitti-body-{}-{n}.json", std::process::id()));
                             let got = self.command(&[
                                 "network".into(),
                                 n.clone(),

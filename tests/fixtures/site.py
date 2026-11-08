@@ -1,4 +1,4 @@
-"""A small site for primavera's own tests: `/flaky` fails its first visit
+"""A small site for bitti's own tests: `/flaky` fails its first visit
 and passes after, `/late` shows its text after `?ms=`, `/m1` has what the
 newer expect subjects read, `/login` signs in (counted at `/logins`), and
 `/note?x=` records what `before/after all` did (`/notes`)."""

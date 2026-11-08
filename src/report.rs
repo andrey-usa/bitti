@@ -185,7 +185,7 @@ pub fn junit(results: &[ScenarioResult], ms: f64) -> String {
     let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     let _ = writeln!(
         out,
-        "<testsuites name=\"primavera\" tests=\"{}\" failures=\"{failures}\" time=\"{:.3}\">",
+        "<testsuites name=\"bitti\" tests=\"{}\" failures=\"{failures}\" time=\"{:.3}\">",
         results.len(),
         ms / 1000.0
     );
@@ -324,7 +324,7 @@ pub fn html(results: &[ScenarioResult], ms: f64) -> String {
     let _ = write!(
         out,
         "<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=\"width=device-width\">\
-         <title>primavera: {}</title><style>{CSS}</style></head><body><h1>{}</h1>",
+         <title>bitti: {}</title><style>{CSS}</style></head><body><h1>{}</h1>",
         esc(&sum),
         esc(&sum)
     );

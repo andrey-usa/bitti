@@ -1,9 +1,9 @@
 ---
-name: primavera
-description: Write and run plain-text web tests (.pv files) on real Chrome with primavera — each step is a navigera command line, each check an `expect` that retries. Use to turn what you did in a navigera session into a regression test, to check a web app after a change, or to automate a browser job, without writing Playwright code.
+name: bitti
+description: Write and run plain-text web tests (.pv files) on real Chrome with bitti — each step is a navigera command line, each check an `expect` that retries. Use to turn what you did in a navigera session into a regression test, to check a web app after a change, or to automate a browser job, without writing Playwright code.
 ---
 
-# primavera
+# bitti
 
 One native binary runs `.pv` scenario files on Chrome through navigera,
 in-process. Every step is a line you could run as `navigera -s work <step>`,
@@ -82,15 +82,15 @@ expect text "Saved" --soft                 # noted; the scenario fails at its en
 ## Run
 
 ```bash
-primavera lint tests/                       # milliseconds, no browser
-primavera run tests/ --base-url http://127.0.0.1:8000
-primavera run tests/ --workers 4 --retries 1 --junit report.xml
-primavera run tests/ --html report.html   # one page: failures first, steps, times, screenshots
-primavera run tests/ --reporter jsonl       # one JSON object per scenario (console to stderr)
-primavera run tests/ --repeat 20 --shuffle  # flake hunt: pass counts per scenario
-primavera run job.pv --var month=2026-09 --json   # print what was saved
-primavera run tests/ --secrets .env.test   # NAME=value lines for ${secret:NAME}
-primavera run tests/x.pv --pause-on-failure  # keeps the failing tab; prints how to attach
+bitti lint tests/                       # milliseconds, no browser
+bitti run tests/ --base-url http://127.0.0.1:8000
+bitti run tests/ --workers 4 --retries 1 --junit report.xml
+bitti run tests/ --html report.html   # one page: failures first, steps, times, screenshots
+bitti run tests/ --reporter jsonl       # one JSON object per scenario (console to stderr)
+bitti run tests/ --repeat 20 --shuffle  # flake hunt: pass counts per scenario
+bitti run job.pv --var month=2026-09 --json   # print what was saved
+bitti run tests/ --secrets .env.test   # NAME=value lines for ${secret:NAME}
+bitti run tests/x.pv --pause-on-failure  # keeps the failing tab; prints how to attach
 ```
 
 Exit codes: 0 passed, 1 failed, 2 a file or argument is wrong, 3 the browser
@@ -99,7 +99,7 @@ didn't start.
 ## When it fails
 
 The output names the line, what was expected and what was seen, the page,
-a screenshot under `.primavera/runs/`, the closest elements on the page as
+a screenshot under `.bitti/runs/`, the closest elements on the page as
 locators (paste one in), and whether the click before changed nothing on
 the page (the page may not have been ready: add an `expect` for what shows
 it is ready, before the click). Open the page with navigera to look:
