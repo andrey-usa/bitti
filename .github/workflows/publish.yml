@@ -10,10 +10,10 @@ name: publish
 #
 # Each registry is switched on by a repository variable (Settings -> Secrets
 # and variables -> Actions -> Variables):
-#   PUBLISH_NPM=true    npm, as @bitti/bitti with platform packages
-#                       @bitti/<os>-<cpu> (npm refuses the unscoped name `bitti`
-#                       as too close to existing packages; the npm org `bitti`
-#                       owns the scope). The first publish of a package needs the secret
+#   PUBLISH_NPM=true    npm, as @andrey-usa/bitti with platform packages
+#                       @andrey-usa/<os>-<cpu> (npm refuses the unscoped name `bitti`
+#                       as too close to existing packages; the scope is the npm account
+#                       andrey-usa's own, so no org is needed). The first publish needs the secret
 #                       NPM_TOKEN; once the packages exist, a trusted
 #                       publisher (this repository, publish.yml) can replace it.
 #   PUBLISH_PYPI=true   PyPI, through a trusted publisher (a pending one works
@@ -86,7 +86,7 @@ jobs:
             python3 packaging/package.py "$kind" --name bitti --version "$VERSION" --dist dist --out pkg \
               --repo "$GITHUB_REPOSITORY" --description "$DESCRIPTION" --keywords "$KEYWORDS" \
               --readme release-ref/README.md --license-file release-ref/LICENSE \
-              --scope bitti --npm-name @bitti/bitti
+              --scope andrey-usa --npm-name @andrey-usa/bitti
           done
           for dir in pkg/npm/*/; do (cd "$dir" && npm pack --silent); done
       - name: Install and run them
@@ -97,7 +97,7 @@ jobs:
           /tmp/venv/bin/pip install --quiet twine && /tmp/venv/bin/twine check pkg/wheels/*.whl
           mkdir /tmp/npm-test && cd /tmp/npm-test && npm init -y >/dev/null
           npm install --no-audit --no-fund "$GITHUB_WORKSPACE"/pkg/npm/bitti-linux-x64/*.tgz "$GITHUB_WORKSPACE"/pkg/npm/bitti/*.tgz
-          node -p "require('@bitti/bitti/package.json').name"
+          node -p "require('@andrey-usa/bitti/package.json').name"
           npx bitti --version
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
