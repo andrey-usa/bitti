@@ -1,17 +1,8 @@
 # bitti
 
-Plain-text web tests that run on real Chrome — faster, with less memory:
-one native binary drives the browser in-process through
-[navigera](https://andrey-usa.github.io/navigera/), no Node, no transpile
-step, no driver process, and no model at run time.
-
-> **Name:** this project was renamed **bitti → bitti** on
-> 2026-11-08 (bitti is Kazakh *бітті* — "it is done, finished"). Until the
-> code-rename release lands, the binary is still invoked as `bitti`
-> and its messages still say `bitti`; the pages below are verbatim
-> from the current README and `--help`, so they use the old name.
-
-## A scenario
+Plain-text web tests that run on real Chrome. One native binary drives the
+browser in-process through [navigera](https://github.com/andrey-usa/navigera):
+no Node, no transpile step, no driver process, and no model at run time.
 
 ```text
 # tests/shop.bt
@@ -34,15 +25,28 @@ PASS  tests/shop.bt:7  Adding a product counts it in the cart  (557 ms)
 1 passed, 0 failed in 0.9 s
 ```
 
-## Build and run
+API tests are `.bt` files too: a scenario of `http` steps and their
+checks runs with no browser at all, in milliseconds ([API tests without a
+browser](format.md#api-tests-without-a-browser)).
+
+## Get bitti
+
+Prebuilt binaries for static Linux (musl) x86_64/aarch64, macOS arm64 and
+x86_64 and Windows x64, each with its SHA-256, are attached to every
+[GitHub release](https://github.com/andrey-usa/bitti/releases) — this site
+documents release **0.1.0**. For CI, the
+[GitHub Action](running.md#github-actions) installs a release (`version`
+picks it: `latest` by default, or a tag).
 
 ## Building
 
-bitti links navigera as a library, checked out beside it:
+bitti links navigera as a library, checked out beside it. CI builds
+against navigera's `master`; a release builds against the navigera tag it
+names:
 
 ```text
 work/
-  navigera/     github.com/andrey-usa/navigera (or navigera-private)
+  navigera/     git clone https://github.com/andrey-usa/navigera (master)
   bitti/    this repository
 ```
 

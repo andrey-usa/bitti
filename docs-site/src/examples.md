@@ -1,11 +1,5 @@
 # Worked examples
 
-> **Name:** this project was renamed **bitti → bitti** on
-> 2026-11-08 (bitti is Kazakh *бітті* — "it is done, finished"). Until the
-> code-rename release lands, the binary is still invoked as `bitti`
-> and its messages still say `bitti`; the pages below are verbatim
-> from the current README and `--help`, so they use the old name.
-
 From `examples/bench-site/` in the repo (they run against navigera's bench site).
 
 ## `shop.bt`
