@@ -29,7 +29,7 @@ API tests are `.bt` files too: a scenario of `http` steps and their
 checks runs with no browser at all, in milliseconds ([API tests without a
 browser](#api-tests-without-a-browser)).
 
-Status: pre-release. Everything below works in this build.
+Status: 0.1.0. Everything below works in this build.
 
 ## The format
 
