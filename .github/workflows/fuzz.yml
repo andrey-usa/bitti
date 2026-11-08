@@ -28,11 +28,11 @@ jobs:
           - target: gherkin_parse
             seeds: feature
     steps:
-      # primavera builds against navigera checked out beside it
+      # bitti builds against navigera checked out beside it
       # (`../navigera`), same layout as its ci workflow.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          path: primavera
+          path: bitti
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -46,7 +46,7 @@ jobs:
       - name: install cargo-fuzz
         run: cargo install cargo-fuzz --locked --version 0.13.2
       - name: seed corpus
-        working-directory: primavera/fuzz
+        working-directory: bitti/fuzz
         run: |
           mkdir -p "corpus/${{ matrix.target }}" artifacts
           case "${{ matrix.seeds }}" in
@@ -55,7 +55,7 @@ jobs:
           esac
           ls "corpus/${{ matrix.target }}" | head -20
       - name: fuzz
-        working-directory: primavera/fuzz
+        working-directory: bitti/fuzz
         env:
           # ASAN aborts on huge allocations instead of returning NULL; the
           # product handles those cleanly, so let the allocator fail soft.
@@ -87,7 +87,7 @@ jobs:
         with:
           name: fuzz-${{ matrix.target }}
           path: |
-            primavera/fuzz/corpus/${{ matrix.target }}
-            primavera/fuzz/artifacts
-            primavera/fuzz/fuzz-${{ matrix.target }}.log
+            bitti/fuzz/corpus/${{ matrix.target }}
+            bitti/fuzz/artifacts
+            bitti/fuzz/fuzz-${{ matrix.target }}.log
           retention-days: 30

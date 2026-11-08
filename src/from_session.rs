@@ -1,4 +1,4 @@
-//! `primavera from-session <name>`: what an agent did in a navigera session
+//! `bitti from-session <name>`: what an agent did in a navigera session
 //! (`navigera -s <name> …`) as a scenario to keep. navigera's `history`
 //! has each action, and for one on a ref the locators that found its
 //! element again just before it ran; the most stable of them replaces the
@@ -19,11 +19,11 @@ pub fn history(session: &str) -> Result<Vec<Value>, String> {
     if v["ok"] != true {
         let e = v["error"].as_str().unwrap_or("no answer");
         return Err(if e.contains("unknown") && e.contains("history") {
-            format!("{e}\n(this session's navigera has no `history`: start the session with this primavera's navigera)")
+            format!("{e}\n(this session's navigera has no `history`: start the session with this bitti's navigera)")
         } else if e.starts_with("no navigera session at") {
             // Its socket's path is navigera's business.
             format!(
-                "no navigera session named {session:?}: start one with `primavera navigera -s {session} start`, \
+                "no navigera session named {session:?}: start one with `bitti navigera -s {session} start`, \
                  do what the test should do, then run this again"
             )
         } else {
@@ -339,7 +339,7 @@ pub fn steps(history: &[Value], base: Option<&str>, mut at: Option<String>) -> (
             continue;
         }
         let Ok(c) = serde_json::from_value::<Command>(e["command"].clone()) else {
-            steps.push_str(&format!("  # (an action this primavera can't read: {})\n", e["command"]));
+            steps.push_str(&format!("  # (an action this bitti can't read: {})\n", e["command"]));
             continue;
         };
         let url = e["url"].as_str().map(String::from);
@@ -404,20 +404,20 @@ fn quote_always(s: &str) -> String {
     }
 }
 
-/// `primavera from-session <name> [--scenario <name>] [--out <file.pv>]`.
+/// `bitti from-session <name> [--scenario <name>] [--out <file.pv>]`.
 pub fn main(args: &[String]) -> Result<String, String> {
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
     let values: Vec<&String> = [flag("--scenario"), flag("--out")].into_iter().flatten().collect();
     let session = args
         .iter()
         .find(|a| !a.starts_with("--") && !values.contains(a))
-        .ok_or("usage: primavera from-session <navigera session> [--scenario <name>] [--out <file.pv>]")?;
+        .ok_or("usage: bitti from-session <navigera session> [--scenario <name>] [--out <file.pv>]")?;
     let scenario = flag("--scenario").cloned().unwrap_or_else(|| format!("What session {session} did"));
     let text = render(&history(session)?, session, &scenario);
     match flag("--out") {
         Some(path) => {
             std::fs::write(path, &text).map_err(|e| format!("{path}: {e}"))?;
-            Ok(format!("wrote {path}; check it with `primavera lint {path}`, then run it\n"))
+            Ok(format!("wrote {path}; check it with `bitti lint {path}`, then run it\n"))
         }
         None => Ok(text),
     }

@@ -1,5 +1,5 @@
 # navigera's bench site (navigera/bench/site/server.py): a small shop.
-# primavera run examples/bench-site --base-url http://127.0.0.1:<port>
+# bitti run examples/bench-site --base-url http://127.0.0.1:<port>
 
 before each
   goto /shop

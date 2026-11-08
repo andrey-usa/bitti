@@ -1,6 +1,6 @@
 # Security
 
-primavera runs what a test file says: browser steps, `exec` of programs,
+bitti runs what a test file says: browser steps, `exec` of programs,
 `http` calls, a `[server]` command. Run test files you trust, as you would
 a script.
 
@@ -15,8 +15,8 @@ issue.
 
 - A secret given as `${secret:…}` reaching any output: the console, JUnit,
   JSON lines, the HTML report, a trace, a screenshot name, a log.
-- A page making primavera (or the navigera in it) read or write a file,
+- A page making bitti (or the navigera in it) read or write a file,
   run a program, or reach the network beyond what the test file asks.
-- `primavera mcp` doing for a client more than its tools describe.
+- `bitti mcp` doing for a client more than its tools describe.
 - The GitHub Action, the release workflow or the container image running
   code they shouldn't, or shipping something other than what was built.

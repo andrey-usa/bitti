@@ -1,6 +1,6 @@
-//! `primavera fix`: put a suggestion from the last run's "nearest on the
+//! `bitti fix`: put a suggestion from the last run's "nearest on the
 //! page" into the step that failed. Every run keeps its failures and their
-//! suggestions in `.primavera/last-run.json`; `fix <file>:<line> --use 2`
+//! suggestions in `.bitti/last-run.json`; `fix <file>:<line> --use 2`
 //! swaps that step's locator flags for the second one, `fix --all` takes
 //! each failure's first when it scored `--min` (0.6) or more, and plain
 //! `fix` lists what there is.
@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use crate::runner::ScenarioResult;
 use crate::suite::tokenize;
 
-const LAST_RUN: &str = ".primavera/last-run.json";
+const LAST_RUN: &str = ".bitti/last-run.json";
 
 /// A suggestion that is a step to put before the failing one (an
 /// `optional click` on what covers its element), not a locator.
@@ -44,7 +44,7 @@ pub fn save(results: &[ScenarioResult]) {
             })
         })
         .collect();
-    let _ = std::fs::create_dir_all(".primavera");
+    let _ = std::fs::create_dir_all(".bitti");
     let _ =
         std::fs::write(LAST_RUN, serde_json::to_string_pretty(&json!({ "failures": failures })).unwrap_or_default());
 }
@@ -113,7 +113,7 @@ struct Failure {
     nearest: Vec<(String, String, f64)>,
 }
 
-/// The last run's failures as it kept them (`primavera_failure`).
+/// The last run's failures as it kept them (`bitti_failure`).
 pub fn last_run() -> Result<Value, String> {
     let text = std::fs::read_to_string(LAST_RUN).map_err(|_| format!("no {LAST_RUN}: run the tests first"))?;
     serde_json::from_str(&text).map_err(|e| format!("{LAST_RUN}: {e}"))
@@ -155,25 +155,25 @@ fn nothing(failed: usize) -> String {
     match failed {
         0 => "nothing to fix: the last run had no failures\n".into(),
         1 => "nothing to fix: the last run's one failure had no similar element on the page to suggest \
-              (its screenshot is under .primavera/runs)\n"
+              (its screenshot is under .bitti/runs)\n"
             .into(),
         n => format!(
             "nothing to fix: none of the last run's {n} failures had a similar element on the page to \
-             suggest (their screenshots are under .primavera/runs)\n"
+             suggest (their screenshots are under .bitti/runs)\n"
         ),
     }
 }
 
-/// `primavera fix --help`.
+/// `bitti fix --help`.
 pub const HELP: &str = "\
-usage: primavera fix [<file>:<line>] [--use <n>] [--all [--min <p>]]
+usage: bitti fix [<file>:<line>] [--use <n>] [--all [--min <p>]]
 
 Puts a suggestion from the last run into the step that failed. A run keeps,
 for each step whose element wasn't found, the elements on the page most like
-it (.primavera/last-run.json).
+it (.bitti/last-run.json).
 
-  primavera fix                 list each failing step and its suggestions
-  primavera fix shop.pv:12      put suggestion 1 into that step
+  bitti fix                 list each failing step and its suggestions
+  bitti fix shop.pv:12      put suggestion 1 into that step
   --use <n>                     put suggestion n instead
   --all                         fix every failing step with its first
                                 suggestion, if it scores --min or more
@@ -227,7 +227,7 @@ fn apply(f: &Failure, n: usize) -> Result<String, String> {
     Ok(said)
 }
 
-/// `primavera fix [<file>:<line>] [--use <n>] [--all [--min <p>]]`.
+/// `bitti fix [<file>:<line>] [--use <n>] [--all [--min <p>]]`.
 pub fn main(args: &[String]) -> Result<String, String> {
     if args.iter().any(|a| a == "--help" || a == "-h") {
         return Ok(HELP.to_string());
@@ -274,7 +274,7 @@ pub fn main(args: &[String]) -> Result<String, String> {
         for (i, (e, l, p)) in f.nearest.iter().enumerate() {
             out.push_str(&format!("  {}. {e}   {l}   {p:.2}\n", i + 1));
         }
-        out.push_str(&format!("  primavera fix {}:{} --use 1\n", shown(&f.file), f.line));
+        out.push_str(&format!("  bitti fix {}:{} --use 1\n", shown(&f.file), f.line));
     }
     Ok(if out.is_empty() { nothing(failed) } else { out })
 }

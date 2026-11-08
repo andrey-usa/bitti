@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn a_changed_or_new_file_is_found_and_an_untouched_one_is_not() {
-        let dir = std::env::temp_dir().join(format!("primavera-watch-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bitti-watch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.pv"), "scenario \"a\"\n  goto /\n").unwrap();

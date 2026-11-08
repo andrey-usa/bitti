@@ -60,11 +60,11 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: primavera
+        working-directory: bitti
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          path: primavera
+          path: bitti
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -86,7 +86,7 @@ jobs:
         run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Smoke test
         run: |
-          bin=target/${{ matrix.target }}/release/primavera
+          bin=target/${{ matrix.target }}/release/bitti
           # The x86_64 macOS build on an arm64 runner: under Rosetta.
           run=()
           if [ "${{ matrix.target }}" = x86_64-apple-darwin ] && [ "$(uname -m)" = arm64 ]; then
@@ -99,21 +99,21 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          tar -C target/${{ matrix.target }}/release -czf dist/primavera-${{ matrix.target }}.tar.gz primavera
-          (cd dist && shasum -a 256 primavera-${{ matrix.target }}.tar.gz > primavera-${{ matrix.target }}.tar.gz.sha256)
+          tar -C target/${{ matrix.target }}/release -czf dist/bitti-${{ matrix.target }}.tar.gz bitti
+          (cd dist && shasum -a 256 bitti-${{ matrix.target }}.tar.gz > bitti-${{ matrix.target }}.tar.gz.sha256)
       - name: Package (zip)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          $zip = "dist/primavera-${{ matrix.target }}.zip"
-          Compress-Archive -Path target/${{ matrix.target }}/release/primavera.exe -DestinationPath $zip
+          $zip = "dist/bitti-${{ matrix.target }}.zip"
+          Compress-Archive -Path target/${{ matrix.target }}/release/bitti.exe -DestinationPath $zip
           $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-          "$hash  primavera-${{ matrix.target }}.zip" | Out-File -Encoding ascii -NoNewline "$zip.sha256"
+          "$hash  bitti-${{ matrix.target }}.zip" | Out-File -Encoding ascii -NoNewline "$zip.sha256"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist-${{ matrix.target }}
-          path: primavera/dist/
+          path: bitti/dist/
 
   publish:
     needs: [plan, build]
@@ -132,4 +132,4 @@ jobs:
           NAVIGERA: ${{ inputs.navigera }}
         run: |
           gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "primavera $TAG" --notes "Built against navigera $NAVIGERA."
+            --title "bitti $TAG" --notes "Built against navigera $NAVIGERA."

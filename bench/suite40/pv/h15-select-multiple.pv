@@ -1,6 +1,6 @@
 # select-multiple: all three options must be selected in one commit;
 # one call per value would replace the selection.
-# NOTE: relative URLs resolve against --base-url (or PRIMAVERA_BASE_URL);
+# NOTE: relative URLs resolve against --base-url (or BITTI_BASE_URL);
 # the gauntlet origin comes from GAUNTLET_URL.
 
 scenario "Selecting every option in a multi-select"

@@ -1,7 +1,7 @@
 //! `--trace on-failure|all`: what each step of a scenario saw (where the
 //! page was, the console messages and requests it brought) in `trace.jsonl`
 //! beside the scenario's screenshot, and the page's ax tree at a failure in
-//! `ax.txt`. `primavera trace <dir> [<line>]` reads it back in the terminal.
+//! `ax.txt`. `bitti trace <dir> [<line>]` reads it back in the terminal.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -59,7 +59,7 @@ fn find(dir: &Path) -> Vec<PathBuf> {
     if !here.is_empty() {
         return here;
     }
-    // `.primavera/runs` (the default): its traces are two levels down, in
+    // `.bitti/runs` (the default): its traces are two levels down, in
     // `<time>/<scenario>/`. Take the latest run that has any.
     let mut runs: Vec<PathBuf> = std::fs::read_dir(dir)
         .into_iter()
@@ -163,7 +163,7 @@ pub fn render(text: &str, only: Option<usize>, dir: &Path) -> String {
         }
         let more = console.len().saturating_sub(cap) + network.len().saturating_sub(cap);
         if more > 0 {
-            let _ = writeln!(out, "                    … {more} more (primavera trace {} {line})", dir.display());
+            let _ = writeln!(out, "                    … {more} more (bitti trace {} {line})", dir.display());
         }
         if only.is_some() {
             if let Some(shot) = s["shot"].as_str() {
@@ -184,14 +184,14 @@ pub fn render(text: &str, only: Option<usize>, dir: &Path) -> String {
     out
 }
 
-/// `primavera trace <dir> [<line>]`.
+/// `bitti trace <dir> [<line>]`.
 pub fn show(dir: &Path, only: Option<usize>) -> Result<String, String> {
     let files = find(dir);
     match files.as_slice() {
         [] if !dir.is_dir() => Err(format!("{}: no such directory", dir.display())),
         [] => Err(format!(
             "no trace in {}, in a scenario's directory under it, or in the latest run under it. Give a \
-             run's directory (.primavera/runs/<time>) or one scenario's; a run writes traces with \
+             run's directory (.bitti/runs/<time>) or one scenario's; a run writes traces with \
              --trace on-failure (scenarios that fail) or --trace all",
             dir.display()
         )),
@@ -200,7 +200,7 @@ pub fn show(dir: &Path, only: Option<usize>) -> Result<String, String> {
             Ok(render(&text, only, one.parent().unwrap_or(Path::new("."))))
         }
         many => {
-            let mut out = String::from("traces here (primavera trace <dir> [<line>]):\n");
+            let mut out = String::from("traces here (bitti trace <dir> [<line>]):\n");
             for f in many {
                 let first = std::fs::read_to_string(f).ok().and_then(|t| t.lines().next().map(str::to_string));
                 let head: Value = first.and_then(|l| serde_json::from_str(&l).ok()).unwrap_or_default();
@@ -251,7 +251,7 @@ mod tests {
         assert!(all.contains("net #1 GET 200"), "{all}");
         assert_eq!(all.matches("at http://x/cart").count(), 1, "said once while it stays: {all}");
         assert!(all.contains("console error: boom 4") && !all.contains("boom 5"), "{all}");
-        assert!(all.contains("… 2 more (primavera trace ev/shop 5)"), "{all}");
+        assert!(all.contains("… 2 more (bitti trace ev/shop 5)"), "{all}");
         let one = render(&text, Some(5), Path::new("ev/shop"));
         assert!(one.contains("boom 6") && !one.contains("goto /cart"), "{one}");
         assert_eq!(last_request("#1 GET 200 a\n#12 POST 201 b\n"), 12);
@@ -273,7 +273,7 @@ mod tests {
             let none = render(&text, Some(n), Path::new("d"));
             assert!(none.contains(&format!("no step at line {n} in this trace; it has lines 4, 5")), "{none}");
         }
-        let e = show(Path::new("/nonexist-primavera-dir"), None).unwrap_err();
-        assert_eq!(e, "/nonexist-primavera-dir: no such directory");
+        let e = show(Path::new("/nonexist-bitti-dir"), None).unwrap_err();
+        assert_eq!(e, "/nonexist-bitti-dir: no such directory");
     }
 }

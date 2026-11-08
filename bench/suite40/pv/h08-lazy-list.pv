@@ -1,7 +1,7 @@
 # lazy-list: items load 20 at a time on scroll; item 45 does not exist
 # until scrolled to. The commit is only visible to the page's own log, so
 # the verdict endpoint is the assertion.
-# NOTE: relative URLs resolve against --base-url (or PRIMAVERA_BASE_URL);
+# NOTE: relative URLs resolve against --base-url (or BITTI_BASE_URL);
 # the gauntlet origin comes from GAUNTLET_URL.
 
 scenario "Scrolling the lazy list to item 45"

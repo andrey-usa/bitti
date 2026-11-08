@@ -1,4 +1,4 @@
-"""A small site for primavera's own tests: `/flaky` fails its first visit
+"""A small site for bitti's own tests: `/flaky` fails its first visit
 and passes after, `/late` shows its text after `?ms=`, `/m1` has what the
 newer expect subjects read, `/login` signs in (counted at `/logins`), and
 `/note?x=` records what `before/after all` did (`/notes`); `/api/…` is the
@@ -33,7 +33,7 @@ LOGIN = """
 """
 
 # `/form` is a form; with `?auto=1` it uses itself, as a person would, for
-# `primavera record` with nobody at the browser (`?auto=2`: after 1.5 s, for
+# `bitti record` with nobody at the browser (`?auto=2`: after 1.5 s, for
 # `record --extend`, which runs the scenario first).
 FORM = """
 <h1>Order</h1>
@@ -60,7 +60,7 @@ if (auto) setTimeout(() => {
 """
 
 # `/bar`: a consent bar over the Buy button; its Accept takes it off the
-# page (`?auto=1`: Accept, then Buy, for `primavera record`).
+# page (`?auto=1`: Accept, then Buy, for `bitti record`).
 BAR = """
 <h1>Shop</h1>
 <button onclick="document.body.append('Bought')" style="margin-top:80vh">Buy now</button>

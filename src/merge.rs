@@ -1,4 +1,4 @@
-//! `primavera merge <dir|file>...`: the jsonl results of several runs (CI
+//! `bitti merge <dir|file>...`: the jsonl results of several runs (CI
 //! shards) read back as one run.
 
 use crate::report;
@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-pub const HELP: &str = "usage: primavera merge <dir|file.jsonl>... [--junit <file>] [--html <file>]\n\
+pub const HELP: &str = "usage: bitti merge <dir|file.jsonl>... [--junit <file>] [--html <file>]\n\
                         \x20                      [--fail-on-flaky]\n\n\
                         Joins the results of shards (`run --shard i/n --reporter jsonl`, saved\n\
                         to a file each) into one console summary, one --junit and one --html, as\n\
@@ -33,14 +33,12 @@ fn parse(words: &[String]) -> Result<Opts, String> {
             "--junit" => o.junit = Some(val("--junit")?),
             "--html" => o.html = Some(val("--html")?),
             "--fail-on-flaky" => o.fail_on_flaky = true,
-            f if f.starts_with("--") => return Err(format!("unknown option {f:?} (primavera merge --help)")),
+            f if f.starts_with("--") => return Err(format!("unknown option {f:?} (bitti merge --help)")),
             p => o.paths.push(PathBuf::from(p)),
         }
     }
     if o.paths.is_empty() {
-        return Err(
-            "primavera merge needs the directories or .jsonl files of the shards (primavera merge --help)".into()
-        );
+        return Err("bitti merge needs the directories or .jsonl files of the shards (bitti merge --help)".into());
     }
     Ok(o)
 }
@@ -228,7 +226,7 @@ mod tests {
 
     #[test]
     fn shards_join_as_one_run() {
-        let dir = std::env::temp_dir().join(format!("primavera-merge-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bitti-merge-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("shard-2")).unwrap();
         let one = format!("{}\n::error file=a.pv::noise\n{}\n{{\"event\":\"summary\",\"passed\":2,\"flaky\":0,\"failed\":0,\"ms\":900}}\n", line("one", "passed", 400.0), line("two", "passed", 500.0));
@@ -253,7 +251,7 @@ mod tests {
         let xml = std::fs::read_to_string(&junit).unwrap();
         assert_eq!(xml.matches("<testcase").count(), 3, "{xml}");
         assert!(xml.contains("tests=\"3\""), "{xml}");
-        let empty = std::env::temp_dir().join(format!("primavera-merge-none-{}", std::process::id()));
+        let empty = std::env::temp_dir().join(format!("bitti-merge-none-{}", std::process::id()));
         std::fs::create_dir_all(&empty).unwrap();
         assert!(read(&[empty]).is_err());
         let _ = std::fs::remove_dir_all(&dir);

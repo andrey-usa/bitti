@@ -1,4 +1,4 @@
-//! A project can bring its own `.primavera` (a cloned repository): primavera
+//! A project can bring its own `.bitti` (a cloned repository): bitti
 //! doesn't write evidence, timings or sign-in state through a link there.
 
 #![cfg(unix)]
@@ -26,8 +26,8 @@ impl Drop for Dir {
     }
 }
 
-fn primavera(dir: &std::path::Path, args: &[&str]) -> (Option<i32>, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera")).args(args).current_dir(dir).output().expect("run");
+fn bitti(dir: &std::path::Path, args: &[&str]) -> (Option<i32>, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(args).current_dir(dir).output().expect("run");
     (out.status.code(), String::from_utf8_lossy(&out.stderr).into_owned())
 }
 
@@ -36,22 +36,22 @@ fn a_linked_state_directory_is_refused() {
     let project = Dir::new("project");
     let elsewhere = Dir::new("elsewhere");
     std::fs::write(project.path().join("t.pv"), "scenario \"x\"\n  goto /\n").unwrap();
-    std::os::unix::fs::symlink(elsewhere.path(), project.path().join(".primavera")).unwrap();
+    std::os::unix::fs::symlink(elsewhere.path(), project.path().join(".bitti")).unwrap();
     for args in [&["run", "t.pv"][..], &["fix", "t.pv:2"], &["lint", "t.pv"]] {
-        let (code, err) = primavera(project.path(), args);
+        let (code, err) = bitti(project.path(), args);
         assert_eq!(code, Some(2), "{args:?}: {err}");
-        assert!(err.contains(".primavera is a link"), "{args:?}: {err}");
+        assert!(err.contains(".bitti is a link"), "{args:?}: {err}");
     }
     assert_eq!(std::fs::read_dir(elsewhere.path()).unwrap().count(), 0, "something landed through the link");
     // Help and the skill don't touch it.
-    assert_eq!(primavera(project.path(), &["--help"]).0, Some(0));
+    assert_eq!(bitti(project.path(), &["--help"]).0, Some(0));
 
-    // A real `.primavera` with `runs` linked.
-    std::fs::remove_file(project.path().join(".primavera")).unwrap();
-    std::fs::create_dir(project.path().join(".primavera")).unwrap();
-    std::os::unix::fs::symlink(elsewhere.path(), project.path().join(".primavera/runs")).unwrap();
-    let (code, err) = primavera(project.path(), &["run", "t.pv"]);
+    // A real `.bitti` with `runs` linked.
+    std::fs::remove_file(project.path().join(".bitti")).unwrap();
+    std::fs::create_dir(project.path().join(".bitti")).unwrap();
+    std::os::unix::fs::symlink(elsewhere.path(), project.path().join(".bitti/runs")).unwrap();
+    let (code, err) = bitti(project.path(), &["run", "t.pv"]);
     assert_eq!(code, Some(2), "{err}");
-    assert!(err.contains(".primavera/runs is a link"), "{err}");
+    assert!(err.contains(".bitti/runs is a link"), "{err}");
     assert_eq!(std::fs::read_dir(elsewhere.path()).unwrap().count(), 0);
 }

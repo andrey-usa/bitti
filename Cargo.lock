@@ -42,6 +42,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
+name = "bitti"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "navigera",
+ "png",
+ "regex",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -495,19 +508,6 @@ dependencies = [
  "fdeflate",
  "flate2",
  "miniz_oxide 0.8.9",
-]
-
-[[package]]
-name = "primavera"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "navigera",
- "png",
- "regex",
- "serde",
- "serde_json",
- "toml",
 ]
 
 [[package]]

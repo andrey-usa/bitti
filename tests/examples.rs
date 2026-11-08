@@ -28,7 +28,7 @@ fn site() -> Option<Site> {
     Some(Site(child, url))
 }
 
-/// primavera's own small site (`tests/fixtures/site.py`).
+/// bitti's own small site (`tests/fixtures/site.py`).
 fn own_site() -> Option<Site> {
     let python = if cfg!(windows) { "python" } else { "python3" };
     let mut child = Command::new(python)
@@ -43,7 +43,7 @@ fn own_site() -> Option<Site> {
     Some(Site(child, url))
 }
 
-/// Browser tests take turns: each primavera run is several Chromes
+/// Browser tests take turns: each bitti run is several Chromes
 /// already, and a small CI machine running them all at once times out.
 static TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -51,30 +51,30 @@ static TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// without a browser to test with.
 fn chrome() -> Option<std::sync::MutexGuard<'static, ()>> {
     let found = navigera::browser::resolve_executable_for(None, true).is_some();
-    assert!(found || std::env::var_os("PRIMAVERA_REQUIRE_BROWSER").is_none(), "no Chrome/Chromium found");
+    assert!(found || std::env::var_os("BITTI_REQUIRE_BROWSER").is_none(), "no Chrome/Chromium found");
     // A test that failed holding it doesn't stop the others.
     found.then(|| TURN.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-fn primavera(args: &[&str]) -> (i32, String) {
+fn bitti(args: &[&str]) -> (i32, String) {
     let evidence = tempfile_dir();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(args)
         .args(["--evidence", &evidence])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
-        .expect("run primavera");
+        .expect("run bitti");
     let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
     (out.status.code().unwrap_or(-1), text)
 }
 
 fn tempfile_dir() -> String {
-    std::env::temp_dir().join(format!("primavera-test-{}", std::process::id())).display().to_string()
+    std::env::temp_dir().join(format!("bitti-test-{}", std::process::id())).display().to_string()
 }
 
 /// An Electron app, a fresh one per scenario: navigera's fixture app, from
 /// the navigera checkout beside this one once `npm install` has run there
-/// (CI: the electron job, with `PRIMAVERA_REQUIRE_ELECTRON`).
+/// (CI: the electron job, with `BITTI_REQUIRE_ELECTRON`).
 #[test]
 fn an_electron_app_is_tested_scenario_by_scenario() {
     let app = concat!(env!("CARGO_MANIFEST_DIR"), "/../navigera/tests/fixtures/electron-app");
@@ -87,15 +87,15 @@ fn an_electron_app_is_tested_scenario_by_scenario() {
     };
     let installed = std::path::Path::new(app).join("node_modules/electron/dist").join(binary).is_file();
     assert!(
-        installed || std::env::var_os("PRIMAVERA_REQUIRE_ELECTRON").is_none(),
-        "PRIMAVERA_REQUIRE_ELECTRON is set but {app} has no Electron: run `npm install` there"
+        installed || std::env::var_os("BITTI_REQUIRE_ELECTRON").is_none(),
+        "BITTI_REQUIRE_ELECTRON is set but {app} has no Electron: run `npm install` there"
     );
     if !installed {
         eprintln!("skipping: no Electron in {app}");
         return;
     }
     let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
-    let (code, out) = primavera(&["run", "tests/fixtures/electron", "--electron", app, "--workers", "2"]);
+    let (code, out) = bitti(&["run", "tests/fixtures/electron", "--electron", app, "--workers", "2"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("3 passed, 0 failed"), "{out}");
     assert!(out.contains("--workers 2 becomes 1"), "{out}");
@@ -116,8 +116,8 @@ fn an_electron_app_already_running_is_tested_by_attaching() {
     };
     let electron = std::path::Path::new(app).join("node_modules/electron/dist").join(binary);
     assert!(
-        electron.is_file() || std::env::var_os("PRIMAVERA_REQUIRE_ELECTRON").is_none(),
-        "PRIMAVERA_REQUIRE_ELECTRON is set but {app} has no Electron: run `npm install` there"
+        electron.is_file() || std::env::var_os("BITTI_REQUIRE_ELECTRON").is_none(),
+        "BITTI_REQUIRE_ELECTRON is set but {app} has no Electron: run `npm install` there"
     );
     if !electron.is_file() {
         eprintln!("skipping: no Electron in {app}");
@@ -156,7 +156,7 @@ fn an_electron_app_already_running_is_tested_by_attaching() {
     });
     let ws = rx.recv_timeout(std::time::Duration::from_secs(30)).expect("the app's DevTools URL");
     std::thread::sleep(std::time::Duration::from_millis(1500));
-    let (code, out) = primavera(&["run", "tests/fixtures/electron-attached", "--attach", &ws, "--workers", "2"]);
+    let (code, out) = bitti(&["run", "tests/fixtures/electron-attached", "--attach", &ws, "--workers", "2"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("3 passed, 0 failed"), "{out}");
     assert!(out.contains("--workers 2 becomes 1"), "{out}");
@@ -170,7 +170,7 @@ fn an_electron_app_already_running_is_tested_by_attaching() {
 fn two_workers_trace_every_step_without_trading_screenshots() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else { return };
     let ev = std::env::temp_dir().join(format!("pv-trace2-{}", std::process::id()));
-    let child = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let child = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", "examples/bench-site", "--base-url", &site.1, "--workers", "2", "--trace", "all"])
         .args(["--evidence", ev.to_str().unwrap()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -199,7 +199,7 @@ fn two_workers_trace_every_step_without_trading_screenshots() {
     let leftovers = std::fs::read_dir(std::env::temp_dir())
         .unwrap()
         .filter_map(Result::ok)
-        .filter(|e| e.file_name().to_string_lossy().starts_with(&format!("primavera-step-{pid}-")))
+        .filter(|e| e.file_name().to_string_lossy().starts_with(&format!("bitti-step-{pid}-")))
         .count();
     assert_eq!(leftovers, 0, "temp captures left behind");
     let _ = std::fs::remove_dir_all(&ev);
@@ -210,9 +210,9 @@ fn the_examples_pass_on_the_bench_site() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else {
         return;
     };
-    let junit = std::env::temp_dir().join(format!("primavera-junit-{}.xml", std::process::id()));
+    let junit = std::env::temp_dir().join(format!("bitti-junit-{}.xml", std::process::id()));
     let (code, out) =
-        primavera(&["run", "examples/bench-site", "--base-url", &site.1, "--junit", &junit.display().to_string()]);
+        bitti(&["run", "examples/bench-site", "--base-url", &site.1, "--junit", &junit.display().to_string()]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("10 passed, 0 failed"), "{out}");
     let xml = std::fs::read_to_string(&junit).unwrap();
@@ -224,7 +224,7 @@ fn a_failure_says_what_was_expected_seen_and_why() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else {
         return;
     };
-    let (code, out) = primavera(&["run", "tests/fixtures/failing.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/failing.pv", "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("expected --selector #cart-count text is \"2\" within 600 ms; saw \"1\""), "{out}");
     assert!(out.contains("note: the step at line 10 (click --selector \"h1\") changed nothing"), "{out}");
@@ -244,15 +244,15 @@ fn a_failure_says_what_was_expected_seen_and_why() {
 
 #[test]
 fn lint_and_list_need_no_browser() {
-    let (code, out) = primavera(&["lint", "examples"]);
+    let (code, out) = bitti(&["lint", "examples"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("4 files, 10 scenarios"), "{out}");
-    let (code, out) = primavera(&["list", "examples", "--tag", "smoke"]);
+    let (code, out) = bitti(&["list", "examples", "--tag", "smoke"]);
     assert_eq!(code, 0, "{out}");
     assert_eq!(out.lines().count(), 2, "{out}");
-    let bad = std::env::temp_dir().join(format!("primavera-bad-{}.pv", std::process::id()));
+    let bad = std::env::temp_dir().join(format!("bitti-bad-{}.pv", std::process::id()));
     std::fs::write(&bad, "scenario \"A\"\n  click 12\n").unwrap();
-    let (code, out) = primavera(&["lint", &bad.display().to_string()]);
+    let (code, out) = bitti(&["lint", &bad.display().to_string()]);
     assert_eq!(code, 2, "{out}");
     assert!(out.contains(":2: refs (12) change between runs"), "{out}");
 }
@@ -268,7 +268,7 @@ fn an_expect_is_woken_by_the_pages_change() {
     // 25 ms cap, as the poll would), a target that appears, a negated
     // state expect, a box a click checks and a field that takes focus
     // (woken by their events): the waits resolve, well inside the timeout.
-    let (code, out) = primavera(&["run", "tests/fixtures/wake.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/wake.pv", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("9 passed, 0 failed"), "{out}");
 }
@@ -278,43 +278,35 @@ fn workers_retries_and_reporters() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     // Retried: the first try fails, the second passes, and that is flaky.
     let (code, out) =
-        primavera(&["run", "tests/fixtures/flaky.pv", "--base-url", &site.1, "--retries", "1", "--workers", "2"]);
+        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site.1, "--retries", "1", "--workers", "2"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("FLAKY tests/fixtures/flaky.pv:1  Fails once, then passes"), "{out}");
     assert!(out.contains("failed first:"), "{out}");
     assert!(out.contains("1 passed, 1 flaky, 0 failed"), "{out}");
     // --fail-on-flaky makes it fail the run; jsonl says what happened.
-    let (_, out) = primavera(&[
-        "run",
-        "tests/fixtures/flaky.pv",
-        "--base-url",
-        &site.1,
-        "--grep",
-        "Steady",
-        "--reporter",
-        "jsonl",
-    ]);
+    let (_, out) =
+        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site.1, "--grep", "Steady", "--reporter", "jsonl"]);
     let first: serde_json::Value = serde_json::from_str(out.lines().next().unwrap_or("")).unwrap_or_default();
     assert_eq!(first["event"], "scenario", "{out}");
     assert_eq!(first["status"], "passed", "{out}");
     let site2 = own_site().unwrap();
     let (code, out) =
-        primavera(&["run", "tests/fixtures/flaky.pv", "--base-url", &site2.1, "--retries", "1", "--fail-on-flaky"]);
+        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site2.1, "--retries", "1", "--fail-on-flaky"]);
     assert_eq!(code, 1, "{out}");
     // GitHub annotations: the failing line, no retries.
     let site3 = own_site().unwrap();
-    let (code, out) = primavera(&["run", "tests/fixtures/flaky.pv", "--base-url", &site3.1, "--reporter", "github"]);
+    let (code, out) = bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site3.1, "--reporter", "github"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("::error file=tests/fixtures/flaky.pv,line=3,title=Fails once%2C then passes::"), "{out}");
 }
 
 #[test]
 fn shards_split_the_scenarios() {
-    let (_, all) = primavera(&["list", "examples"]);
+    let (_, all) = bitti(&["list", "examples"]);
     let mut all: Vec<&str> = all.lines().collect();
     let mut parts: Vec<String> = Vec::new();
     for i in 1..=3 {
-        let (code, out) = primavera(&["list", "examples", "--shard", &format!("{i}/3")]);
+        let (code, out) = bitti(&["list", "examples", "--shard", &format!("{i}/3")]);
         assert_eq!(code, 0, "{out}");
         assert!(!out.trim().is_empty(), "shard {i}/3 is empty");
         parts.extend(out.lines().map(str::to_string));
@@ -323,14 +315,14 @@ fn shards_split_the_scenarios() {
     all.sort();
     parts.sort();
     assert_eq!(all, parts, "the shards cover every scenario once");
-    let (code, out) = primavera(&["list", "examples", "--shard", "4/3"]);
+    let (code, out) = bitti(&["list", "examples", "--shard", "4/3"]);
     assert_eq!(code, 2, "{out}");
 }
 
 #[test]
 fn if_blocks_look_at_the_page_as_it_is() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = primavera(&["run", "tests/fixtures/if.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/if.pv", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
 }
@@ -338,10 +330,10 @@ fn if_blocks_look_at_the_page_as_it_is() {
 #[test]
 fn ax_trees_match_partially_and_say_where_they_dont() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = primavera(&["run", "tests/fixtures/ax.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/ax.pv", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
-    let (code, out) = primavera(&["run", "tests/fixtures/ax-fail.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/ax-fail.pv", "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("expected ax --role form --name Checkout to match the tree under it"), "{out}");
     assert!(out.contains("nearest: `- combobox \"Country\" value=\"Canada\""), "{out}");
@@ -351,16 +343,16 @@ fn ax_trees_match_partially_and_say_where_they_dont() {
 fn exec_runs_programs_and_checks_what_they_said() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let py = if cfg!(windows) { "PY=python" } else { "PY=python3" };
-    let (code, out) = primavera(&["run", "tests/fixtures/exec.pv", "--base-url", &site.1, "--var", py]);
+    let (code, out) = bitti(&["run", "tests/fixtures/exec.pv", "--base-url", &site.1, "--var", py]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
-    let (code, out) = primavera(&["run", "tests/fixtures/exec-fail.pv", "--var", py]);
+    let (code, out) = bitti(&["run", "tests/fixtures/exec-fail.pv", "--var", py]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("exited 2: db down"), "{out}");
     assert!(out.contains("still ran after 300 ms; stopped it"), "{out}");
     // A script named by its path, the run started from elsewhere.
     if cfg!(unix) {
-        let (code, out) = primavera(&["run", "tests/fixtures/exec-path.pv"]);
+        let (code, out) = bitti(&["run", "tests/fixtures/exec-path.pv"]);
         assert_eq!(code, 0, "{out}");
     }
 }
@@ -369,10 +361,10 @@ fn exec_runs_programs_and_checks_what_they_said() {
 fn http_calls_share_cookies_with_the_browser() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let secrets = secrets_file();
-    let (code, out) = primavera(&["run", "tests/fixtures/http.pv", "--base-url", &site.1, "--secrets", &secrets]);
+    let (code, out) = bitti(&["run", "tests/fixtures/http.pv", "--base-url", &site.1, "--secrets", &secrets]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
-    let (code, out) = primavera(&["run", "tests/fixtures/http-fail.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/http-fail.pv", "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("/api/fail answered 500: db down"), "{out}");
     assert!(out.contains("GET http://127.0.0.1:9/: "), "{out}");
@@ -382,14 +374,8 @@ fn http_calls_share_cookies_with_the_browser() {
 fn feature_files_run_with_the_runs_steps_and_report_cucumber_json() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let report = std::env::temp_dir().join(format!("pv-cucumber-{}.json", std::process::id()));
-    let (code, out) = primavera(&[
-        "run",
-        "tests/fixtures/features",
-        "--base-url",
-        &site.1,
-        "--cucumber",
-        &report.display().to_string(),
-    ]);
+    let (code, out) =
+        bitti(&["run", "tests/fixtures/features", "--base-url", &site.1, "--cucumber", &report.display().to_string()]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("3 passed, 0 failed"), "{out}");
     let j: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&report).unwrap()).unwrap();
@@ -400,14 +386,8 @@ fn feature_files_run_with_the_runs_steps_and_report_cucumber_json() {
     assert!(first["steps"].as_array().unwrap().iter().all(|s| s["result"]["status"] == "passed"), "{first}");
     // Allure results: one per scenario, the feature as a label.
     let allure = std::env::temp_dir().join(format!("pv-allure-{}", std::process::id()));
-    let (code, out) = primavera(&[
-        "run",
-        "tests/fixtures/features",
-        "--base-url",
-        &site.1,
-        "--allure",
-        &allure.display().to_string(),
-    ]);
+    let (code, out) =
+        bitti(&["run", "tests/fixtures/features", "--base-url", &site.1, "--allure", &allure.display().to_string()]);
     assert_eq!(code, 0, "{out}");
     let results: Vec<_> = std::fs::read_dir(&allure).unwrap().filter_map(Result::ok).map(|e| e.path()).collect();
     assert_eq!(results.iter().filter(|p| p.to_string_lossy().ends_with("-result.json")).count(), 3, "{results:?}");
@@ -415,7 +395,7 @@ fn feature_files_run_with_the_runs_steps_and_report_cucumber_json() {
     assert!(one["labels"].to_string().contains("Signing in"), "{one}");
     std::fs::remove_dir_all(&allure).ok();
     // A failure: the step that failed, and the ones after it skipped.
-    let (code, out) = primavera(&[
+    let (code, out) = bitti(&[
         "run",
         "tests/fixtures/features-fail.feature",
         "--base-url",
@@ -451,7 +431,7 @@ fn a_config_starts_the_app_and_picks_a_profile() {
          [server]\ncommand = \"{py} {site} --port {port}\"\nurl = \"http://127.0.0.1:{port}/login\"\nreuse = false\n\
          [env.other.vars]\ngreeting = \"from other\"\n"
     );
-    std::fs::write(dir.join("primavera.toml"), config).unwrap();
+    std::fs::write(dir.join("bitti.toml"), config).unwrap();
     std::fs::write(
         dir.join("t.pv"),
         "scenario \"Config\"\n  goto /login\n  expect text \"Sign in\"\n  expect ${greeting} is ${want}\n",
@@ -462,12 +442,12 @@ fn a_config_starts_the_app_and_picks_a_profile() {
     );
     std::fs::write(dir.join("bad.toml"), bad).unwrap();
     let run = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
             .arg("run")
             .args(args)
             .current_dir(&dir)
             .output()
-            .expect("run primavera");
+            .expect("run bitti");
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
         (out.status.code().unwrap_or(-1), text)
     };
@@ -505,7 +485,7 @@ fn screenshots_match_their_baselines() {
         let mut args =
             vec!["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "500"];
         args.extend_from_slice(extra);
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).args(&args).output().expect("run primavera");
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(&args).output().expect("run bitti");
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
         (out.status.code().unwrap_or(-1), text)
     };
@@ -573,7 +553,7 @@ fn press_understands_control_or_meta() {
         ),
     )
     .unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &dir.join("ev").display().to_string()])
         .args(["--timeout-ms", "3000"])
         .output()
@@ -602,7 +582,7 @@ fn screenshots_wait_for_a_stable_render() {
         let mut args =
             vec!["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "3000"];
         args.extend_from_slice(extra);
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).args(&args).output().expect("run primavera");
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(&args).output().expect("run bitti");
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
         (out.status.code().unwrap_or(-1), text)
     };
@@ -643,7 +623,7 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
         let mut args =
             vec!["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "1500"];
         args.extend_from_slice(extra);
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).args(&args).output().expect("run primavera");
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(&args).output().expect("run bitti");
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
         (out.status.code().unwrap_or(-1), text)
     };
@@ -657,7 +637,7 @@ fn a_screenshot_that_never_stabilises_fails_at_the_timeout() {
          expect screenshot box --selector \"#c\"\n",
     )
     .unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", still.to_str().unwrap(), "--base-url", &site.1, "--evidence", &evidence, "--timeout-ms", "1500"])
         .args(["--update-screenshots"])
         .output()
@@ -691,7 +671,7 @@ fn check_waits_for_a_late_commit() {
          expect js \"document.getElementById('c').checked === true\"\n",
     )
     .unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", &dir.join("ev").display().to_string()])
         .args(["--timeout-ms", "3000"])
         .output()
@@ -728,7 +708,7 @@ fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
         ),
     )
     .unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--update-screenshots", "--timeout-ms", "2000"])
         .args(["--evidence", dir.join("ev").to_str().unwrap()])
         .output()
@@ -762,14 +742,14 @@ fn a_navigera_session_becomes_a_scenario_that_passes() {
     std::fs::create_dir_all(&dir).unwrap();
     let name = dir.join("work.sock").display().to_string();
     let nv = |args: &[&str]| -> serde_json::Value {
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
             // This reads navigera's JSON line (its default is compact text).
             .env("NAVIGERA_OUTPUT", "json")
             .args(["navigera", "--session", &name])
             .args(args)
             .stdin(Stdio::null())
             .output()
-            .expect("primavera navigera");
+            .expect("bitti navigera");
         let text = String::from_utf8_lossy(&out.stdout);
         let v: serde_json::Value = serde_json::from_str(text.trim()).unwrap_or_else(|_| panic!("{args:?}: {text}"));
         assert!(v["ok"] == true, "{args:?}: {v}");
@@ -788,7 +768,7 @@ fn a_navigera_session_becomes_a_scenario_that_passes() {
     nv(&["fill", &r("textbox \"Password\""), "hunter2-not-in-the-file"]);
     nv(&["get", "value", "--label", "Email"]);
     nv(&["click", &r("link \"Shop\"")]);
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["from-session", &name, "--scenario", "Shops"])
         .output()
         .unwrap();
@@ -808,7 +788,7 @@ fn a_navigera_session_becomes_a_scenario_that_passes() {
     let secrets = dir.join("secrets.env");
     std::fs::write(&secrets, "PASSWORD=from-the-secrets-file\n").unwrap();
     let (code, text) =
-        primavera(&["run", file.to_str().unwrap(), "--base-url", &site.1, "--secrets", secrets.to_str().unwrap()]);
+        bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1, "--secrets", secrets.to_str().unwrap()]);
     assert_eq!(code, 0, "{pv}\n{text}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -819,7 +799,7 @@ fn over_mcp_an_agent_explores_writes_the_test_and_runs_it() {
     let (Some(_turn), Some(site)) = (chrome(), site()) else { return };
     let dir = std::env::temp_dir().join(format!("pv-mcp-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .arg("mcp")
         .current_dir(&dir)
         .stdin(Stdio::piped())
@@ -839,7 +819,7 @@ fn over_mcp_an_agent_explores_writes_the_test_and_runs_it() {
     };
     let text = |r: &serde_json::Value| r["result"]["content"][0]["text"].as_str().unwrap_or("").to_string();
     let init = rpc("initialize", serde_json::json!({"protocolVersion": "2025-06-18"}));
-    assert_eq!(init["result"]["serverInfo"]["name"], "primavera", "{init}");
+    assert_eq!(init["result"]["serverInfo"]["name"], "bitti", "{init}");
     rpc(
         "tools/call",
         serde_json::json!({"name": "browser_navigate", "arguments": {"url": format!("{}/login", site.1)}}),
@@ -851,16 +831,16 @@ fn over_mcp_an_agent_explores_writes_the_test_and_runs_it() {
     rpc("tools/call", serde_json::json!({"name": "browser_click", "arguments": {"ref": r}}));
     let wrote = rpc(
         "tools/call",
-        serde_json::json!({"name": "primavera_from_session", "arguments": {"scenario": "Consents", "out": "consent.pv"}}),
+        serde_json::json!({"name": "bitti_from_session", "arguments": {"scenario": "Consents", "out": "consent.pv"}}),
     );
     assert!(text(&wrote).contains("click --role button --name \"Accept all\""), "{wrote}");
     let ran = rpc(
         "tools/call",
-        serde_json::json!({"name": "primavera_run", "arguments": {"paths": ["consent.pv"], "base_url": site.1}}),
+        serde_json::json!({"name": "bitti_run", "arguments": {"paths": ["consent.pv"], "base_url": site.1}}),
     );
     assert_eq!(ran["result"]["isError"], false, "{}", text(&ran));
     assert!(text(&ran).ends_with("exit 0"), "{}", text(&ran));
-    let failure = rpc("tools/call", serde_json::json!({"name": "primavera_failure", "arguments": {}}));
+    let failure = rpc("tools/call", serde_json::json!({"name": "bitti_failure", "arguments": {}}));
     assert!(text(&failure).contains("no failures"), "{failure}");
     drop(stdin);
     let _ = child.wait();
@@ -874,7 +854,7 @@ fn a_recording_becomes_a_scenario_that_passes() {
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("order.pv");
     // The page uses itself (`?auto=1`): a field, a checkbox, a select, a link.
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["record", &format!("{}/form?auto=1", site.1), "--headless", "--for", "3"])
         .args(["--scenario", "Orders", "--out", file.to_str().unwrap()])
         .output()
@@ -892,7 +872,7 @@ fn a_recording_becomes_a_scenario_that_passes() {
     );
     // Run without the page using itself: the steps do it.
     std::fs::write(&file, pv.replace("?auto=1", "")).unwrap();
-    let (code, text) = primavera(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
+    let (code, text) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
     assert_eq!(code, 0, "{pv}\n{text}");
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -903,7 +883,7 @@ fn a_click_that_takes_its_element_away_is_recorded_and_a_covered_click_is_fixed(
     let dir = std::env::temp_dir().join(format!("pv-bar-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("buy.pv");
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["record", &format!("{}/bar?auto=1", site.1), "--headless", "--for", "3"])
         .args(["--scenario", "Buys", "--out", file.to_str().unwrap()])
         .output()
@@ -913,13 +893,12 @@ fn a_click_that_takes_its_element_away_is_recorded_and_a_covered_click_is_fixed(
     // Accept was gone before `locate` could check it: its role and name, read at once, find it.
     assert!(pv.contains("  click --role button --name Accept\n  click --role button --name \"Buy now\"\n"), "{pv}");
     std::fs::write(&file, pv.replace("?auto=1", "")).unwrap();
-    let (code, text) = primavera(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
+    let (code, text) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
     assert_eq!(code, 0, "{pv}\n{text}");
     // Without the Accept click, Buy is covered: `fix` puts it back as an
     // optional click before the step.
     std::fs::write(&file, "scenario \"Buys\"\n  goto /bar\n  click --role button --name \"Buy now\" --timeout-ms 500\n  expect text Bought\n").unwrap();
-    let run =
-        |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_primavera")).args(args).current_dir(&dir).output().unwrap();
+    let run = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_bitti")).args(args).current_dir(&dir).output().unwrap();
     let out = run(&["run", "buy.pv", "--base-url", &site.1]);
     assert!(!out.status.success());
     let list = String::from_utf8_lossy(&run(&["fix"]).stdout).to_string();
@@ -944,7 +923,7 @@ fn a_recording_extends_a_scenario_from_where_it_ends() {
     let file = dir.join("order.pv");
     let start = "# An order.\nscenario \"Opens the form\"\n  goto /form?auto=2\n  expect text Order\n\nscenario \"Other\"\n  goto /done\n";
     std::fs::write(&file, start).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["record", "--extend", file.to_str().unwrap(), "--scenario", "Opens the form"])
         .args(["--base-url", &site.1, "--headless", "--for", "4"])
         .output()
@@ -957,11 +936,11 @@ fn a_recording_extends_a_scenario_from_where_it_ends() {
                 click --role link --name \"Place order\"\n  expect url ends-with /done\n\nscenario \"Other\"\n  goto /done\n";
     assert_eq!(pv, want);
     std::fs::write(&file, pv.replace("?auto=2", "")).unwrap();
-    let (code, text) = primavera(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
+    let (code, text) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
     assert_eq!(code, 0, "{text}");
     // A scenario that fails before its end isn't extended.
     std::fs::write(&file, "scenario \"Broken\"\n  goto /form\n  expect text Nowhere --timeout-ms 200\n").unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["record", "--extend", file.to_str().unwrap(), "--base-url", &site.1, "--headless", "--for", "1"])
         .output()
         .unwrap();
@@ -988,7 +967,7 @@ fn an_unsure_failure_asks_the_decision_model_when_there_is_one() {
     )
     .unwrap();
     let pv = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
             .args(args)
             .current_dir(&dir)
             .env("NAVIGERA_DECIDER_URL", &jev.1)
@@ -1023,7 +1002,7 @@ fn a_missing_element_in_a_frame_gets_suggestions_from_the_frame() {
     )
     .unwrap();
     let pv = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).args(args).current_dir(&dir).output().unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(args).current_dir(&dir).output().unwrap();
         (
             out.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr),
@@ -1052,7 +1031,7 @@ fn accessibility_is_checked_by_axe() {
          expect accessible --selector #ok\n  goto /done\n  expect accessible --ignore html-has-lang\n",
     )
     .unwrap();
-    let (code, out) = primavera(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("1 passed") && out.contains("1 failed"), "{out}");
     assert!(out.contains("to pass axe (wcag2a, wcag2aa, wcag21a, wcag21aa)"), "{out}");
@@ -1072,7 +1051,7 @@ fn load_metrics_are_budgets() {
          expect load < 10000ms\n  expect cls < 0.1\n\nscenario \"Over\"\n  goto /form\n  expect lcp < 0.001ms --timeout-ms 200\n",
     )
     .unwrap();
-    let (code, out) = primavera(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("1 passed") && out.contains("1 failed"), "{out}");
     assert!(out.contains("expected lcp < 0.001 ms within 200 ms; saw "), "{out}");
@@ -1094,7 +1073,7 @@ fn a_video_is_kept_for_a_failure_and_dropped_for_a_pass() {
     )
     .unwrap();
     let ev = dir.join("ev");
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--video", "on-failure", "--reporter", "jsonl"])
         .args(["--evidence", ev.to_str().unwrap(), "--html", dir.join("r.html").to_str().unwrap()])
         .output()
@@ -1138,14 +1117,14 @@ fn a_trace_records_each_step_and_reads_back() {
     )
     .unwrap();
     let ev = dir.join("ev");
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--trace", "on-failure"])
         .args(["--evidence", ev.to_str().unwrap(), "--html", dir.join("r.html").to_str().unwrap()])
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
     let show = |extra: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).arg("trace").arg(&ev).args(extra).output().unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti")).arg("trace").arg(&ev).args(extra).output().unwrap();
         String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr)
     };
     // The run directory lists its traces; the scenario's shows each step.
@@ -1153,18 +1132,18 @@ fn a_trace_records_each_step_and_reads_back() {
     let scenario =
         std::fs::read_dir(&ev).unwrap().filter_map(Result::ok).find(|e| e.path().join("trace.jsonl").is_file());
     let scenario = scenario.expect("a trace.jsonl").path();
-    let all = Command::new(env!("CARGO_BIN_EXE_primavera")).arg("trace").arg(&scenario).output().unwrap();
+    let all = Command::new(env!("CARGO_BIN_EXE_bitti")).arg("trace").arg(&scenario).output().unwrap();
     let all = String::from_utf8_lossy(&all.stdout).to_string();
     assert!(all.starts_with("FAIL ") && all.contains("\"Traced\""), "{all}{list}");
     assert!(all.contains("console error: boom-trace"), "{all}");
     assert!(all.contains("net #") && all.contains("/api/n"), "{all}");
     assert!(all.contains("/login, title \"t\""), "{all}");
-    let one = Command::new(env!("CARGO_BIN_EXE_primavera")).arg("trace").arg(&scenario).arg("5").output().unwrap();
+    let one = Command::new(env!("CARGO_BIN_EXE_bitti")).arg("trace").arg(&scenario).arg("5").output().unwrap();
     let one = String::from_utf8_lossy(&one.stdout).to_string();
     assert!(one.contains("FAIL") && one.contains("the page at the failure (ax.txt)"), "{one}");
     // Each step also kept the page as it was after it: an ax tree and a JPEG,
     // named in the trace, shown by `trace <dir> <line>` and in the HTML report.
-    let first = Command::new(env!("CARGO_BIN_EXE_primavera")).arg("trace").arg(&scenario).arg("2").output().unwrap();
+    let first = Command::new(env!("CARGO_BIN_EXE_bitti")).arg("trace").arg(&scenario).arg("2").output().unwrap();
     let first = String::from_utf8_lossy(&first.stdout).to_string();
     assert!(first.contains("the page after this step (001-L2.ax.txt)") && first.contains("001-L2.jpg"), "{first}");
     let jpg = std::fs::read(scenario.join("001-L2.jpg")).unwrap();
@@ -1191,7 +1170,7 @@ fn a_trace_records_each_step_and_reads_back() {
 
 #[test]
 fn a_download_is_compared_with_the_expected_file() {
-    let exe = std::env::var("PRIMAVERA_COMPARA").unwrap_or_else(|_| "compara".into());
+    let exe = std::env::var("BITTI_COMPARA").unwrap_or_else(|_| "compara".into());
     if std::process::Command::new(&exe).arg("--version").output().is_err() {
         return; // compara isn't here
     }
@@ -1208,7 +1187,7 @@ fn a_download_is_compared_with_the_expected_file() {
                 expect download \"report-*.csv\" compare other.csv --key id --report json,rows\n";
     std::fs::write(&pv, scenario("The same", "expected.csv") + &scenario("Not the same", "other.csv") + rows).unwrap();
     let ev = dir.join("ev");
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--evidence", ev.to_str().unwrap()])
         .output()
         .unwrap();
@@ -1244,7 +1223,7 @@ fn fix_puts_a_suggestion_into_the_failing_step() {
     )
     .unwrap();
     let pv = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).args(args).current_dir(&dir).output().unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti")).args(args).current_dir(&dir).output().unwrap();
         (
             out.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr),
@@ -1252,7 +1231,7 @@ fn fix_puts_a_suggestion_into_the_failing_step() {
     };
     let (code, out) = pv(&["run", "t.pv", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("fix: primavera fix t.pv:3 --use 1"), "{out}");
+    assert!(out.contains("fix: bitti fix t.pv:3 --use 1"), "{out}");
     let (_, list) = pv(&["fix"]);
     assert!(list.contains("t.pv:3") && list.contains("--role button --name \"Sign in\""), "{list}");
     let (code, out) = pv(&["fix", "t.pv:3", "--use", "1"]);
@@ -1269,7 +1248,7 @@ fn fix_puts_a_suggestion_into_the_failing_step() {
     std::fs::write(dir.join("u.pv"), "use lib.pv\n\nscenario \"Signs in\"\n  goto /login\n  run sign_in\n").unwrap();
     let (code, out) = pv(&["run", "u.pv", "--base-url", &site.1, "--evidence", "ev"]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("fix: primavera fix lib.pv:2 --use 1"), "{out}");
+    assert!(out.contains("fix: bitti fix lib.pv:2 --use 1"), "{out}");
     let (code, out) = pv(&["fix", "lib.pv:2", "--use", "1"]);
     assert_eq!(code, 0, "{out}");
     let (code, out) = pv(&["run", "u.pv", "--base-url", &site.1, "--evidence", "ev"]);
@@ -1289,7 +1268,7 @@ fn fetch(site: &Site, path: &str) -> String {
 }
 
 fn secrets_file() -> String {
-    let path = std::env::temp_dir().join(format!("primavera-secrets-{}.env", std::process::id()));
+    let path = std::env::temp_dir().join(format!("bitti-secrets-{}.env", std::process::id()));
     std::fs::write(&path, "# test only\nPV_TEST_PW=\"hunter22\"\n").unwrap();
     path.display().to_string()
 }
@@ -1298,7 +1277,7 @@ fn secrets_file() -> String {
 fn the_newer_subjects_and_isolation_between_scenarios() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     for workers in ["1", "2"] {
-        let (code, out) = primavera(&["run", "tests/fixtures/m1.pv", "--base-url", &site.1, "--workers", workers]);
+        let (code, out) = bitti(&["run", "tests/fixtures/m1.pv", "--base-url", &site.1, "--workers", workers]);
         assert_eq!(code, 1, "{out}");
         assert!(out.contains("5 passed, 1 failed"), "workers {workers}: {out}");
         assert!(out.contains("FAIL  tests/fixtures/m1.pv:23  Soft expectations fail it at the end"), "{out}");
@@ -1307,7 +1286,7 @@ fn the_newer_subjects_and_isolation_between_scenarios() {
     // Every run of a scenario downloads into a directory of its own: the
     // same file name each time, not `report-2026 (2).csv`.
     let repeat = ["--grep", "Subjects", "--repeat", "3", "--workers", "2"];
-    let (code, out) = primavera(&[&["run", "tests/fixtures/m1.pv", "--base-url", &site.1][..], &repeat].concat());
+    let (code, out) = bitti(&[&["run", "tests/fixtures/m1.pv", "--base-url", &site.1][..], &repeat].concat());
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("3 passed, 0 failed"), "{out}");
 }
@@ -1317,41 +1296,40 @@ fn auth_runs_once_and_hooks_wrap_the_file() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let secrets = secrets_file();
     let (code, out) =
-        primavera(&["run", "tests/fixtures/auth.pv", "--base-url", &site.1, "--workers", "2", "--secrets", &secrets]);
+        bitti(&["run", "tests/fixtures/auth.pv", "--base-url", &site.1, "--workers", "2", "--secrets", &secrets]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("5 passed, 0 failed"), "{out}");
     // Two auths, each signed in once, for five scenarios on two workers.
     assert_eq!(fetch(&site, "/logins"), "2", "{out}");
     assert_eq!(fetch(&site, "/notes"), "setup,teardown", "{out}");
     // Again: `shopper` signs in anew, `keeper` (ttl 1h) is reused.
-    let (code, out) = primavera(&["run", "tests/fixtures/auth.pv", "--base-url", &site.1, "--secrets", &secrets]);
+    let (code, out) = bitti(&["run", "tests/fixtures/auth.pv", "--base-url", &site.1, "--secrets", &secrets]);
     assert_eq!(code, 0, "{out}");
     assert_eq!(fetch(&site, "/logins"), "3", "{out}");
     // A secret never shows in what the run prints.
-    let (code, out) =
-        primavera(&["run", "tests/fixtures/secret-fail.pv", "--base-url", &site.1, "--secrets", &secrets]);
+    let (code, out) = bitti(&["run", "tests/fixtures/secret-fail.pv", "--base-url", &site.1, "--secrets", &secrets]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("saw \"***\""), "{out}");
     assert!(!out.contains("hunter22"), "{out}");
     // A file whose `before all` fails runs none of its scenarios.
-    let (code, out) = primavera(&["run", "tests/fixtures/before-fail.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/before-fail.pv", "--base-url", &site.1]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("before all: expected title is \"not this one\""), "{out}");
-    let (_, out) = primavera(&["lint", "tests/fixtures/auth.pv", "--secrets", &secrets]);
+    let (_, out) = bitti(&["lint", "tests/fixtures/auth.pv", "--secrets", &secrets]);
     assert!(out.contains("ok: 1 file, 5 scenarios") && !out.contains("warning"), "{out}");
 }
 
 #[test]
 fn handoff_waits_only_when_it_must() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = primavera(&["run", "tests/fixtures/handoff.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/handoff.pv", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     // Nobody at a screen here: it says so instead of waiting.
     if cfg!(target_os = "linux")
         && std::env::var_os("DISPLAY").is_none()
         && std::env::var_os("WAYLAND_DISPLAY").is_none()
     {
-        let (code, out) = primavera(&["run", "tests/fixtures/handoff-wait.pv", "--base-url", &site.1]);
+        let (code, out) = bitti(&["run", "tests/fixtures/handoff-wait.pv", "--base-url", &site.1]);
         assert_eq!(code, 1, "{out}");
         assert!(out.contains("handoff needs a person at a screen"), "{out}");
     }
@@ -1361,7 +1339,7 @@ fn handoff_waits_only_when_it_must() {
 fn a_pause_leaves_the_failing_tab_to_navigera() {
     use std::io::Write;
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let mut child = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", "tests/fixtures/pause.pv", "--base-url", &site.1, "--pause-on-failure"])
         .args(["--evidence", &tempfile_dir()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -1401,7 +1379,7 @@ fn a_pause_leaves_the_failing_tab_to_navigera() {
 fn repeat_and_shuffle_hunt_flakes() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let (code, out) =
-        primavera(&["run", "tests/fixtures/flaky.pv", "--base-url", &site.1, "--repeat", "3", "--shuffle", "42"]);
+        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site.1, "--repeat", "3", "--shuffle", "42"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("shuffled with seed 42"), "{out}");
     assert!(out.contains("FLAKY 2/3  tests/fixtures/flaky.pv  Fails once, then passes"), "{out}");
@@ -1414,21 +1392,21 @@ fn repeat_and_shuffle_hunt_flakes() {
             .map(|l| l.split("  ").nth(2).unwrap_or("").to_string())
             .collect()
     };
-    let (_, again) = primavera(&["list", "tests/fixtures/flaky.pv"]);
+    let (_, again) = bitti(&["list", "tests/fixtures/flaky.pv"]);
     assert_eq!(again.lines().count(), 2, "{again}");
     let site2 = own_site().unwrap();
     let (_, out2) =
-        primavera(&["run", "tests/fixtures/flaky.pv", "--base-url", &site2.1, "--repeat", "3", "--shuffle", "42"]);
+        bitti(&["run", "tests/fixtures/flaky.pv", "--base-url", &site2.1, "--repeat", "3", "--shuffle", "42"]);
     assert_eq!(order(&out), order(&out2), "{out}\n{out2}");
 }
 
 #[test]
 fn set_values_fill_in_their_variables() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = primavera(&["run", "tests/fixtures/set-expand.pv", "--base-url", &site.1, "--var", "WHO=ada"]);
+    let (code, out) = bitti(&["run", "tests/fixtures/set-expand.pv", "--base-url", &site.1, "--var", "WHO=ada"]);
     assert_eq!(code, 0, "{out}");
     // Annotations don't take the console's place.
-    let (code, out) = primavera(&[
+    let (code, out) = bitti(&[
         "run",
         "tests/fixtures/set-expand.pv",
         "--base-url",
@@ -1457,7 +1435,7 @@ fn a_script_that_never_settles_is_bounded_by_the_step_and_an_optional_miss_shows
     .unwrap();
     let ev = dir.join("ev");
     let start = std::time::Instant::now();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", pv.to_str().unwrap(), "--base-url", &site.1, "--trace", "all"])
         .args(["--evidence", ev.to_str().unwrap(), "--html", dir.join("r.html").to_str().unwrap()])
         .output()
@@ -1469,7 +1447,7 @@ fn a_script_that_never_settles_is_bounded_by_the_step_and_an_optional_miss_shows
     let html = std::fs::read_to_string(dir.join("r.html")).unwrap();
     assert!(html.contains("class=\"step skip\"") && html.contains("optional, did not hold"), "{html}");
     let trace = |extra: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_primavera")).arg("trace").args(extra).output().unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_bitti")).arg("trace").args(extra).output().unwrap();
         (out.status.code(), String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr))
     };
     let opt = std::fs::read_dir(&ev)
@@ -1503,7 +1481,7 @@ fn a_run_costs_the_same_for_each_scenario() {
     let Some(_turn) = chrome() else {
         return;
     };
-    let dir = std::env::temp_dir().join(format!("primavera-linear-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bitti-linear-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let timed = |n: usize| {
         let file = dir.join(format!("s{n}.pv"));
@@ -1516,7 +1494,7 @@ fn a_run_costs_the_same_for_each_scenario() {
             .collect();
         std::fs::write(&file, text).unwrap();
         let started = std::time::Instant::now();
-        let (code, out) = primavera(&["run", &file.display().to_string(), "--workers", "1"]);
+        let (code, out) = bitti(&["run", &file.display().to_string(), "--workers", "1"]);
         assert_eq!(code, 0, "{out}");
         assert!(out.contains(&format!("{n} passed, 0 failed")), "{out}");
         started.elapsed()
@@ -1536,11 +1514,11 @@ fn a_browser_that_never_starts_is_an_exit_code_not_a_pass() {
     std::fs::create_dir_all(&dir).unwrap();
     let pv = dir.join("t.pv");
     std::fs::write(&pv, "scenario \"A\"\n  goto /\nscenario \"B\"\n  goto /\n").unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", pv.to_str().unwrap(), "--base-url", "http://127.0.0.1:9"])
         .env("CHROME_BIN", dir.join("no-such-chrome"))
         .output()
-        .expect("run primavera");
+        .expect("run bitti");
     let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(3), "{text}");
     assert!(text.contains("the browser didn't start") && text.contains("2 scenarios not run"), "{text}");
@@ -1550,7 +1528,7 @@ fn a_browser_that_never_starts_is_an_exit_code_not_a_pass() {
 #[test]
 fn routes_replay_a_har_and_change_real_responses() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = primavera(&["run", "tests/fixtures/har.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/har.pv", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
@@ -1558,7 +1536,7 @@ fn routes_replay_a_har_and_change_real_responses() {
 #[test]
 fn a_permissions_step_grants_denies_and_resets() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) = primavera(&["run", "tests/fixtures/permissions.pv", "--base-url", &site.1]);
+    let (code, out) = bitti(&["run", "tests/fixtures/permissions.pv", "--base-url", &site.1]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed"), "{out}");
 }
@@ -1591,20 +1569,20 @@ fn wait_all(rx: &std::sync::mpsc::Receiver<String>, seen: &mut Vec<String>, need
 #[test]
 fn watch_runs_again_only_the_file_that_changed() {
     let Some(_turn) = chrome() else { return };
-    let dir = std::env::temp_dir().join(format!("primavera-watch-run-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bitti-watch-run-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let py = if cfg!(windows) { "python" } else { "python3" };
     let scenario = |name: &str| format!("scenario \"{name}\"\n  exec {py} -c \"print(1)\"\n    expect exit 0\n");
     std::fs::write(dir.join("a.pv"), scenario("alpha")).unwrap();
     std::fs::write(dir.join("b.pv"), scenario("beta")).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["run", "a.pv", "b.pv", "--watch", "--evidence", &tempfile_dir()])
         .current_dir(&dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("run primavera --watch");
+        .expect("run bitti --watch");
     let rx = lines_of(&mut child);
     let mut seen = Vec::new();
     let first = wait_all(&rx, &mut seen, &["watching 2 files", "2 passed"], 60);
@@ -1632,13 +1610,13 @@ fn watch_runs_again_only_the_file_that_changed() {
 fn merge_joins_the_jsonl_of_shards_into_one_report() {
     let Some(_turn) = chrome() else { return };
     let Some(site) = own_site() else { return };
-    let dir = std::env::temp_dir().join(format!("primavera-merge-run-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bitti-merge-run-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let mut total = 0;
     for i in 1..=2 {
         let shard = format!("{i}/2");
-        let (_, out) = primavera(&[
+        let (_, out) = bitti(&[
             "run",
             "tests/fixtures/failing.pv",
             "tests/fixtures/if.pv",
@@ -1656,11 +1634,11 @@ fn merge_joins_the_jsonl_of_shards_into_one_report() {
     assert!(total >= 2, "{total}");
     let junit = dir.join("merged.xml");
     let html = dir.join("merged.html");
-    let merged = Command::new(env!("CARGO_BIN_EXE_primavera"))
+    let merged = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(["merge", dir.to_str().unwrap(), "--junit", junit.to_str().unwrap(), "--html", html.to_str().unwrap()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
-        .expect("run primavera merge");
+        .expect("run bitti merge");
     let code = merged.status.code().unwrap_or(-1);
     let out = String::from_utf8_lossy(&merged.stdout).to_string() + &String::from_utf8_lossy(&merged.stderr);
     assert_eq!(code, 1, "{out}");
@@ -1671,21 +1649,21 @@ fn merge_joins_the_jsonl_of_shards_into_one_report() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// primavera in `dir` (its own `.primavera/`, so its last run is its own).
-fn primavera_in(dir: &std::path::Path, args: &[&str], env: &[(&str, &str)]) -> (i32, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_primavera"))
+/// bitti in `dir` (its own `.bitti/`, so its last run is its own).
+fn bitti_in(dir: &std::path::Path, args: &[&str], env: &[(&str, &str)]) -> (i32, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(args)
         .envs(env.iter().copied())
         .current_dir(dir)
         .output()
-        .expect("run primavera");
+        .expect("run bitti");
     let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
     (out.status.code().unwrap_or(-1), text)
 }
 
 /// A directory of the test's own.
 fn own_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("primavera-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bitti-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -1699,7 +1677,7 @@ fn api_scenarios_run_with_no_browser() {
     let secrets = secrets_file();
     let nothing = "/nonexistent/chrome";
     let started = std::time::Instant::now();
-    let (code, out) = primavera(&[
+    let (code, out) = bitti(&[
         "run",
         "tests/fixtures/api/api.pv",
         "--base-url",
@@ -1722,8 +1700,7 @@ fn api_scenarios_run_with_no_browser() {
     assert!(!out.contains("hunter22"), "{out}");
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
 
-    let (code, out) =
-        primavera(&["run", "tests/fixtures/api/api-fail.pv", "--base-url", &site.1, "--chromium", nothing]);
+    let (code, out) = bitti(&["run", "tests/fixtures/api/api-fail.pv", "--base-url", &site.1, "--chromium", nothing]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("0 passed, 6 failed"), "{out}");
     assert!(out.contains("the GraphQL answer has 1 error(s): Cannot query field 'nope' on type 'Query'"), "{out}");
@@ -1750,7 +1727,7 @@ fn an_api_sign_in_carries_into_the_browser() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let secrets = secrets_file();
     let (code, out) =
-        primavera(&["run", "tests/fixtures/api/mixed.pv", "--base-url", &site.1, "--secrets", &secrets, "-j", "2"]);
+        bitti(&["run", "tests/fixtures/api/mixed.pv", "--base-url", &site.1, "--secrets", &secrets, "-j", "2"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
     assert!(!out.contains("(no browser)"), "{out}");
@@ -1775,39 +1752,39 @@ fn run_control_picks_and_stops() {
             .filter_map(|l| l.split("  ").nth(1).map(|n| n.split(" @").next().unwrap_or(n).to_string()))
             .collect()
     };
-    let (_, out) = primavera_in(&dir, &["list", "t.pv", "--tag", "smoke and not slow"], &[]);
+    let (_, out) = bitti_in(&dir, &["list", "t.pv", "--tag", "smoke and not slow"], &[]);
     assert_eq!(names(&out), ["one"], "{out}");
-    let (_, out) = primavera_in(&dir, &["list", "t.pv", "--tag", "not (smoke or wip)", "--tag", "wip"], &[]);
+    let (_, out) = bitti_in(&dir, &["list", "t.pv", "--tag", "not (smoke or wip)", "--tag", "wip"], &[]);
     assert_eq!(names(&out), ["three", "four"], "{out}");
-    let (_, out) = primavera_in(&dir, &["list", "t.pv", "--grep-invert", "o"], &[]);
+    let (_, out) = bitti_in(&dir, &["list", "t.pv", "--grep-invert", "o"], &[]);
     assert_eq!(names(&out), ["three"], "{out}");
-    let (code, out) = primavera_in(&dir, &["list", "t.pv", "--tag", "smoke and"], &[]);
+    let (code, out) = bitti_in(&dir, &["list", "t.pv", "--tag", "smoke and"], &[]);
     assert_eq!(code, 2, "{out}");
 
     // One failure stops the run: the rest are not started.
-    let (code, out) = primavera_in(&dir, &["run", "t.pv", "--base-url", &site.1, "-x"], &[]);
+    let (code, out) = bitti_in(&dir, &["run", "t.pv", "--base-url", &site.1, "-x"], &[]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("2 scenarios not run: 1 scenario failed (--max-failures 1)"), "{out}");
     // The whole run, then only what failed in it.
-    let (code, _) = primavera_in(&dir, &["run", "t.pv", "--base-url", &site.1], &[]);
+    let (code, _) = bitti_in(&dir, &["run", "t.pv", "--base-url", &site.1], &[]);
     assert_eq!(code, 1);
-    let (code, out) = primavera_in(&dir, &["run", "t.pv", "--base-url", &site.1, "--last-failed"], &[]);
+    let (code, out) = bitti_in(&dir, &["run", "t.pv", "--base-url", &site.1, "--last-failed"], &[]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("0 passed, 2 failed"), "{out}");
     assert!(out.contains("FAIL  t.pv:4  two") && out.contains("FAIL  t.pv:7  three"), "{out}");
     std::fs::write(dir.join("t.pv"), "scenario \"one\"\n  http GET /api/search --query q=1\n  expect json $.q is 1\n")
         .unwrap();
-    let (code, out) = primavera_in(&dir, &["run", "t.pv", "--base-url", &site.1, "--last-failed"], &[]);
+    let (code, out) = bitti_in(&dir, &["run", "t.pv", "--base-url", &site.1, "--last-failed"], &[]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("no scenario failed in the last run"), "{out}");
 
     // @only focuses a run, unless it is forbidden (as under CI).
     std::fs::write(dir.join("t.pv"), "scenario \"one\"\n  wait --ms 1\nscenario \"two\" @only\n  wait --ms 1\n")
         .unwrap();
-    let (code, out) = primavera_in(&dir, &["run", "t.pv", "--allow-only"], &[]);
+    let (code, out) = bitti_in(&dir, &["run", "t.pv", "--allow-only"], &[]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("1 passed, 0 failed") && out.contains("two"), "{out}");
-    let (code, out) = primavera_in(&dir, &["run", "t.pv"], &[("CI", "true")]);
+    let (code, out) = bitti_in(&dir, &["run", "t.pv"], &[("CI", "true")]);
     assert_eq!(code, 2, "{out}");
     assert!(out.contains("@only is on 1 scenario") && out.contains("t.pv:3  two"), "{out}");
 }
@@ -1828,14 +1805,13 @@ fn slowmo_and_a_pause_step() {
         serde_json::from_str::<serde_json::Value>(line).unwrap()["ms"].as_f64().unwrap()
     };
     let (code, out) =
-        primavera_in(&dir, &["run", "s.pv", "--base-url", &site.1, "--slowmo", "300", "--reporter", "jsonl"], &[]);
+        bitti_in(&dir, &["run", "s.pv", "--base-url", &site.1, "--slowmo", "300", "--reporter", "jsonl"], &[]);
     assert_eq!(code, 0, "{out}");
     assert!(ms(&out) >= 900.0, "three actions, 300 ms before each: {}", ms(&out));
 
     std::fs::write(dir.join("p.pv"), "scenario \"stops for a look\"\n  goto /done\n  pause\n  expect text Thanks\n")
         .unwrap();
-    let (code, out) =
-        primavera_in(&dir, &["run", "p.pv", "--base-url", &site.1, "-j", "2"], &[("PRIMAVERA_PAUSE_S", "1")]);
+    let (code, out) = bitti_in(&dir, &["run", "p.pv", "--base-url", &site.1, "-j", "2"], &[("BITTI_PAUSE_S", "1")]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("a `pause` step waits for Enter: --workers 2 becomes 1"), "{out}");
     assert!(out.contains("PAUSED  p.pv:3  the browser stays as the steps before left it"), "{out}");
@@ -1854,7 +1830,7 @@ fn json_snapshots_are_written_then_held() {
     let run = |extra: &[&str]| {
         let mut args = vec!["run", "s.pv", "--base-url", site.1.as_str()];
         args.extend_from_slice(extra);
-        primavera_in(&dir, &args, &[])
+        bitti_in(&dir, &args, &[])
     };
     let (code, out) = run(&[]);
     assert_eq!(code, 1, "{out}");
@@ -1876,7 +1852,7 @@ fn json_snapshots_are_written_then_held() {
 fn a_scenario_controls_the_pages_clock() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     for workers in ["1", "2"] {
-        let (code, out) = primavera(&["run", "tests/fixtures/clock.pv", "--base-url", &site.1, "--workers", workers]);
+        let (code, out) = bitti(&["run", "tests/fixtures/clock.pv", "--base-url", &site.1, "--workers", workers]);
         assert_eq!(code, 0, "workers {workers}: {out}");
         assert!(out.contains("2 passed, 0 failed"), "workers {workers}: {out}");
     }
@@ -1888,7 +1864,7 @@ fn a_scenario_controls_the_pages_clock() {
 fn a_scenario_stops_when_its_time_is_up() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let started = std::time::Instant::now();
-    let (code, out) = primavera(&[
+    let (code, out) = bitti(&[
         "run",
         "tests/fixtures/timeout.pv",
         "--base-url",
@@ -1907,7 +1883,7 @@ fn a_scenario_stops_when_its_time_is_up() {
     assert!(started.elapsed() < std::time::Duration::from_secs(15), "{:?}", started.elapsed());
     // `--global-timeout-ms`: the scenario running then stops, the rest don't start, the run fails.
     let started = std::time::Instant::now();
-    let (code, out) = primavera(&[
+    let (code, out) = bitti(&[
         "run",
         "tests/fixtures/timeout.pv",
         "--base-url",

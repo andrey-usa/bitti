@@ -1,6 +1,6 @@
 # redirect-chain: three JS hops each carrying the chain token; jumping
 # straight to /redir/final is detectable server-side.
-# NOTE: relative URLs resolve against --base-url (or PRIMAVERA_BASE_URL);
+# NOTE: relative URLs resolve against --base-url (or BITTI_BASE_URL);
 # the gauntlet origin comes from GAUNTLET_URL.
 
 scenario "Following the redirect chain hop by hop"

@@ -1837,7 +1837,7 @@ mod tests {
         assert_eq!(e.line, 2);
         let e = check("scenario \"x\"\n  save t = gett title\n").unwrap_err();
         assert_eq!(e.line, 2, "{e}");
-        // Variables stand in for values; `save … = json` is primavera's own.
+        // Variables stand in for values; `save … = json` is bitti's own.
         check("set w = 800\nscenario \"x\"\n  goto /${w}\n  click --text ${w}\n  save t = get title\n  save id = json $.id\n")
             .unwrap();
     }

@@ -1,4 +1,4 @@
-//! primavera: plain-text web tests on real Chrome, run by one native binary
+//! bitti: plain-text web tests on real Chrome, run by one native binary
 //! through navigera. See README.md.
 
 mod allure;
@@ -30,12 +30,12 @@ use std::sync::{mpsc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// The agent skill: the format and the commands, for an agent writing tests.
-const SKILL_MD: &str = include_str!("../skills/primavera/SKILL.md");
+const SKILL_MD: &str = include_str!("../skills/bitti/SKILL.md");
 
 const USAGE: &str = "\
-primavera: plain-text web tests on real Chrome (through navigera)
+bitti: plain-text web tests on real Chrome (through navigera)
 
-usage: primavera <command> [...]
+usage: bitti <command> [...]
 
 commands:
   run [<file|dir>...]    run scenarios (default: every .pv and .feature file
@@ -49,22 +49,22 @@ commands:
                          scenario
   from-session <name>    what a navigera session did, as a scenario
   navigera <command…>    navigera's commands, built in
-                         (primavera navigera -s work goto <url>)
+                         (bitti navigera -s work goto <url>)
   mcp                    an MCP server: navigera's browser tools and
-                         primavera's own
+                         bitti's own
   skill                  the agent skill: the .pv format, steps and expect forms
   --version
 
-`primavera <command> --help` lists a command's options. Steps, locators and
-expect forms: `primavera skill`.
+`bitti <command> --help` lists a command's options. Steps, locators and
+expect forms: `bitti skill`.
 
 exit codes: 0 all passed, 1 a scenario failed, 2 a file or an argument is
 wrong, 3 the browser or the app server didn't start
 ";
 
-/// `run`'s options, for `primavera run --help`.
+/// `run`'s options, for `bitti run --help`.
 const RUN_OPTIONS: &[(&str, &str)] = &[
-    ("--base-url <url>", "where relative URLs (`goto /cart`) point (else `base` in the file, PRIMAVERA_BASE_URL)"),
+    ("--base-url <url>", "where relative URLs (`goto /cart`) point (else `base` in the file, BITTI_BASE_URL)"),
     ("--var <name=value>", "a variable for ${name} (repeatable)"),
     ("--secrets <file>", "NAME=value lines for ${secret:NAME} (the environment comes first); masked in output"),
     ("--grep <text>", "only scenarios whose name contains it"),
@@ -87,7 +87,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
         "--reporter <name>",
         "console (default), jsonl (one JSON object per scenario on stdout), github (workflow annotations; on by itself under GitHub Actions); repeatable",
     ),
-    ("--config <file>", "settings, a [server] and [env.<name>] profiles (default: ./primavera.toml)"),
+    ("--config <file>", "settings, a [server] and [env.<name>] profiles (default: ./bitti.toml)"),
     ("--env <name>", "the config's [env.<name>] profile on top of the rest"),
     (
         "--update-snapshots",
@@ -96,7 +96,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ("--compare-report <k>", "what `expect download … compare` keeps: html, json, rows (comma-separated) or none (default html)"),
     (
         "--trace <when>",
-        "on-failure or all: each step's page (ax tree, JPEG), console and requests beside the screenshot in trace.jsonl; read it with `primavera trace`, or in --html",
+        "on-failure or all: each step's page (ax tree, JPEG), console and requests beside the screenshot in trace.jsonl; read it with `bitti trace`, or in --html",
     ),
     (
         "--video <when>",
@@ -126,7 +126,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ),
     (
         "--evidence <dir>",
-        "failure screenshots and downloads (default .primavera/runs/<time>; a directory you name is used as given, links included)",
+        "failure screenshots and downloads (default .bitti/runs/<time>; a directory you name is used as given, links included)",
     ),
     ("--watch", "after the run, run again each scenario file that changes (polled every 300 ms), until Ctrl-C"),
     ("--pause-on-failure", "keep the browser at a failure, open to `navigera --attach`, until Enter (one worker)"),
@@ -156,12 +156,12 @@ fn wrapped(prefix: &str, text: &str, indent: usize) -> String {
     out
 }
 
-/// `primavera <command> --help`: that command's usage and options.
+/// `bitti <command> --help`: that command's usage and options.
 fn help_for(cmd: &str) -> Option<String> {
     let text = match cmd {
         "run" => {
             let mut out = String::from(
-                "usage: primavera run [<file.pv|file.feature|dir>...] [options]\n\n\
+                "usage: bitti run [<file.pv|file.feature|dir>...] [options]\n\n\
                  Runs the scenarios in the files, or in every .pv and .feature file under\n\
                  the directories (default: the current one).\n\noptions:\n",
             );
@@ -170,43 +170,43 @@ fn help_for(cmd: &str) -> Option<String> {
             }
             out
         }
-        "lint" => "usage: primavera lint [<file|dir>...] [--var <name=value>] [--secrets <file>]\n\n\
+        "lint" => "usage: bitti lint [<file|dir>...] [--var <name=value>] [--secrets <file>]\n\n\
                    Checks .pv and .feature files without a browser: syntax, unknown steps,\n\
                    and variables nothing sets (warnings: the run's environment may set them).\n"
             .to_string(),
-        "list" => "usage: primavera list [<file|dir>...] [--grep <text>] [--tag <tag>]\n\
+        "list" => "usage: bitti list [<file|dir>...] [--grep <text>] [--tag <tag>]\n\
                    \x20                     [--shard <i/n>]\n\n\
                    The scenarios a run with the same options would take, one per line:\n\
                    file:line, name and tags.\n"
             .to_string(),
-        "trace" => "usage: primavera trace [<dir>] [<line>]\n\n\
+        "trace" => "usage: bitti trace [<dir>] [<line>]\n\n\
                     A trace that `run --trace on-failure|all` recorded: every step with its\n\
                     page, console and requests, or the step at <line> in full, with its\n\
                     screenshot file and ax tree. <dir> is a run's directory\n\
-                    (.primavera/runs/<time>) or one scenario's in it; by default, the\n\
+                    (.bitti/runs/<time>) or one scenario's in it; by default, the\n\
                     latest run's.\n"
             .to_string(),
         "merge" => merge::HELP.to_string(),
         "fix" => fix::HELP.to_string(),
-        "from-session" => "usage: primavera from-session <navigera session> [--scenario <name>]\n\
+        "from-session" => "usage: bitti from-session <navigera session> [--scenario <name>]\n\
                            \x20                             [--out <file.pv>]\n\n\
                            Writes what a navigera session did as a scenario, its refs turned into\n\
                            locators that hold between runs.\n"
             .to_string(),
-        "record" => "usage: primavera record <url> [--out <file.pv>] [--scenario <name>] [--headless]\n\
+        "record" => "usage: bitti record <url> [--out <file.pv>] [--scenario <name>] [--headless]\n\
                      \x20                       [--for <seconds>]\n\
-                     \x20      primavera record --extend <file.pv> [--scenario <name>]\n\
+                     \x20      bitti record --extend <file.pv> [--scenario <name>]\n\
                      \x20                       [--base-url <url>] [--secrets <file>]\n\n\
                      Opens a browser to use by hand; what you do becomes a scenario. With\n\
                      --extend, runs the scenario to its end first, then records more steps\n\
                      into it. Needs a display.\n"
             .to_string(),
-        "mcp" => "usage: primavera mcp [--headed] [--chromium <path>]\n\n\
+        "mcp" => "usage: bitti mcp [--headed] [--chromium <path>]\n\n\
                   An MCP server on standard input and output: navigera's browser tools and\n\
-                  primavera_from_session, primavera_run, primavera_failure and primavera_fix.\n"
+                  bitti_from_session, bitti_run, bitti_failure and bitti_fix.\n"
             .to_string(),
         "skill" => {
-            "usage: primavera skill\n\nPrints the agent skill: the .pv format, steps and expect forms.\n".to_string()
+            "usage: bitti skill\n\nPrints the agent skill: the .pv format, steps and expect forms.\n".to_string()
         }
         _ => return None,
     };
@@ -222,7 +222,7 @@ struct Args {
     cucumber: Option<PathBuf>,
     allure: Option<PathBuf>,
     html: Option<PathBuf>,
-    /// primavera.toml's `[server]`.
+    /// bitti.toml's `[server]`.
     server: Option<config::Server>,
     workers: usize,
     retries: u32,
@@ -254,7 +254,7 @@ fn parse_args() -> Result<Args, String> {
     if matches!(cmd.as_str(), "help" | "--help" | "-h") {
         return Err(USAGE.to_string());
     }
-    // primavera.toml (or --config), and its --env profile: flags before the
+    // bitti.toml (or --config), and its --env profile: flags before the
     // command line's, which win.
     let mut take = |flag: &str| -> Result<Option<String>, String> {
         match raw.iter().position(|w| w == flag) {
@@ -433,7 +433,7 @@ fn parse_args() -> Result<Args, String> {
             }
             "-h" | "--help" => return Err(USAGE.to_string()),
             // One line: the whole usage under it would scroll the error away.
-            f if f.starts_with('-') => return Err(format!("unknown option {f} (primavera {cmd} --help lists them)")),
+            f if f.starts_with('-') => return Err(format!("unknown option {f} (bitti {cmd} --help lists them)")),
             p => paths.push(PathBuf::from(p)),
         }
     }
@@ -554,29 +554,29 @@ fn load(paths: &[PathBuf]) -> Result<Vec<suite::Suite>, String> {
 
 fn main() -> ExitCode {
     // navigera's own commands, for exploring a page before writing the
-    // test (`primavera navigera -s work goto …`); a session they start is
+    // test (`bitti navigera -s work goto …`); a session they start is
     // served by this executable again (`--session <name> …` first).
     let first = std::env::args().nth(1);
     if first.as_deref() == Some("navigera") {
-        // Its help names the program it runs as: `primavera navigera -s s
-        // start`, not `primavera -s s start`, and says which navigera this is.
+        // Its help names the program it runs as: `bitti navigera -s s
+        // start`, not `bitti -s s start`, and says which navigera this is.
         let rest: Vec<String> = std::env::args().skip(2).collect();
         if rest.is_empty() || rest.iter().any(|a| matches!(a.as_str(), "--help" | "-h" | "help")) {
-            println!("(built into primavera {}; `primavera navigera` runs it)\n", env!("CARGO_PKG_VERSION"));
+            println!("(built into bitti {}; `bitti navigera` runs it)\n", env!("CARGO_PKG_VERSION"));
         }
-        return navigera::cli::main(std::iter::once("primavera navigera".to_string()).chain(rest));
+        return navigera::cli::main(std::iter::once("bitti navigera".to_string()).chain(rest));
     }
     if first.as_deref().is_some_and(|a| a == "--session" || a.starts_with("--session=")) {
         return navigera::cli::main(std::env::args());
     }
-    // `primavera <command> --help`: that command's own usage and options.
+    // `bitti <command> --help`: that command's own usage and options.
     if let Some(text) = first.as_deref().and_then(help_for) {
         if std::env::args().skip(2).any(|a| a == "--help" || a == "-h") {
             print!("{text}");
             return ExitCode::SUCCESS;
         }
     }
-    // `.primavera` holds run evidence, timings and sign-in state. A project
+    // `.bitti` holds run evidence, timings and sign-in state. A project
     // can bring its own as a link (a cloned repository): don't write through
     // one.
     if !matches!(first.as_deref(), None | Some("-h" | "--help" | "help" | "skill" | "--version" | "-V" | "version")) {
@@ -585,7 +585,7 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     }
-    // The test loop over MCP: navigera's browser tools and primavera's own.
+    // The test loop over MCP: navigera's browser tools and bitti's own.
     // Flags after `mcp` are navigera's (`--headed`, `--chromium <path>`).
     if first.as_deref() == Some("mcp") {
         let args = std::iter::once("navigera".to_string()).chain(std::env::args().skip(2)).chain(["mcp".to_string()]);
@@ -593,11 +593,11 @@ fn main() -> ExitCode {
             Ok(parsed) => parsed.config,
             Err(e) => {
                 eprintln!(
-                    "primavera mcp: {}",
+                    "bitti mcp: {}",
                     // navigera's text names navigera's help; these flags are ours.
                     match e {
                         navigera::protocol::ArgsError::Help(t) | navigera::protocol::ArgsError::Invalid(t) =>
-                            t.replace("navigera --help", "primavera mcp --help"),
+                            t.replace("navigera --help", "bitti mcp --help"),
                     }
                 );
                 return ExitCode::from(2);
@@ -659,17 +659,17 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         "--version" | "-V" | "version" => {
-            println!("primavera {}", env!("CARGO_PKG_VERSION"));
+            println!("bitti {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         "trace" => {
-            let dir = args.paths.first().cloned().unwrap_or_else(|| PathBuf::from(".primavera/runs"));
+            let dir = args.paths.first().cloned().unwrap_or_else(|| PathBuf::from(".bitti/runs"));
             let only = match args.paths.get(1) {
                 None => None,
                 Some(p) => match p.to_str().and_then(|w| w.parse::<usize>().ok()) {
                     Some(n) => Some(n),
                     None => {
-                        eprintln!("{}: not a line number (primavera trace <dir> <line>)", p.display());
+                        eprintln!("{}: not a line number (bitti trace <dir> <line>)", p.display());
                         return ExitCode::from(2);
                     }
                 },
@@ -732,22 +732,22 @@ fn main() -> ExitCode {
         other => {
             eprintln!(
                 "unknown command {other:?}: the commands are run, lint, list, trace, merge, fix, record, \
-                 from-session, navigera, mcp and skill (primavera --help)"
+                 from-session, navigera, mcp and skill (bitti --help)"
             );
             ExitCode::from(2)
         }
     }
 }
 
-/// An error if `.primavera`, or a directory in it primavera writes to, is a
+/// An error if `.bitti`, or a directory in it bitti writes to, is a
 /// link: it would send evidence, timings and sign-in state wherever the link
 /// points.
 fn own_state_dir() -> Result<(), String> {
-    for path in [".primavera", ".primavera/runs", ".primavera/auth"] {
+    for path in [".bitti", ".bitti/runs", ".bitti/auth"] {
         if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
             let to = std::fs::read_link(path).map(|t| format!(" (to {})", t.display())).unwrap_or_default();
             return Err(format!(
-                "{path} is a link{to}. primavera keeps run evidence, timings and sign-in state there and \
+                "{path} is a link{to}. bitti keeps run evidence, timings and sign-in state there and \
                  doesn't write through a link a project brought with it: remove the link (a real \
                  directory is fine)"
             ));
@@ -756,12 +756,12 @@ fn own_state_dir() -> Result<(), String> {
     Ok(())
 }
 
-/// `PRIMAVERA_PHASES=1`: each phase of the run's wall time on stderr, in ms
+/// `BITTI_PHASES=1`: each phase of the run's wall time on stderr, in ms
 /// since the first call (a measurement aid; nothing else changes).
 pub fn phase(label: &str) {
     static T0: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
     let t0 = T0.get_or_init(Instant::now);
-    if std::env::var_os("PRIMAVERA_PHASES").is_some() {
+    if std::env::var_os("BITTI_PHASES").is_some() {
         eprintln!("phase {:>8.1} ms  {label}", t0.elapsed().as_secs_f64() * 1000.0);
     }
 }
@@ -797,12 +797,12 @@ fn run_watching(args: Args) -> ExitCode {
         let mut next = args.clone();
         next.paths = files;
         // Each run keeps its evidence apart, as separate runs do.
-        if next.opts.evidence.starts_with(".primavera/runs") {
+        if next.opts.evidence.starts_with(".bitti/runs") {
             let stamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_millis())
                 .unwrap_or_default();
-            next.opts.evidence = PathBuf::from(format!(".primavera/runs/{stamp}"));
+            next.opts.evidence = PathBuf::from(format!(".bitti/runs/{stamp}"));
         }
         run(next);
     }
@@ -811,13 +811,13 @@ fn run_watching(args: Args) -> ExitCode {
 fn run(args: Args) -> ExitCode {
     phase("run() entered");
     let started = Instant::now();
-    // This run's own evidence directory, under `.primavera/runs`, must be
+    // This run's own evidence directory, under `.bitti/runs`, must be
     // new: one already there as a link was put there for this moment.
-    if args.opts.evidence.starts_with(".primavera")
+    if args.opts.evidence.starts_with(".bitti")
         && std::fs::symlink_metadata(&args.opts.evidence).is_ok_and(|m| m.file_type().is_symlink())
     {
         eprintln!(
-            "{} is a link: primavera doesn't write evidence through a link a project brought with it; remove it",
+            "{} is a link: bitti doesn't write evidence through a link a project brought with it; remove it",
             args.opts.evidence.display()
         );
         return ExitCode::from(2);
@@ -922,13 +922,13 @@ fn run(args: Args) -> ExitCode {
     // A pause holds the run at one failure: one worker. An Electron app
     // runs one copy at a time (two would share its user data).
     if opts.electron.is_some() && args.workers > 1 {
-        eprintln!("primavera: --electron runs one app at a time: --workers {} becomes 1", args.workers);
+        eprintln!("bitti: --electron runs one app at a time: --workers {} becomes 1", args.workers);
     }
     if opts.attach.is_some() && args.workers > 1 {
-        eprintln!("primavera: --attach runs in the one browser it attached to: --workers {} becomes 1", args.workers);
+        eprintln!("bitti: --attach runs in the one browser it attached to: --workers {} becomes 1", args.workers);
     }
     if pausing && args.workers > 1 {
-        eprintln!("primavera: a `pause` step waits for Enter: --workers {} becomes 1", args.workers);
+        eprintln!("bitti: a `pause` step waits for Enter: --workers {} becomes 1", args.workers);
     }
     let one = opts.pause || pausing || opts.electron.is_some() || opts.attach.is_some();
     let workers = if one { 1 } else { args.workers.min(jobs.len()).max(1) };
@@ -1325,12 +1325,12 @@ fn worker(
     }
 }
 
-/// How long each scenario took last time (`.primavera/timings.json`), to
+/// How long each scenario took last time (`.bitti/timings.json`), to
 /// start the slow ones first.
 struct Timings;
 
 impl Timings {
-    const PATH: &'static str = ".primavera/timings.json";
+    const PATH: &'static str = ".bitti/timings.json";
 
     fn load() -> BTreeMap<String, f64> {
         std::fs::read_to_string(Self::PATH).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
@@ -1341,7 +1341,7 @@ impl Timings {
         for r in results.iter().filter(|r| r.skipped.is_none()) {
             all.insert(r.key(), (r.ms * 10.0).round() / 10.0);
         }
-        if std::fs::create_dir_all(".primavera").is_ok() {
+        if std::fs::create_dir_all(".bitti").is_ok() {
             let _ = std::fs::write(Self::PATH, serde_json::to_string_pretty(&all).unwrap_or_default());
         }
     }
@@ -1377,7 +1377,7 @@ mod tests {
         let skill = SKILL_MD.replace("\r\n", "\n");
         let blocks: Vec<&str> = skill.split("```text\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
         // The scripts it names sit next to the .pv, as the skill says.
-        let dir = std::env::temp_dir().join(format!("primavera-skill-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bitti-skill-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("check.js"), "return true").unwrap();
         let lints = |text: &str| {

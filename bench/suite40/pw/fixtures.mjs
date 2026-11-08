@@ -1,5 +1,5 @@
 // Shared fixtures for the suite40 Playwright Test port.
-// One fresh browser context per test (mirrors primavera's per-scenario
+// One fresh browser context per test (mirrors bitti's per-scenario
 // reset --all isolation); the cookie banner is accepted by a helper.
 import { test as base, expect } from "@playwright/test";
 import path from "node:path";

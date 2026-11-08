@@ -1,6 +1,6 @@
 // @playwright/test config for the suite40 benchmark port.
 // Everything is localhost (shop on 18001, gauntlet on 18201/18202), so no
-// proxy is needed. Drives the same headless-shell Chromium as the primavera
+// proxy is needed. Drives the same headless-shell Chromium as the bitti
 // leg; no browser is downloaded. Assertions keep a 30 s budget.
 import { defineConfig } from "@playwright/test";
 

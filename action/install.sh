@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # The action's install step: a release binary for this runner (checked
 # against the SHA-256 published beside it), else a build from the action's
-# own commit with navigera beside it. Puts `primavera` on the PATH.
+# own commit with navigera beside it. Puts `bitti` on the PATH.
 set -euo pipefail
 
 # Git Bash on Windows: POSIX paths here, a Windows one for GITHUB_PATH.
 unix() { cygpath -u "$1" 2>/dev/null || printf '%s\n' "$1"; }
 PV_ACTION=$(unix "$PV_ACTION")
 temp=$(unix "$RUNNER_TEMP")
-root="$temp/primavera"
+root="$temp/bitti"
 mkdir -p "$root/bin"
 cygpath -w "$root/bin" >> "$GITHUB_PATH" 2>/dev/null || echo "$root/bin" >> "$GITHUB_PATH"
 
@@ -26,22 +26,22 @@ sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum 
 release() {
   [ -n "$target" ] || return 1
   case "$PV_VERSION" in
-    latest) url="https://github.com/andrey-usa/primavera/releases/latest/download/primavera-$target.$ext" ;;
-    *) url="https://github.com/andrey-usa/primavera/releases/download/$PV_VERSION/primavera-$target.$ext" ;;
+    latest) url="https://github.com/andrey-usa/bitti/releases/latest/download/bitti-$target.$ext" ;;
+    *) url="https://github.com/andrey-usa/bitti/releases/download/$PV_VERSION/bitti-$target.$ext" ;;
   esac
   tmp=$(mktemp -d)
   curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$tmp/pv.$ext" "$url" || return 1
   curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$tmp/pv.sha256" "$url.sha256" || {
-    echo "::error title=primavera::no checksum beside $url"; exit 1; }
+    echo "::error title=bitti::no checksum beside $url"; exit 1; }
   [ "$(cut -d' ' -f1 < "$tmp/pv.sha256")" = "$(sha256 "$tmp/pv.$ext")" ] || {
-    echo "::error title=primavera::$url does not match its checksum"; exit 1; }
+    echo "::error title=bitti::$url does not match its checksum"; exit 1; }
   if [ "$ext" = zip ]; then
     # Git Bash may have no unzip; PowerShell always can.
     pwsh -NoProfile -Command "Expand-Archive -Force -Path '$(cygpath -w "$tmp/pv.zip")' -DestinationPath '$(cygpath -w "$root/bin")'" || return 1
   else
     tar -C "$root/bin" -xzf "$tmp/pv.tar.gz" || return 1
   fi
-  echo "primavera $PV_VERSION from $url"
+  echo "bitti $PV_VERSION from $url"
 }
 
 source_build() {
@@ -51,12 +51,12 @@ source_build() {
     git clone --quiet --filter=blob:none https://github.com/andrey-usa/navigera "$nav"
     git -C "$nav" checkout --quiet "$PV_NAVIGERA_REF"
   fi
-  echo "building primavera from $PV_ACTION with navigera $(git -C "$nav" rev-parse --short HEAD)"
-  CARGO_TARGET_DIR="$temp/primavera-target" cargo install --quiet --locked --path "$PV_ACTION" --root "$root"
+  echo "building bitti from $PV_ACTION with navigera $(git -C "$nav" rev-parse --short HEAD)"
+  CARGO_TARGET_DIR="$temp/bitti-target" cargo install --quiet --locked --path "$PV_ACTION" --root "$root"
 }
 
 if [ "$PV_VERSION" = source ] || ! release; then
-  [ "$PV_VERSION" = source ] || echo "::notice title=primavera::no release binary for ${target:-this runner} ($PV_VERSION); building from source"
+  [ "$PV_VERSION" = source ] || echo "::notice title=bitti::no release binary for ${target:-this runner} ($PV_VERSION); building from source"
   source_build
 fi
-"$root/bin/primavera" --version
+"$root/bin/bitti" --version

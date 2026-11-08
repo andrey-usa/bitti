@@ -49,7 +49,7 @@ fn failure_lines(out: &mut String, f: &Failure, indent: &str, file: &Path) {
         // Where the failing step is written (a flow's, maybe in a used file).
         let (file, line) = f.source.as_ref().map_or((file, f.line), |(p, l, _)| (p.as_path(), *l));
         if file.extension().is_none_or(|e| e != "feature") {
-            let _ = writeln!(out, "{indent}fix: primavera fix {}:{line} --use 1", rel(file));
+            let _ = writeln!(out, "{indent}fix: bitti fix {}:{line} --use 1", rel(file));
         }
     }
     if let Some(h) = &f.hint {
@@ -226,7 +226,7 @@ pub fn junit(results: &[ScenarioResult], ms: f64) -> String {
     let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     let _ = writeln!(
         out,
-        "<testsuites name=\"primavera\" tests=\"{}\" failures=\"{failures}\" skipped=\"{skipped}\" time=\"{:.3}\">",
+        "<testsuites name=\"bitti\" tests=\"{}\" failures=\"{failures}\" skipped=\"{skipped}\" time=\"{:.3}\">",
         results.len(),
         ms / 1000.0
     );
@@ -529,7 +529,7 @@ pub fn html(results: &[ScenarioResult], ms: f64, report_dir: &Path) -> String {
     let _ = write!(
         out,
         "<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content=\"width=device-width\">\
-         <title>primavera: {}</title><style>{CSS}</style></head><body><h1>{}</h1>",
+         <title>bitti: {}</title><style>{CSS}</style></head><body><h1>{}</h1>",
         esc(&sum),
         esc(&sum)
     );

@@ -1,7 +1,7 @@
 # An Electron app, scenario by scenario: navigera's fixture app (a form saved
 # through the app's main process, and a Settings window the app opens
 # itself). Each scenario gets a fresh app.
-#   primavera run tests/fixtures/electron --electron ../navigera/tests/fixtures/electron-app
+#   bitti run tests/fixtures/electron --electron ../navigera/tests/fixtures/electron-app
 
 scenario "Saves an order through the main process"
   expect title is Orders

@@ -1,5 +1,5 @@
-name: primavera
-description: Run plain-text web tests (.pv and .feature files) with primavera on the runner's Chrome.
+name: bitti
+description: Run plain-text web tests (.pv and .feature files) with bitti on the runner's Chrome.
 author: andrey-usa
 branding:
   icon: check-circle
@@ -10,16 +10,16 @@ inputs:
     description: ".pv/.feature files or directories, separated by spaces"
     default: "."
   base-url:
-    description: "where relative URLs (goto /cart) point; else `base` in the file or primavera.toml"
+    description: "where relative URLs (goto /cart) point; else `base` in the file or bitti.toml"
     default: ""
   args:
-    description: "more `primavera run` options, separated by spaces (e.g. --workers auto --retries 1 --junit report.xml)"
+    description: "more `bitti run` options, separated by spaces (e.g. --workers auto --retries 1 --junit report.xml)"
     default: ""
   working-directory:
     description: "where to run (paths are relative to it)"
     default: "."
   version:
-    description: "a primavera release tag (v0.3.0), latest, or source (a build from this action's own commit)"
+    description: "a bitti release tag (v0.3.0), latest, or source (a build from this action's own commit)"
     default: "latest"
   navigera-ref:
     description: "the navigera branch or commit a source build uses"
@@ -33,7 +33,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install primavera
+    - name: Install bitti
       shell: bash
       env:
         PV_VERSION: ${{ inputs.version }}
@@ -53,11 +53,11 @@ runs:
         read -ra extra <<< "$PV_ARGS"
         set -- run "${paths[@]}"
         [ -n "$PV_BASE_URL" ] && set -- "$@" --base-url "$PV_BASE_URL"
-        evidence="$RUNNER_TEMP/primavera-evidence"
+        evidence="$RUNNER_TEMP/bitti-evidence"
         given=""
         for ((i = 0; i < ${#extra[@]}; i++)); do
           [ "${extra[$i]}" = --evidence ] && given="${extra[$((i + 1))]:-}"
         done
         if [ -n "$given" ]; then evidence="$given"; else set -- "$@" --evidence "$evidence"; fi
         echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
-        primavera "$@" "${extra[@]}"
+        bitti "$@" "${extra[@]}"

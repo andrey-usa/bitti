@@ -52,7 +52,7 @@ fn result(r: &ScenarioResult, feature: Option<&str>, id: &str) -> (Value, Option
         .collect();
     let mut labels = vec![
         json!({"name": "suite", "value": file}),
-        json!({"name": "framework", "value": "primavera"}),
+        json!({"name": "framework", "value": "bitti"}),
         json!({"name": "thread", "value": format!("worker {}", r.worker)}),
     ];
     if let Some(f) = feature {

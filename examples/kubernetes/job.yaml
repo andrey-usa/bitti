@@ -1,15 +1,15 @@
-# primavera as a Kubernetes (or OpenShift) Job: the tests from a ConfigMap,
+# bitti as a Kubernetes (or OpenShift) Job: the tests from a ConfigMap,
 # the app at a Service in the cluster, the run's lines on the pod's log,
 # JUnit and evidence in its /work/out (an emptyDir: copy them out, or mount
-# a volume that outlives the pod, before the pod goes). The image: `docker build -f primavera/Dockerfile`
-# (see primavera's README), pushed where the cluster pulls from.
+# a volume that outlives the pod, before the pod goes). The image: `docker build -f bitti/Dockerfile`
+# (see bitti's README), pushed where the cluster pulls from.
 #
 #   kubectl create configmap pv-tests --from-file=tests/
-#   kubectl apply -f job.yaml && kubectl logs -f job/primavera
+#   kubectl apply -f job.yaml && kubectl logs -f job/bitti
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: primavera
+  name: bitti
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 1800
@@ -21,8 +21,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: primavera
-          image: registry.example.com/primavera:latest
+        - name: bitti
+          image: registry.example.com/bitti:latest
           args: ["run", "/tests", "--base-url", "http://shop.default.svc:8080", "--workers", "2",
                  "--junit", "/work/out/junit.xml", "--evidence", "/work/out/evidence"]
           env:

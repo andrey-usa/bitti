@@ -1,9 +1,9 @@
-//! `primavera record <url>`: a browser to use by hand; what you do in it
+//! `bitti record <url>`: a browser to use by hand; what you do in it
 //! becomes a scenario. A script in every page of the browser notes each
 //! click, field change, check, select, upload and Enter as it happens,
 //! with the locators that find the element (navigera's `locate`, run in
 //! the page at that moment, so a click that navigates away is still
-//! known), and says so on the console; primavera reads it from there and
+//! known), and says so on the console; bitti reads it from there and
 //! writes the scenario the way `from-session` does. The file is rewritten
 //! after every step, so stopping with Ctrl-C keeps what was done.
 //! `--extend <file.pv>` runs a scenario of that file to its end first and
@@ -71,7 +71,7 @@ fn recorder() -> String {
   const doc = Math.random().toString(36).slice(2);
   let seq = 0;
   // Each step is said twice: at once with `quick`'s locators (`early`),
-  // then with `locate`'s; primavera keeps the second when it comes.
+  // then with `locate`'s; bitti keeps the second when it comes.
   const note = (el, step) => {{
     const n = ++seq, id = doc + '.' + n, at = Date.now(), url = location.href;
     const early = quick(el, step.op);
@@ -214,8 +214,8 @@ fn watch(
     Ok((notes, here))
 }
 
-/// `primavera record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <s>]`,
-/// or `primavera record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>] …`.
+/// `bitti record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <s>]`,
+/// or `bitti record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>] …`.
 pub fn main(args: &[String]) -> Result<String, String> {
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
     let until = match flag("--for") {
@@ -230,7 +230,7 @@ pub fn main(args: &[String]) -> Result<String, String> {
     let url = args
         .iter()
         .find(|a| !a.starts_with("--") && !values.contains(a))
-        .ok_or("usage: primavera record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <seconds>]\n       primavera record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>]")?;
+        .ok_or("usage: bitti record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <seconds>]\n       bitti record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>]")?;
     let url = navigera::protocol::normalize_url(url);
     let out = flag("--out");
     let scenario = flag("--scenario").cloned().unwrap_or_else(|| "Recorded".to_string());
@@ -254,7 +254,7 @@ pub fn main(args: &[String]) -> Result<String, String> {
     match out {
         Some(path) => {
             std::fs::write(path, &text).map_err(|e| format!("{path}: {e}"))?;
-            Ok(format!("wrote {path}; check it with `primavera lint {path}`, then run it\n"))
+            Ok(format!("wrote {path}; check it with `bitti lint {path}`, then run it\n"))
         }
         None => Ok(text),
     }
@@ -320,7 +320,7 @@ fn extend(
     let result = r.run(&suite, &scenario, 1, &vars);
     if let Some(f) = &result.failure {
         return Err(format!(
-            "{path}:{}: {:?} fails there, before its end: {}\nfix it first (primavera run {path}), then extend it",
+            "{path}:{}: {:?} fails there, before its end: {}\nfix it first (bitti run {path}), then extend it",
             f.line, scenario.name, f.message
         ));
     }

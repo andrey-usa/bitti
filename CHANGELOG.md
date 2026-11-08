@@ -15,7 +15,7 @@ The first release, still to be named.
   a field's step by its role and its label's own words (not a select's
   options), when `locate` can't finish first; before, such a click was
   sometimes recorded as `--text`.
-- `--video on-failure|all` (also `video` in primavera.toml): what the page
+- `--video on-failure|all` (also `video` in bitti.toml): what the page
   showed, frame by frame with the time of each, in the scenario's
   evidence (`video/index.html` plays it), named in the console and JSON
   lines and linked from `--html`.
@@ -39,35 +39,35 @@ The first release, still to be named.
 - `retry` blocks, a `pause` step, `--slowmo <ms>`, tag expressions,
   `--grep-invert`, `--max-failures`/`-x`, `--last-failed`, and `@skip`,
   `@fixme`, `@only` (`--forbid-only`, on under CI) and `@slow`.
-- `primavera run --watch` runs the scenario files, then runs again each
+- `bitti run --watch` runs the scenario files, then runs again each
   one that changes, until Ctrl-C.
-- `primavera merge <dir|file.jsonl>...` joins the `--reporter jsonl`
+- `bitti merge <dir|file.jsonl>...` joins the `--reporter jsonl`
   output of shards into one console summary, one `--junit` and one
   `--html`.
 - A `set permissions grant|deny|reset <name>…` step (navigera's) is
   documented, and `set device` knows 55 devices.
 - `--trace` keeps each step's page: an ax tree and a JPEG of the viewport
-  per step beside `trace.jsonl`, shown by `primavera trace <dir> <line>`,
+  per step beside `trace.jsonl`, shown by `bitti trace <dir> <line>`,
   and `--html` shows a traced scenario's steps as a timeline that opens
   to them.
 
 - Plain-text web tests (`.pv`) and Gherkin `.feature` files that run on real
   Chrome through navigera, in one native binary with no Node.
-- `primavera run` (workers, a browser context per scenario, retries,
+- `bitti run` (workers, a browser context per scenario, retries,
   `--repeat` and `--shuffle`, traces), `lint` and `list`.
 - Writing tests from what was done in a browser: `record`, and
   `from-session` from a navigera session's history.
 - `fix`: a failing step's nearest matches on the page, written into the
   file with `--use`.
 - `trace` for a recorded run, `skill` (the agent skill), `mcp` (an MCP
-  server with navigera's browser tools and primavera's own), and
-  `primavera navigera …`, navigera itself, built in.
+  server with navigera's browser tools and bitti's own), and
+  `bitti navigera …`, navigera itself, built in.
 - A GitHub Action (`action.yml`) and a container image (`Dockerfile`).
-- `--electron <app>` (`electron` and `electron_args` in `primavera.toml`):
+- `--electron <app>` (`electron` and `electron_args` in `bitti.toml`):
   scenarios test an Electron desktop app's windows, a fresh app per
   scenario, one at a time. `expect js --main "<code>"` checks the app's main
   process; `eval --main` runs code there as a step.
-- `--attach <port|ws://…>` (`attach` in `primavera.toml`): run against a
+- `--attach <port|ws://…>` (`attach` in `bitti.toml`): run against a
   browser or an Electron app already running with a DevTools port. An app
   attached to isn't restarted between scenarios (they go on where the one
   before left it) and keeps running after the run; one worker.
@@ -77,7 +77,7 @@ The first release, still to be named.
 - `expect js --file <script.js>` [+ a comparison]: a check from a file next
   to the `.pv` (an expression, or a function body that `return`s its
   answer), for one across rows or too long to quote on a line.
-- `primavera <command> --help` prints that command's usage and options.
+- `bitti <command> --help` prints that command's usage and options.
 - `print <command>`: a step that shows a read command's result (a value,
   a locator's text, the page's tree) under its scenario in the run's
   output, checking nothing and waiting for nothing.
@@ -85,7 +85,7 @@ The first release, still to be named.
   a scenario (a file's variable sits at the top; a step `set` is the
   browser's), flags that can't go together (`--text` with `--nth`), and a
   `set` of a setting the browser doesn't have.
-- The agent skill (`primavera skill`) leads with the loop that costs an
+- The agent skill (`bitti skill`) leads with the loop that costs an
   agent least: write the scenario from the task, `lint`, run, and fix from
   the failure, which names the closest elements as locators; then `print`,
   one browser session with `--raw` for looking, and `from-session`. It is
@@ -106,10 +106,10 @@ The first release, still to be named.
 - `expect js` is bounded by its step's time: a script that never settles
   fails at 5 s (or `--timeout-ms`), saying so, not after 35 s with a
   DevTools method name. An `optional` step that did not hold shows as
-  `skip` in a trace and its HTML; `primavera trace <dir> <line>` says when
+  `skip` in a trace and its HTML; `bitti trace <dir> <line>` says when
   there is no such line, and a directory that isn't there says so.
 - With a `[server]`, the browser starts while the app does instead of after
   it answers, so its launch is off the run's critical path (a bench-site
   run with a server that takes 1.5 s: 6.8 s -> 6.5 s here; 7.3 s -> 5.9 s
   on a slower machine). A server that fails to start also closes the
-  browser. `PRIMAVERA_PHASES=1` prints where a run's time goes.
+  browser. `BITTI_PHASES=1` prints where a run's time goes.

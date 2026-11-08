@@ -1,9 +1,9 @@
 ---
-name: primavera
-description: Write and run plain-text web tests (.pv files) on real Chrome with primavera — each step is a navigera command line, each check an `expect` that retries. Use to turn what you did in a browser into a regression test, to check a web app after a change, or to automate a browser job, without writing test code.
+name: bitti
+description: Write and run plain-text web tests (.pv files) on real Chrome with bitti — each step is a navigera command line, each check an `expect` that retries. Use to turn what you did in a browser into a regression test, to check a web app after a change, or to automate a browser job, without writing test code.
 ---
 
-# primavera
+# bitti
 
 `.pv` files of steps and checks, run on Chrome by one binary. The shortest
 way to a passing test: write the scenario from what the task says, `lint`
@@ -32,7 +32,7 @@ scenario "Adding a product counts it in the cart"
   <target> "text"`, `select <target> "option"` (its text or value; case and
   spacing don't matter), `press Enter`, `check <target>`, `hover`,
   `scroll`, `upload <target> file.txt`, `wait --text "Saved"`, `eval
-  "<js>"`, `dialog --accept`, `tab-select 1`. `primavera navigera
+  "<js>"`, `dialog --accept`, `tab-select 1`. `bitti navigera
   <command> --help` gives a command's flags and examples.
 - Targets are locators, never refs: `--role button --name "Pay"`, `--label
   Email`, `--text "Sign in"`, `--testid total`, `--placeholder Search`,
@@ -122,10 +122,10 @@ Write the file and run it in one command:
 cat > cart.pv <<'EOF'
 …
 EOF
-primavera lint cart.pv && primavera run cart.pv --base-url "$BASE_URL"
+bitti lint cart.pv && bitti run cart.pv --base-url "$BASE_URL"
 ```
 
-An Electron desktop app instead of a site: `primavera run app.pv --electron
+An Electron desktop app instead of a site: `bitti run app.pv --electron
 ./my-app` (the app's directory with Electron in its `node_modules`, or the
 app's executable). No `goto`: each scenario starts in a fresh app's first
 window; a window the app opens becomes the current tab. `expect js --main
@@ -143,7 +143,7 @@ FAIL  cart.pv:3  Adding a product counts it in the cart  (5.2 s)
       at http://127.0.0.1:8000/shop, title "Shop"
       nearest on the page:
         1. button "Add to cart"   --role button --name "Add to cart"   0.70
-      fix: primavera fix cart.pv:5 --use 1
+      fix: bitti fix cart.pv:5 --use 1
 ```
 
 Paste the locator in, or run the `fix` line (`--use 2` for the second: the
@@ -156,14 +156,14 @@ nothing, the failure notes it: the page may not have been ready, so add an
 One browser session keeps its state (cart, sign-in) between commands:
 
 ```bash
-primavera navigera -s look start
-primavera navigera -s look --raw goto "$BASE_URL/shop"
-primavera navigera -s look --raw ax           # the page as a tree
-primavera navigera -s look --raw eval "document.querySelector('#total').textContent"
+bitti navigera -s look start
+bitti navigera -s look --raw goto "$BASE_URL/shop"
+bitti navigera -s look --raw ax           # the page as a tree
+bitti navigera -s look --raw eval "document.querySelector('#total').textContent"
 ```
 
 `ax` lines become locators: `button "Pay" [ref=12]` is `--role button
---name "Pay"`. After clicking through by ref (`--raw click 12`), `primavera
+--name "Pay"`. After clicking through by ref (`--raw click 12`), `bitti
 from-session look --out shop.pv` writes what the session did as a scenario,
 refs turned into locators; add the expects the test is for.
 
@@ -176,5 +176,5 @@ step; a `pause` step stops there until Enter, the browser open to `navigera
 
 Exit codes of a run: 0 passed, 1 a scenario failed, 2 a file or argument is
 wrong, 3 the browser or the app server didn't start. More (flows, sign-in
-once with `auth`, data rows, workers, retries, reports): `primavera run
+once with `auth`, data rows, workers, retries, reports): `bitti run
 --help` and the README.

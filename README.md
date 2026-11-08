@@ -1,4 +1,4 @@
-# primavera
+# bitti
 
 Plain-text web tests that run on real Chrome. One native binary drives the
 browser in-process through [navigera](https://github.com/andrey-usa/navigera):
@@ -20,7 +20,7 @@ scenario "Adding a product counts it in the cart" @smoke
 ```
 
 ```console
-$ primavera run tests --junit report.xml
+$ bitti run tests --junit report.xml
 PASS  tests/shop.pv:7  Adding a product counts it in the cart  (557 ms)
 1 passed, 0 failed in 0.9 s
 ```
@@ -90,7 +90,7 @@ Status: pre-release. Everything below works in this build.
   a line with its variables filled in.
 - `exec [--timeout-ms <ms>] <program> <args…>` runs a program (no shell:
   `sh -c "…"` or `pwsh -c "…"` for one) in the `.pv` file's directory,
-  with `PRIMAVERA_BASE_URL` set, for what a browser can't reach: seed a
+  with `BITTI_BASE_URL` set, for what a browser can't reach: seed a
   database (`psql`, `sqlplus`), call a script. Its exit code and output
   become `${exec.exit}`, `${exec.stdout}` and `${exec.stderr}`, and
   `expect exit 0`, `expect stdout contains SHIPPED`, `expect stderr …`
@@ -161,7 +161,7 @@ Status: pre-release. Everything below works in this build.
   ```
 - `pause` stops the run there, the browser as the steps before left it,
   open to a second navigera session (the command to attach is printed),
-  until Enter; with no terminal it waits `PRIMAVERA_PAUSE_S` seconds, and
+  until Enter; with no terminal it waits `BITTI_PAUSE_S` seconds, and
   under CI not at all unless that is set. A run with a `pause` in it runs
   one worker.
 - `clock install [--time 2024-02-02T08:00:00] [--paused]` puts the page's
@@ -193,7 +193,7 @@ Status: pre-release. Everything below works in this build.
   scenario starts it signed in. The block runs once per run, in a browser
   context of its own, the first time a scenario needs it (the other
   workers wait for it), and its cookies and storage are saved under
-  `.primavera/auth/` (keep that out of git); with a `ttl` the saved state
+  `.bitti/auth/` (keep that out of git); with a `ttl` the saved state
   is reused by later runs until it is that old.
 - `before all` runs once for the file, before its first scenario; what it
   saves every scenario of the file sees. If it fails, none of them run.
@@ -231,8 +231,8 @@ Status: pre-release. Everything below works in this build.
 | `request … count` + a comparison | how many matching requests |
 | `cookie <name>` [+ a comparison], `no cookie <name>`, `cookie <name> absent` | a cookie of the scenario's browser context |
 | `storage local\|session <key>` [+ a comparison \| `absent`] | Local or Session Storage |
-| `download <file glob>`, `no download …` | a finished download (then `${download.path}`, `${download.name}`: the latest match). Each scenario's downloads go to a directory of its own beside its evidence (`.primavera/runs/<time>/<scenario>/downloads`, kept only when something came), so a name never carries over from another scenario; a second file of the same name in one scenario arrives as `name (2).ext` |
-| `download <file glob> compare <expected file>` [`--key <columns>`] [compara flags…] | the download is the same table as the expected file beside the `.pv` ([compara](https://github.com/andrey-usa/compara) on the PATH, or `PRIMAVERA_COMPARA`): CSV, NDJSON or Parquet, either side; compara's flags (`-i`, `--trim`, `--tolerance`) pass through. A difference fails the step with compara's counts and the reports it kept beside the scenario's downloads: `--report html,json,rows` (the HTML report, the JSON summary of counts and column statistics, CSVs of the changed, added and removed rows) or `none`; the run's `--compare-report` (`compare_report` in `primavera.toml`, default `html`) when the step doesn't say, and compara's own `-o`, `--json` or `--export-dir` win |
+| `download <file glob>`, `no download …` | a finished download (then `${download.path}`, `${download.name}`: the latest match). Each scenario's downloads go to a directory of its own beside its evidence (`.bitti/runs/<time>/<scenario>/downloads`, kept only when something came), so a name never carries over from another scenario; a second file of the same name in one scenario arrives as `name (2).ext` |
+| `download <file glob> compare <expected file>` [`--key <columns>`] [compara flags…] | the download is the same table as the expected file beside the `.pv` ([compara](https://github.com/andrey-usa/compara) on the PATH, or `BITTI_COMPARA`): CSV, NDJSON or Parquet, either side; compara's flags (`-i`, `--trim`, `--tolerance`) pass through. A difference fails the step with compara's counts and the reports it kept beside the scenario's downloads: `--report html,json,rows` (the HTML report, the JSON summary of counts and column statistics, CSVs of the changed, added and removed rows) or `none`; the run's `--compare-report` (`compare_report` in `bitti.toml`, default `html`) when the step doesn't say, and compara's own `-o`, `--json` or `--export-dir` win |
 | `console` + a comparison, `no console "<t>"` | a console message (any level) |
 | `no errors` | no page exceptions or console errors |
 | `accessible` [`--selector <css>`] [`--tags wcag2a,wcag2aa,…`] [`--ignore <rule>,…`] | [axe-core](https://github.com/dequelabs/axe-core) (built in) finds no violation in the page, or under the selector: WCAG 2.0 and 2.1 A and AA by default; `--tags` replaces that set (`--tags wcag2a,wcag2aa,best-practice` to add axe's best practices); a failure names each rule, its impact, the first elements and what to fix |
@@ -315,7 +315,7 @@ scenario "An order can be placed and ships" @api
 ```
 
 ```console
-$ primavera run tests/api
+$ bitti run tests/api
 PASS  tests/api/orders.pv:6  An order can be placed and ships  (412 ms)
 1 passed, 0 failed in 415 ms (no browser)
 ```
@@ -392,7 +392,7 @@ scenario.
 ## Running
 
 ```text
-primavera run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--grep-invert <text>]
+bitti run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--grep <text>] [--grep-invert <text>]
               [--tag <tag|expression>] [--last-failed] [--max-failures <n>|-x] [--forbid-only|--allow-only]
               [--workers <n|auto>|-j <n>] [--isolation context|browser] [--retries <n>] [--fail-on-flaky] [--shard <i/n>]
               [--repeat <n>] [--shuffle [<seed>]] [--slowmo <ms>]
@@ -401,21 +401,21 @@ primavera run [<file.pv|file.feature|dir>...] [--base-url <url>] [--var k=v] [--
               [--electron <app> [--electron-arg <arg>]...] [--attach <port|ws://…>]
               [--secrets <file>] [--evidence <dir>] [--pause-on-failure] [--trace on-failure|all] [--video on-failure|all] [--update-snapshots]
               [--compare-report html,json,rows|none] [--config <file>] [--env <name>]
-primavera lint [<file.pv|file.feature|dir>...]
-primavera list [<file.pv|file.feature|dir>...]
-primavera trace <dir> [<line>]
-primavera fix [<file>:<line>] [--use <n>] [--all [--min <p>]]
-primavera navigera <command…>
-primavera from-session <name> [--scenario <name>] [--out <file.pv>]
-primavera record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <seconds>]
-primavera record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>]
-primavera mcp [--headed] [--chromium <path>]
-primavera skill          # the agent skill (what an agent reads to write tests)
-primavera <command> --help   # that command's usage and options
-primavera --version
+bitti lint [<file.pv|file.feature|dir>...]
+bitti list [<file.pv|file.feature|dir>...]
+bitti trace <dir> [<line>]
+bitti fix [<file>:<line>] [--use <n>] [--all [--min <p>]]
+bitti navigera <command…>
+bitti from-session <name> [--scenario <name>] [--out <file.pv>]
+bitti record <url> [--out <file.pv>] [--scenario <name>] [--headless] [--for <seconds>]
+bitti record --extend <file.pv> [--scenario <name>] [--base-url <url>] [--secrets <file>]
+bitti mcp [--headed] [--chromium <path>]
+bitti skill          # the agent skill (what an agent reads to write tests)
+bitti <command> --help   # that command's usage and options
+bitti --version
 ```
 
-`--base-url` falls back to `base` in the file, then `PRIMAVERA_BASE_URL`.
+`--base-url` falls back to `base` in the file, then `BITTI_BASE_URL`.
 `--workers auto` is half the CPUs, at most 8.
 
 - `--tag smoke` runs the scenarios tagged `@smoke`; a tag expression picks
@@ -432,9 +432,9 @@ primavera --version
 - `--max-failures <n>` starts no scenario once n have failed (`-x`: at the
   first), and says how many were not run; the run fails.
 - `--last-failed` (`--lf`) runs only the scenarios that failed in the last
-  run in this directory (`.primavera/last-run.json`); with none, it says
+  run in this directory (`.bitti/last-run.json`); with none, it says
   so and exits 0.
-- `--scenario-timeout-ms <ms>` (`scenario_timeout_ms` in `primavera.toml`)
+- `--scenario-timeout-ms <ms>` (`scenario_timeout_ms` in `bitti.toml`)
   is the most one scenario's steps may take: no step starts once it is
   up, and a step's wait (an `expect`, a `retry`, an `http` or `exec`, its
   own `--timeout-ms` too) stops there, the failure saying so. `@slow`
@@ -456,7 +456,7 @@ primavera --version
   instead of a new browser's few hundred. `--workers n` runs n at once,
   each in a browser context of one shared browser (about 40% less memory
   at 4 workers than a browser each; `--isolation browser` gives each its
-  own); the longest start first (by `.primavera/timings.json`, which each
+  own); the longest start first (by `.bitti/timings.json`, which each
   run updates; the first run goes in file order).
 - `--engine lightpanda` (or `engine = "lightpanda"` in a profile, or
   `NAVIGERA_ENGINE=lightpanda`) runs on
@@ -468,7 +468,7 @@ primavera --version
   passes 22, and is not faster: 22 s against Chrome's 11 s at one worker
   (half of it the three failures' waits).
 - `--electron <app>` (or `electron = "./app"` and `electron_args = [...]`
-  in `primavera.toml`) tests an Electron desktop app instead of a web
+  in `bitti.toml`) tests an Electron desktop app instead of a web
   page: the scenarios drive its windows as tabs, through navigera's
   `start --electron`. `<app>` is the app's directory or main script (the
   Electron in its `node_modules` runs it), a packaged app's executable or a
@@ -482,7 +482,7 @@ primavera --version
   code there as a step. On a Linux
   CI machine, run under `xvfb-run`. The example: `tests/fixtures/electron`,
   run in CI on Linux, macOS and Windows against navigera's fixture app.
-- `--attach <port|ws://…>` (or `attach = "9222"` in `primavera.toml`) runs
+- `--attach <port|ws://…>` (or `attach = "9222"` in `bitti.toml`) runs
   against a browser or an Electron app that is already running with a
   DevTools port: the build a developer has open (`npm start --
   --remote-debugging-port=9222`), or a Chrome they started. In an app, the
@@ -498,7 +498,7 @@ primavera --version
   Secrets are masked as in the console. A screenshot two scenarios share
   (a failed `before all`) is in the page once; a bigger one, and any once
   the page holds 10 MB of them (failures first), is a link relative to the
-  report, so upload the report and `.primavera/runs/`
+  report, so upload the report and `.bitti/runs/`
   together. With `--repeat`, a pass count per scenario comes first. A run
   that finds no scenario (exit 2) writes no report.
 - `--allure <dir>` writes Allure 2 results for `allure generate <dir>` or an
@@ -516,8 +516,8 @@ primavera --version
 - `--trace on-failure` (or `all`) records each step of a scenario: where
   the page was, the console messages and the requests it brought, in
   `trace.jsonl` beside the scenario's screenshot, with the page's ax tree
-  at a failure in `ax.txt`. `primavera trace <dir>` prints it (a run's
-  directory lists its traces); `primavera trace <dir> <line>` shows one
+  at a failure in `ax.txt`. `bitti trace <dir>` prints it (a run's
+  directory lists its traces); `bitti trace <dir> <line>` shows one
   step in full, with the tree when it is the one that failed. Each step
   also keeps the page as it was after it, beside `trace.jsonl`: `NNN-L<line>.ax.txt`
   (its ax tree) and `NNN-L<line>.jpg` (the viewport, JPEG quality 60, about
@@ -535,10 +535,10 @@ primavera --version
   parses is reported and the watching goes on. The files a `use` or a flow
   brings in are not watched on their own: save the scenario file to run it.
   `--junit` and `--html` hold the latest run.
-- `primavera merge <dir|file.jsonl>...` joins the results of shards into one
+- `bitti merge <dir|file.jsonl>...` joins the results of shards into one
   console summary, one `--junit` and one `--html`, as if one run had made
   them: save each shard's `--reporter jsonl` output
-  (`primavera run --shard 1/3 --reporter jsonl > shard-1.jsonl`), put the
+  (`bitti run --shard 1/3 --reporter jsonl > shard-1.jsonl`), put the
   files in one place and name it. A directory is searched for `.jsonl`
   files. The steps and traces stay with the shards, so the report has each
   scenario's status, time and failure; the time is the longest shard's.
@@ -558,7 +558,7 @@ primavera --version
   Actions). `--json` prints
   what the scenarios saved, for a pipeline's next step.
 - A failure prints the step, what was expected and seen, where the page
-  was, a screenshot (under `.primavera/runs/`), and a note when an earlier
+  was, a screenshot (under `.bitti/runs/`), and a note when an earlier
   click changed nothing on the page (navigera's `no_effect`), the usual
   reason the next check fails. When the element isn't there, it lists the
   closest ones on the page as locators to paste in:
@@ -573,25 +573,25 @@ primavera --version
 
   When that list is unsure (the best under 0.6, or the first two within
   0.1) and a decision model is set up for navigera (`TYPESAFE_API_KEY`, or
-  `NAVIGERA_DECIDER_URL`), primavera also asks it which element the step
+  `NAVIGERA_DECIDER_URL`), bitti also asks it which element the step
   meant (navigera's `find`, on the failing page) and adds its pick, marked
   `(decider)`: first when the model is at least 0.5 sure, else last (the
   list stays at three); one call per such failure, none otherwise. The
   list covers frames too: a step with `--frame` keeps it, and `fix` changes
   only the locator.
-- `primavera fix <file>:<line> [--use <n>]` puts the last run's n-th
+- `bitti fix <file>:<line> [--use <n>]` puts the last run's n-th
   "nearest on the page" into that step (only its locator flags change, and
-  only if the line still reads as it did); `primavera fix --all [--min
+  only if the line still reads as it did); `bitti fix --all [--min
   0.6]` takes each failure's first suggestion that scored that much, and
-  plain `primavera fix` lists them. The failure block prints the command.
+  plain `bitti fix` lists them. The failure block prints the command.
   A click that something else covers (a consent bar, a modal) gets that
   thing's buttons instead, "Accept", "Close", "Got it" … first, as an
   `optional click` that `fix` puts before the step.
   A `.feature` step is left alone: change its `step` block instead.
-- `primavera navigera …` is navigera itself, built in: explore a page the
-  way an agent does (`primavera navigera -s work start`, `goto`, `ax`,
+- `bitti navigera …` is navigera itself, built in: explore a page the
+  way an agent does (`bitti navigera -s work start`, `goto`, `ax`,
   `click 12`, `fill 15 ada@example.com`) with no second program to
-  install. `primavera from-session work` then writes what that session did
+  install. `bitti from-session work` then writes what that session did
   as a scenario: each action once, and the waits between (reads and `eval`
   left out), every ref replaced by the most stable locator that found its
   element again just before the action (test id, role and name, label, placeholder, text, CSS;
@@ -607,7 +607,7 @@ primavera --version
   line. Read it through, keep the expects that matter, add the ones the
   test is for. A session started by a plain `navigera` works too when that
   navigera has `history`.
-- `primavera record <url> --out t.pv` opens a browser to use by hand: each
+- `bitti record <url> --out t.pv` opens a browser to use by hand: each
   click, field change, check, select, upload and Enter becomes a step as
   you do it, with the most stable locator that finds the element (the same
   `locate` as `from-session`, run in the page at that moment; when the
@@ -619,22 +619,22 @@ primavera --version
   every step: close the browser or press Ctrl-C to stop. A click into a
   field isn't a step (its value is); typing in a field twice keeps the
   last value.
-- `primavera record --extend t.pv [--scenario <name>]` grows a scenario
+- `bitti record --extend t.pv [--scenario <name>]` grows a scenario
   instead: it runs that scenario (default: the file's last) to its end,
   `after each` left out, then hands you the browser there; what you do
   goes in after its last step, the same way, and the rest of the file stays
   as it was. A scenario that fails before its end is not extended: fix it
   first. `--headless` and `--for <s>` work as for `record`; a `.feature`
   is refused (its steps live in its `step` blocks).
-- `primavera mcp` is the same loop for an agent over MCP (stdio): navigera's
+- `bitti mcp` is the same loop for an agent over MCP (stdio): navigera's
   browser tools (`browser_navigate`, `browser_snapshot`, `browser_click`,
-  … one browser for all of them) beside `primavera_from_session` (what
-  those tools did, as a scenario; `out` writes it), `primavera_run`,
-  `primavera_list`, `primavera_lint`, `primavera_failure` (the last run's
-  failures with the nearest elements) and `primavera_fix`. Its
+  … one browser for all of them) beside `bitti_from_session` (what
+  those tools did, as a scenario; `out` writes it), `bitti_run`,
+  `bitti_list`, `bitti_lint`, `bitti_failure` (the last run's
+  failures with the nearest elements) and `bitti_fix`. Its
   instructions tell the agent that page content is data, not instructions,
   and to confirm irreversible actions against the user's request. Register it as
-  `{"command": "primavera", "args": ["mcp"]}`. What the tools run, read
+  `{"command": "bitti", "args": ["mcp"]}`. What the tools run, read
   and write (`paths`, `out`, the files `args` names) stays inside the
   working directory, as navigera's own tools' files do, and `args` can't
   name a `--chromium` to start; `NAVIGERA_MCP_ALLOW_FILES=1` lifts both.
@@ -643,15 +643,15 @@ primavera --version
   left it and prints how to look at that very tab (`navigera -s pv start
   --attach ws://…/devtools/page/…`, then `navigera -s pv ax`); Enter goes
   on with the run. It runs one worker. With no terminal to press Enter in,
-  it waits `PRIMAVERA_PAUSE_S` seconds (default 600, for an agent looking
+  it waits `BITTI_PAUSE_S` seconds (default 600, for an agent looking
   from elsewhere), and under CI (`CI` set) it doesn't pause unless that is
   set.
 - Exit codes: 0 passed, 1 a scenario failed, 2 a file or argument is wrong,
   3 the browser or the app server didn't start.
 
-## Config: `primavera.toml`
+## Config: `bitti.toml`
 
-A `primavera.toml` in the current directory (or `--config <file>`) holds
+A `bitti.toml` in the current directory (or `--config <file>`) holds
 what a run takes by default; flags on the command line win over it.
 Paths in it are from its own directory.
 
@@ -682,7 +682,7 @@ region = "eu"
 ```
 
 The `[server]` starts before the browser and is ready when its `url`
-answers (any status under 500); its output goes to `.primavera/server.log`,
+answers (any status under 500); its output goes to `.bitti/server.log`,
 and it is stopped with everything it started when the run ends. One that
 exits or doesn't answer in time ends the run with exit 3 and the end of its
 log. Other keys: `timeout_ms`, `wait_ms`, `isolation`, `fail_on_flaky`,
@@ -692,7 +692,7 @@ error.
 ## GitHub Actions
 
 ```yaml
-- uses: andrey-usa/primavera@next
+- uses: andrey-usa/bitti@next
   with:
     paths: tests
     base-url: http://127.0.0.1:3000
@@ -701,24 +701,24 @@ error.
 
 It runs on the runner's Chrome (Linux, macOS, Windows). `version` picks a
 release (`latest` by default, or a tag); with no release binary for the
-runner it builds primavera from the action's own commit (`source` asks for
+runner it builds bitti from the action's own commit (`source` asks for
 that), with navigera at `navigera-ref`. Failures are annotations on the
 lines that failed; the `evidence` output is the directory holding their
 screenshots, for `actions/upload-artifact`.
 
 ## Container
 
-`Dockerfile` builds an image with primavera and Debian's headless Chromium,
+`Dockerfile` builds an image with bitti and Debian's headless Chromium,
 amd64 or arm64, from the directory holding both checkouts (see Building):
 
 ```console
-$ docker build -f primavera/Dockerfile -t primavera .
-$ docker run --rm --network host -v "$PWD/tests:/tests:ro" primavera run /tests --base-url http://127.0.0.1:3000
+$ docker build -f bitti/Dockerfile -t bitti .
+$ docker run --rm --network host -v "$PWD/tests:/tests:ro" bitti run /tests --base-url http://127.0.0.1:3000
 ```
 
 It runs as an unprivileged user (any uid, so OpenShift's random ones too),
 with a read-only root filesystem if asked (`HOME=/tmp`, a `/tmp` to write
-to, and a writable working directory: `.primavera/` with the last run,
+to, and a writable working directory: `.bitti/` with the last run,
 timings and evidence goes there, `/work` by default), and without Chrome's own sandbox: a container without user
 namespaces can't give Chrome one, and the container is the boundary.
 `examples/kubernetes/job.yaml` is a Job: the tests from a ConfigMap, JUnit
@@ -726,19 +726,19 @@ and evidence in `/work/out`, a memory-backed `/dev/shm`.
 
 ## Building
 
-primavera links navigera as a library, checked out beside it. CI builds
+bitti links navigera as a library, checked out beside it. CI builds
 against navigera's `master`; a release builds against the navigera tag it
 names:
 
 ```text
 work/
   navigera/     git clone https://github.com/andrey-usa/navigera (master)
-  primavera/    this repository
+  bitti/    this repository
 ```
 
 ```console
-$ cd primavera && cargo build --release
-$ ./target/release/primavera run examples --base-url http://127.0.0.1:<port>
+$ cd bitti && cargo build --release
+$ ./target/release/bitti run examples --base-url http://127.0.0.1:<port>
 ```
 
 `examples/bench-site` runs against navigera's bench site

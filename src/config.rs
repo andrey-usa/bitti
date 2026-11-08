@@ -1,4 +1,4 @@
-//! `primavera.toml`: what a run takes by default, the app `[server]` it
+//! `bitti.toml`: what a run takes by default, the app `[server]` it
 //! starts, and `[env.<name>]` profiles (`--env staging`). Flags on the
 //! command line win over the file; a profile wins over the file's top.
 //!
@@ -212,13 +212,13 @@ pub struct Config {
     pub profile: Profile,
 }
 
-/// The config: `explicit` (`--config`), else `primavera.toml` in the
+/// The config: `explicit` (`--config`), else `bitti.toml` in the
 /// current directory when there is one; with `env`, that profile on top.
 pub fn load(explicit: Option<&Path>, env: Option<&str>) -> Result<Option<Config>, String> {
     let file = match explicit {
         Some(p) => p.to_path_buf(),
-        None if Path::new("primavera.toml").is_file() => PathBuf::from("primavera.toml"),
-        None if env.is_some() => return Err("--env names a profile of primavera.toml, and there is none here".into()),
+        None if Path::new("bitti.toml").is_file() => PathBuf::from("bitti.toml"),
+        None if env.is_some() => return Err("--env names a profile of bitti.toml, and there is none here".into()),
         None => return Ok(None),
     };
     let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;

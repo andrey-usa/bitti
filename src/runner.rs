@@ -96,7 +96,7 @@ impl Options {
     /// A run's defaults; `stamp` (seconds) names its evidence directory.
     pub fn new(stamp: u64) -> Self {
         Options {
-            base: std::env::var("PRIMAVERA_BASE_URL").ok().filter(|v| !v.is_empty()),
+            base: std::env::var("BITTI_BASE_URL").ok().filter(|v| !v.is_empty()),
             vars: BTreeMap::new(),
             headed: false,
             chromium: None,
@@ -109,7 +109,7 @@ impl Options {
             grep: None,
             grep_invert: None,
             tags: Vec::new(),
-            evidence: PathBuf::from(format!(".primavera/runs/{stamp}")),
+            evidence: PathBuf::from(format!(".bitti/runs/{stamp}")),
             run_id: format!("{stamp}-{}", std::process::id()),
             secrets: BTreeMap::new(),
             pause: false,
@@ -255,7 +255,7 @@ impl ScenarioResult {
         self.passed() && !self.retried.is_empty()
     }
 
-    /// `file::name`, the key of `.primavera/timings.json`.
+    /// `file::name`, the key of `.bitti/timings.json`.
     pub fn key(&self) -> String {
         format!("{}::{}", self.file.display(), self.base_name())
     }
@@ -834,17 +834,14 @@ impl Runner {
         }
         if enter(None).is_err() {
             // No one can press Enter: an agent looking from elsewhere gets
-            // a while (PRIMAVERA_PAUSE_S, default 600 s); CI none.
+            // a while (BITTI_PAUSE_S, default 600 s); CI none.
             let ci = under_ci();
-            let secs: u64 = std::env::var("PRIMAVERA_PAUSE_S").ok().and_then(|v| v.parse().ok()).unwrap_or(if ci {
-                0
-            } else {
-                600
-            });
+            let secs: u64 =
+                std::env::var("BITTI_PAUSE_S").ok().and_then(|v| v.parse().ok()).unwrap_or(if ci { 0 } else { 600 });
             if secs == 0 {
-                eprintln!("        (no terminal input, and CI: not pausing; PRIMAVERA_PAUSE_S=<s> to pause anyway)");
+                eprintln!("        (no terminal input, and CI: not pausing; BITTI_PAUSE_S=<s> to pause anyway)");
             } else {
-                eprintln!("        (no terminal input here: going on in {secs} s; PRIMAVERA_PAUSE_S sets how long)");
+                eprintln!("        (no terminal input here: going on in {secs} s; BITTI_PAUSE_S sets how long)");
                 std::thread::sleep(Duration::from_secs(secs));
             }
         }
@@ -1362,7 +1359,7 @@ impl Runner {
         // Keyed by where it signs in: another base URL, another state.
         let base = self.opts.base.clone().or_else(|| suite.base.clone()).unwrap_or_default();
         let key = base.bytes().fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
-        let dir = std::path::absolute(".primavera/auth").unwrap_or_else(|_| PathBuf::from(".primavera/auth"));
+        let dir = std::path::absolute(".bitti/auth").unwrap_or_else(|_| PathBuf::from(".bitti/auth"));
         let path = dir.join(format!("{name}-{:08x}.json", key as u32));
         let reusable = auth.ttl_s.is_some_and(|ttl| {
             std::fs::metadata(&path)
@@ -1509,7 +1506,7 @@ impl Runner {
         }
         if self.bare {
             return Err(format!(
-                "`{}` needs a browser, and this runs without one (only `http`, `exec` and their checks): a primavera bug, please report it",
+                "`{}` needs a browser, and this runs without one (only `http`, `exec` and their checks): a bitti bug, please report it",
                 words.join(" ")
             ));
         }
@@ -1973,7 +1970,7 @@ impl Runner {
     /// directory (`report`: html, json, rows), each unless the step's own
     /// compara flags already say where.
     fn compara(&self, got: &str, expected: &str, flags: &[String], report: &[String]) -> Result<(), String> {
-        let exe = std::env::var("PRIMAVERA_COMPARA").unwrap_or_else(|_| "compara".into());
+        let exe = std::env::var("BITTI_COMPARA").unwrap_or_else(|_| "compara".into());
         let stem = Path::new(got).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         // Beside the scenario's downloads (`<evidence>/<scenario>/downloads/`).
         let dir = Path::new(got)
@@ -2104,7 +2101,7 @@ impl Runner {
         // Workers are threads of one process: the name must be unique per capture.
         static CAPTURES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let seq = CAPTURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("primavera-step-{}-{seq}.jpg", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("bitti-step-{}-{seq}.jpg", std::process::id()));
         // A capture that cannot finish (a page stuck behind a native dialog never
         // answers) is dropped after a second, not after navigera's 35 s.
         let words = [
@@ -2578,7 +2575,7 @@ const __pvFocused = (el) => { if (!el) return false; const a = el.getRootNode().
 "#;
 
 /// `compare()` mirrored for a wake wait's predicate: the matcher word is
-/// the switch key, strings compare as primavera's trimmed reads do,
+/// the switch key, strings compare as bitti's trimmed reads do,
 /// numbers as its `parse::<f64>` (an empty or non-numeric side is not a
 /// number). Anything the mirror cannot say (a pattern JS rejects) throws,
 /// and the predicate's own catch wakes early instead of blocking a pass.
@@ -2599,7 +2596,7 @@ const __pvCmp = (actual, m, expected) => { actual = String(actual); switch (m) {
 "#;
 
 /// `expect screenshot`'s page-quiet clock: from document start in every
-/// tab, the time of the page's own last DOM change. primavera's freeze
+/// tab, the time of the page's own last DOM change. bitti's freeze
 /// style and mask divs (`__pv_freeze`, `__pv_mask`) do not count. It
 /// installs once a document (the init script runs it first; a direct
 /// eval is the fallback for pages that predate the registration).
@@ -2847,10 +2844,10 @@ pub fn browser_failed(e: &str) -> String {
         let path = rest[at + 6..].split(" --").next().unwrap_or("").trim();
         return format!(
             "the browser didn't start: there is no browser at {path}. Point --chromium or CHROME_BIN at \
-             Chrome, Chromium or Edge, or run `primavera navigera install-browser`"
+             Chrome, Chromium or Edge, or run `bitti navigera install-browser`"
         );
     }
-    let rest = rest.replace("`navigera install-browser`", "`primavera navigera install-browser`");
+    let rest = rest.replace("`navigera install-browser`", "`bitti navigera install-browser`");
     format!("the browser didn't start: {rest}")
 }
 
@@ -2869,7 +2866,7 @@ pub fn pv_terms(message: &str) -> String {
         out = out.replace(from, to);
     }
     if out.contains("ERR_CONNECTION_REFUSED") && !out.contains("[server]") {
-        out.push_str(" (a [server] in primavera.toml can start the app before the run)");
+        out.push_str(" (a [server] in bitti.toml can start the app before the run)");
     }
     // Any other `(… ax …)` aside, in this navigera's words or an older one's.
     while let Some(at) = out.find("`ax`") {
@@ -2902,7 +2899,7 @@ fn run_program(
         cmd.current_dir(dir);
     }
     if let Some(b) = base {
-        cmd.env("PRIMAVERA_BASE_URL", b);
+        cmd.env("BITTI_BASE_URL", b);
     }
     let mut child = cmd.spawn().map_err(|e| format!("exec {program}: {e}"))?;
     let read = |mut pipe: Box<dyn Read + Send>| {
@@ -3330,7 +3327,7 @@ mod tests {
         let none = browser_failed(
             "browser launch failed (engine=chrome, headed=false): no Chrome found — run `navigera install-browser`",
         );
-        assert!(none.contains("`primavera navigera install-browser`") && !none.contains("engine="), "{none}");
+        assert!(none.contains("`bitti navigera install-browser`") && !none.contains("engine="), "{none}");
     }
 
     #[test]

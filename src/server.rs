@@ -1,4 +1,4 @@
-//! The `[server]` of `primavera.toml`: the app under test, started before
+//! The `[server]` of `bitti.toml`: the app under test, started before
 //! the browser and stopped, with everything it started, after the run.
 
 use std::path::{Path, PathBuf};
@@ -36,8 +36,8 @@ pub fn start(s: &Server) -> Result<Running, String> {
             s.url
         ));
     }
-    let log = PathBuf::from(".primavera").join("server.log");
-    let _ = std::fs::create_dir_all(".primavera");
+    let log = PathBuf::from(".bitti").join("server.log");
+    let _ = std::fs::create_dir_all(".bitti");
     let out = std::fs::File::create(&log).map_err(|e| format!("server: {}: {e}", log.display()))?;
     let err = out.try_clone().map_err(|e| format!("server: {e}"))?;
     let mut cmd = if cfg!(windows) {

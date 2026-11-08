@@ -1,8 +1,8 @@
 # An Electron app that is already running with a DevTools port, as a
-# developer starts it: primavera attaches to it, and the scenarios run in
+# developer starts it: bitti attaches to it, and the scenarios run in
 # order in the one app, each going on where the one before left it.
 #   electron --remote-debugging-port=9222 ../navigera/tests/fixtures/electron-app &
-#   primavera run tests/fixtures/electron-attached --attach 9222
+#   bitti run tests/fixtures/electron-attached --attach 9222
 
 scenario "Saves an order in the running app"
   expect title is Orders
