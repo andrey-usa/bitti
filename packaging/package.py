@@ -133,7 +133,7 @@ def npm(args) -> None:
         (root / pkg_dir / "package.json").write_text(json.dumps(meta, indent=2) + "\n")
         (root / pkg_dir / "README.md").write_text(
             f"# {pkg}\n\nThe {os_}-{cpu} binary for [{args.name}](https://github.com/{args.repo}). "
-            f"Install `{args.name}` instead; npm picks this package for you.\n")
+            f"Install `{args.npm_name or args.name}` instead; npm picks this package for you.\n")
         optional[pkg] = args.version
     if not optional:
         raise SystemExit(f"no {args.name}-<target> archives in {args.dist}")
@@ -141,7 +141,7 @@ def npm(args) -> None:
     pkg_expr = (f"`@{args.scope}/${{process.platform}}-${{process.arch}}`" if args.scope
                 else f"`{args.name}-${{process.platform}}-${{process.arch}}`")
     write_exe(main / "bin" / f"{args.name}.js", LAUNCHER.format(name=args.name, pkg_expr=pkg_expr).encode())
-    meta = {"name": args.name, **common, "description": args.description,
+    meta = {"name": args.npm_name or args.name, **common, "description": args.description,
             "keywords": args.keywords.split(",") if args.keywords else [],
             "bin": {args.name: f"bin/{args.name}.js"}, "files": ["bin"],
             "engines": {"node": ">=16"}, "optionalDependencies": optional}
@@ -270,6 +270,7 @@ def main() -> None:
     ap.add_argument("--license-file", default="LICENSE")
     ap.add_argument("--readme", default="README.md")
     ap.add_argument("--keywords", default="")
+    ap.add_argument("--npm-name", default="", help="npm: the main package's name when it differs from --name (npm refuses an unscoped name too close to an existing one: --scope bitti --npm-name @bitti/bitti); the command stays --name")
     ap.add_argument("--scope", default="", help="npm: name the platform packages @<scope>/<os>-<cpu> (the main package keeps its name)")
     ap.add_argument("--mcp-name", default="", help="npm: the server's MCP Registry name (io.github.<owner>/<name>)")
     args = ap.parse_args()
