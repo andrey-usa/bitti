@@ -96,7 +96,7 @@ jobs:
           /tmp/venv/bin/bitti --version
           /tmp/venv/bin/pip install --quiet twine && /tmp/venv/bin/twine check pkg/wheels/*.whl
           mkdir /tmp/npm-test && cd /tmp/npm-test && npm init -y >/dev/null
-          npm install --no-audit --no-fund "$GITHUB_WORKSPACE"/pkg/npm/bitti-linux-x64/*.tgz "$GITHUB_WORKSPACE"/pkg/npm/bitti/*.tgz
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE"/pkg/npm/andrey-usa-linux-x64/*.tgz "$GITHUB_WORKSPACE"/pkg/npm/bitti/*.tgz
           node -p "require('@andrey-usa/bitti/package.json').name"
           npx bitti --version
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
