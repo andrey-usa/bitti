@@ -301,6 +301,59 @@ fn workers_retries_and_reporters() {
 }
 
 #[test]
+fn a_serial_scenario_runs_while_no_other_does() {
+    // API-only scenarios (no browser): each logs when it starts and ends,
+    // 300 ms apart. Four at two workers, one of them @serial.
+    let dir = std::env::temp_dir().join(format!("bt-serial-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let log = dir.join("log.txt");
+    std::fs::write(
+        dir.join("mark.py"),
+        "import sys, time\nlog = open(sys.argv[2], 'a')\nlog.write(f'{time.time()} start {sys.argv[1]}\\n'); log.flush()\n\
+         time.sleep(0.3)\nlog.write(f'{time.time()} end {sys.argv[1]}\\n')\n",
+    )
+    .unwrap();
+    let step = |name: &str| format!("  exec ${{PY}} mark.py {name} ${{LOG}}\n");
+    let body = format!(
+        "scenario \"a\"\n{}\nscenario \"b\" @serial\n{}\nscenario \"c\"\n{}\nscenario \"d\"\n{}",
+        step("a"),
+        step("b"),
+        step("c"),
+        step("d")
+    );
+    let file = dir.join("serial.bt");
+    std::fs::write(&file, body).unwrap();
+    let py = if cfg!(windows) { "PY=python" } else { "PY=python3" };
+    let log_var = format!("LOG={}", log.display());
+    let (code, out) = bitti(&["run", file.to_str().unwrap(), "--workers", "2", "--var", py, "--var", &log_var]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("4 passed"), "{out}");
+    let text = std::fs::read_to_string(&log).unwrap();
+    let mut spans: std::collections::BTreeMap<String, (f64, f64)> = Default::default();
+    for line in text.lines() {
+        let w: Vec<&str> = line.split_whitespace().collect();
+        let t: f64 = w[0].parse().unwrap();
+        let e = spans.entry(w[2].to_string()).or_insert((0.0, 0.0));
+        if w[1] == "start" {
+            e.0 = t
+        } else {
+            e.1 = t
+        }
+    }
+    let b = spans["b"];
+    for (name, s) in &spans {
+        if name != "b" {
+            assert!(s.1 <= b.0 || s.0 >= b.1, "{name} {s:?} ran while the serial one did {b:?}:\n{text}");
+        }
+    }
+    // The others still ran side by side.
+    let others: Vec<(f64, f64)> = spans.iter().filter(|(n, _)| *n != "b").map(|(_, s)| *s).collect();
+    let overlap = others.iter().enumerate().any(|(i, x)| others[i + 1..].iter().any(|y| x.0 < y.1 && y.0 < x.1));
+    assert!(overlap, "two workers ran nothing at once:\n{text}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn shards_split_the_scenarios() {
     let (_, all) = bitti(&["list", "examples"]);
     let mut all: Vec<&str> = all.lines().collect();
@@ -1055,6 +1108,19 @@ fn load_metrics_are_budgets() {
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("1 passed") && out.contains("1 failed"), "{out}");
     assert!(out.contains("expected lcp < 0.001 ms within 200 ms; saw "), "{out}");
+    // INP: the slowest click so far, named; under what Chrome keeps, a pass.
+    std::fs::write(
+        &file,
+        "scenario \"Quick enough\"\n  goto /clicks\n  click --text Quick\n  expect text Done\n  expect inp < 200ms\n\n\
+         scenario \"Too slow\"\n  goto /clicks\n  click --text Slow\n  expect inp < 200ms --timeout-ms 300\n\n\
+         scenario \"Finer than the browser keeps\"\n  goto /clicks\n  click --text Quick\n  expect inp < 50ms\n",
+    )
+    .unwrap();
+    let (code, out) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("1 passed") && out.contains("2 failed"), "{out}");
+    assert!(out.contains("expected inp < 200 ms within 300 ms; saw ") && out.contains("(#slow)"), "{out}");
+    assert!(out.contains("a budget under 104 ms can't be checked"), "{out}");
     std::fs::remove_dir_all(&dir).ok();
 }
 

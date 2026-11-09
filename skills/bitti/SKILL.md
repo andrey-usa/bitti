@@ -169,7 +169,7 @@ refs turned into locators; add the expects the test is for.
 
 Tags pick and mark scenarios: `--tag "smoke and not slow"`; `@skip` and
 `@fixme` aren't run, `@only` runs just those (an error under CI), `@slow`
-triples the checks' time. `-x` stops at the first failure, `--last-failed`
+triples the checks' time, `@serial` runs one while no other scenario runs. `-x` stops at the first failure, `--last-failed`
 runs what failed last time. `--headed --slowmo 500` shows a run step by
 step; a `pause` step stops there until Enter, the browser open to `navigera
 --attach` (the command is printed).

@@ -17,7 +17,7 @@
 //! expect request POST /api/orders json $.total is 36
 //! expect download report-*.csv
 //! expect no errors
-//! expect lcp < 2.5s                      (also fcp, ttfb, load in ms or s; cls)
+//! expect lcp < 2.5s                      (also fcp, ttfb, load, inp in ms or s; cls)
 //! expect accessible [--selector main] [--tags wcag2aa] [--ignore color-contrast]
 //! expect not --selector .toast visible   (any expectation can be negated)
 //! expect text "Saved" --soft             (noted, the scenario goes on, fails at the end)
@@ -123,7 +123,7 @@ pub const A11Y_TAGS: &[&str] = &["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
 /// `expect <metric> <comparison> <value>`: the page's Core Web Vitals and
 /// load times, as the browser measured them for the current document.
-pub const METRICS: &[&str] = &["lcp", "fcp", "ttfb", "load", "cls"];
+pub const METRICS: &[&str] = &["lcp", "fcp", "ttfb", "load", "cls", "inp"];
 
 /// A metric's limit as a number: milliseconds for the times (`2.5s`,
 /// `800ms`, a bare number is ms), the score itself for `cls`.
@@ -980,6 +980,7 @@ mod tests {
         let e = p("lcp < 2.5s").unwrap();
         assert_eq!((e.subject, e.matcher, e.value.as_str()), (Subject::Metric("lcp".into()), Matcher::Lt, "2500"));
         assert_eq!(p("ttfb <= 800ms").unwrap().value, "800");
+        assert_eq!(p("inp < 200ms").unwrap().subject, Subject::Metric("inp".into()));
         assert_eq!(p("load < 3000").unwrap().value, "3000");
         assert_eq!(p("cls < 0.1").unwrap().value, "0.1");
         assert!(p("lcp is 2s").unwrap_err().contains("<, <="));

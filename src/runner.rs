@@ -2213,12 +2213,37 @@ impl Runner {
                 }
             }
             Subject::Metric(name) => {
-                let v = self.command(&["eval".into(), format!("({METRIC_JS})({})", serde_json::json!(name))])?;
-                match v.as_f64() {
+                // navigera's `vitals`: every number as the browser measured
+                // it, with the element behind LCP, CLS and INP.
+                let v = self.command(&["vitals".into()])?;
+                let behind = match name.as_str() {
+                    "lcp" => v["lcp_element"].as_str(),
+                    "inp" => v["inp_element"].as_str(),
+                    "cls" => v["cls_elements"].get(0).and_then(Value::as_str),
+                    _ => None,
+                };
+                match v[name.as_str()].as_f64() {
                     Some(n) => {
                         let actual = format!("{}", (n * 1000.0).round() / 1000.0);
-                        (compare(&actual, e.matcher, value), actual)
+                        let held = compare(&actual, e.matcher, value);
+                        match behind {
+                            Some(el) if held == e.negate => (held, format!("{actual} ({el})")),
+                            _ => (held, actual),
+                        }
                     }
+                    // Every interaction was quicker than the browser keeps.
+                    None if name == "inp" && v["inp_under_ms"].is_number() => {
+                        let under = v["inp_under_ms"].as_f64().unwrap_or(104.0);
+                        let limit: f64 = value.parse().unwrap_or(0.0);
+                        if limit < under {
+                            return Err(format!(
+                                "expect inp: every interaction took under {under} ms, and the browser keeps none that \
+                                 quick, so a budget under {under} ms can't be checked"
+                            ));
+                        }
+                        (matches!(e.matcher, Matcher::Lt | Matcher::Le), format!("under {under}"))
+                    }
+                    None if name == "inp" => (false, "no interaction yet".into()),
                     None => (false, "not measured yet".into()),
                 }
             }
@@ -2645,34 +2670,10 @@ const UNCOVER_JS: &str = r#"(sel) => {
     .sort((a, b) => b.p - a.p).slice(0, 3);
 }"#;
 
-/// `expect lcp|fcp|ttfb|load|cls`: what the browser measured for the
-/// current document (ms from its navigation start; `cls`: the largest
-/// session window of layout shifts not caused by input), or null.
-const METRIC_JS: &str = r#"async (name) => {
-  const nav = performance.getEntriesByType('navigation')[0];
-  const seen = (type) => new Promise((done) => {
-    let got = [];
-    try {
-      const o = new PerformanceObserver((l) => { got = got.concat(l.getEntries()); });
-      o.observe({ type, buffered: true });
-      setTimeout(() => { o.disconnect(); done(got); }, 50);
-    } catch (_) { done([]); }
-  });
-  if (name === 'ttfb') return nav ? nav.responseStart : null;
-  if (name === 'load') return nav && nav.loadEventEnd > 0 ? nav.loadEventEnd : null;
-  if (name === 'fcp') { const e = performance.getEntriesByName('first-contentful-paint')[0]; return e ? e.startTime : null; }
-  if (name === 'lcp') { const all = await seen('largest-contentful-paint'); return all.length ? all[all.length - 1].startTime : null; }
-  if (name === 'cls') {
-    let best = 0, sum = 0, first = 0, last = 0;
-    for (const e of (await seen('layout-shift')).filter((e) => !e.hadRecentInput)) {
-      if (sum && (e.startTime - last > 1000 || e.startTime - first > 5000)) sum = 0;
-      if (!sum) first = e.startTime;
-      sum += e.value; last = e.startTime; best = Math.max(best, sum);
-    }
-    return best;
-  }
-  return null;
-}"#;
+/// `@serial` (or `@exclusive`): the scenario runs while no other does.
+pub fn is_serial(tags: &[String]) -> bool {
+    tags.iter().any(|t| t == "serial" || t == "exclusive")
+}
 
 pub(crate) fn parse(words: &[String]) -> Result<Command, String> {
     let parsed =

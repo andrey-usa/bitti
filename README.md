@@ -236,7 +236,7 @@ Status: 0.1.0. Everything below works in this build.
 | `console` + a comparison, `no console "<t>"` | a console message (any level) |
 | `no errors` | no page exceptions or console errors |
 | `accessible` [`--selector <css>`] [`--tags wcag2a,wcag2aa,…`] [`--ignore <rule>,…`] | [axe-core](https://github.com/dequelabs/axe-core) (built in) finds no violation in the page, or under the selector: WCAG 2.0 and 2.1 A and AA by default; `--tags` replaces that set (`--tags wcag2a,wcag2aa,best-practice` to add axe's best practices); a failure names each rule, its impact, the first elements and what to fix |
-| `lcp`, `fcp`, `ttfb`, `load` `<`, `<=`, `>`, `>=` `<time>` (`2.5s`, `800ms`; a bare number is ms); `cls` + a comparison and a score (`0.1`) | a performance budget for the current page, as the browser measured it: largest and first contentful paint, time to first byte, the load event (ms from the navigation's start); the layout shift score (its largest session window, shifts after input left out). Not measured yet (the load event still to come) is retried |
+| `lcp`, `fcp`, `ttfb`, `load`, `inp` `<`, `<=`, `>`, `>=` `<time>` (`2.5s`, `800ms`; a bare number is ms); `cls` + a comparison and a score (`0.1`) | a performance budget for the current page, as the browser measured it (navigera's `vitals`): largest and first contentful paint, time to first byte, the load event (ms from the navigation's start); the layout shift score (its largest session window, shifts after input left out); interaction to next paint, the slowest of the scenario's clicks and key presses on this page so far (put it after them). A miss names the element behind it (`3120 (#hero)`). Not measured yet (the load event still to come, no interaction yet) is retried. Chrome keeps only interactions of 104 ms or more, so `inp < 200ms` passes when every one was quicker, and a budget under 104 ms is refused. Run under `set cpu 4` and `set network fast-3g` to measure as a mid-tier phone |
 | `exit` [`is`] `<n>`, `stdout`/`stderr` + a comparison | what the last `exec` gave |
 | `status` [`is`] `<n>`, `body` + a comparison, `json <$.path>` [+ a comparison], `header <name>` [+ a comparison] | the last `http` answer; a JSON object or array compared with `is` is compared as JSON (key order and `1` vs `1.0` don't matter), with `contains` as a part of it (`json $ contains '{"role": "shopper"}'`: the keys it names, at any depth; for an array, items that some item matches) |
 | `json <$.path> count` + a comparison | how many items the array (or keys the object) at the path has |
@@ -424,7 +424,10 @@ bitti --version
   `--grep-invert <text>` leaves out the names that contain it.
 - Some tags say how a scenario runs: `@skip` and `@fixme` aren't run and
   are reported as skipped (`SKIP`, JUnit `<skipped/>`, Allure `skipped`);
-  `@slow` gives each check three times its time; `@only` runs only the
+  `@slow` gives each check three times its time; `@serial` (or
+  `@exclusive`) runs the scenario while no other one runs, for one that
+  changes what the others read (an app setting, a shared account): the
+  others run in parallel first, then each `@serial` one alone; `@only` runs only the
   scenarios that have it, a focus while working on one. It is an error
   with `--forbid-only`, which is on by itself under CI (`CI` set), so a
   focus left in by mistake doesn't pass a build on a few scenarios

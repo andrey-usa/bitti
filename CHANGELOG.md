@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `expect inp < 200ms`: interaction to next paint, the slowest of the
+  scenario's interactions on the page so far, beside `lcp`, `fcp`,
+  `ttfb`, `load` and `cls`. Every budget now reads navigera's `vitals`,
+  and a miss names the element behind it (`expect lcp < 2.5s`: `3120
+  (#hero)`). Chrome keeps only interactions of 104 ms or more, so a
+  budget of 104 ms or more is decided either way and one under it is
+  refused.
+- `@serial` (or `@exclusive`): a scenario that runs while no other one
+  does, for one that changes what the others read. With `--workers` the
+  others run in parallel first, then each `@serial` one alone.
+- From navigera: `passkey on` (a virtual authenticator: passkey sign-up
+  and sign-in with no person or phone), kept by `state save` and so by
+  `auth`; `set cpu 4` (a slower phone's main thread); `screenshot` of one
+  element.
+
 ## [0.1.0] - 2026-11-08
 
 The first release.

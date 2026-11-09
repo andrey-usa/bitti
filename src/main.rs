@@ -962,7 +962,15 @@ fn run(args: Args) -> ExitCode {
         forks[0] = early_runner.take();
     }
     phase("jobs planned");
+    // `@serial` ones last: each waits until no other scenario runs, and a
+    // worker waiting for that while parallel work is left would sit idle.
+    let (mut jobs, serial): (Vec<_>, Vec<_>) =
+        jobs.into_iter().partition(|j: &runner::Job| !runner::is_serial(&j.get(&suites).1.tags));
+    jobs.extend(serial);
     let queue = Mutex::new(std::collections::VecDeque::from(jobs));
+    // `@serial` scenarios take it to write, every other one to read: one
+    // of them runs while no other scenario does.
+    let alone = std::sync::RwLock::new(());
     let (tx, rx) = mpsc::channel::<Event>();
     let mut results: Vec<runner::ScenarioResult> = Vec::new();
     let mut launch_errors = Vec::new();
@@ -973,10 +981,10 @@ fn run(args: Args) -> ExitCode {
     std::thread::scope(|scope| {
         for (w, fork) in forks.into_iter().enumerate() {
             let tx = tx.clone();
-            let (queue, suites, opts, hooks) = (&queue, &suites, &opts, &hooks);
+            let (queue, suites, opts, hooks, alone) = (&queue, &suites, &opts, &hooks, &alone);
             let stop = Stop { max: args.max_failures, failed: &failed, until: opts.deadline };
             let retries = args.retries;
-            scope.spawn(move || worker(w, fork, queue, suites, opts, hooks, retries, stop, tx));
+            scope.spawn(move || worker(w, fork, queue, suites, opts, hooks, alone, retries, stop, tx));
         }
         drop(tx);
         let mut out = std::io::stdout();
@@ -1255,6 +1263,7 @@ fn worker(
     suites: &[suite::Suite],
     opts: &runner::Options,
     hooks: &Hooks,
+    alone: &std::sync::RwLock<()>,
     retries: u32,
     stop: Stop,
     tx: mpsc::Sender<Event>,
@@ -1281,6 +1290,19 @@ fn worker(
         }
         let job_rep = job.rep;
         r.rep = job_rep;
+        // Held to the end of its tries (a poisoned lock only means a worker
+        // panicked: the scenarios still run).
+        let (_shared, _alone) = if runner::is_serial(&sc.tags) {
+            (None, Some(alone.write().unwrap_or_else(|p| p.into_inner())))
+        } else {
+            (Some(alone.read().unwrap_or_else(|p| p.into_inner())), None)
+        };
+        if stop.reached() {
+            if let Ok(mut q) = queue.lock() {
+                q.push_front(job);
+            }
+            return;
+        }
         let before = if suite.before_all.is_empty() {
             Ok(BTreeMap::new())
         } else {
@@ -1309,6 +1331,7 @@ fn worker(
         if !result.passed() {
             stop.failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
+        drop((_shared, _alone));
         if tx.send(Event::Done(Box::new(result))).is_err() {
             return;
         }

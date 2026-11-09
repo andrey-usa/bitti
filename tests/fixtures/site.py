@@ -175,6 +175,10 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/framed":
             # A button inside a frame whose name a test misspells.
             return self.page('<iframe srcdoc="<button>Subscibe</button>"></iframe>')
+        if u.path == "/clicks":
+            # A button whose handler keeps the page busy for 250 ms, and one that answers at once.
+            return self.page('<button id=slow onclick="let t=performance.now();while(performance.now()-t<250){}">Slow</button>'
+                             '<button id=quick onclick="this.textContent=\'Done\'">Quick</button>')
         if u.path == "/a11y":
             # An image without alt and a button without a name, outside #ok.
             return self.page('<main><h1>Gallery</h1><section id=ok><p>Fine here.</p></section>'
