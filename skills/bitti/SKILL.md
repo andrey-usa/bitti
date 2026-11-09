@@ -33,7 +33,7 @@ scenario "Adding a product counts it in the cart"
   spacing don't matter), `press Enter`, `check <target>`, `hover`,
   `scroll`, `upload <target> file.txt`, `wait --text "Saved"`, `eval
   "<js>"`, `dialog --accept`, `tab-select 1`. `bitti navigera
-  <command> --help` gives a command's flags and examples.
+  <command> --help` lists its flags.
 - Targets are locators, never refs: `--role button --name "Pay"`, `--label
   Email`, `--text "Sign in"`, `--testid total`, `--placeholder Search`,
   `--selector "#id"`. `--nth 1` (0-based) picks among the matches of any but
@@ -44,8 +44,8 @@ scenario "Adding a product counts it in the cart"
 - `save NAME = <command>` keeps a result (`save total = get text --testid
   total`), used later as `${total}`.
 - `print <command>` shows a result in the run's output without checking or
-  waiting: `print get text --testid total`, `print eval "…"`, `print ax
-  --selector main` (the page as a tree). Use it to look while you write:
+  waiting: `print get text --testid total`, `print ax --selector main`
+  (the page as a tree). Use it while you write:
   a failing `expect` shows only 300 characters of what it saw.
 - `optional <step>` may fail (a banner that only sometimes shows). A
   banner that comes back on every page needs its dismiss after each
@@ -74,8 +74,8 @@ expect not --selector .toast visible
   `value`, `attr <name>` or `count`, or a state: `visible hidden enabled
   disabled checked unchecked focused editable empty`. `not` negates any.
 - `text "…"` is visible text anywhere on the page.
-- `js --file check.js` runs a script beside the `.bt` (a sum of rows, …):
-  an expression, or a body that `return`s. It holds on a true value, or
+- `js --file check.js` runs a script beside the `.bt`: an expression, or
+  a body that `return`s. It holds on a true value, or
   compares like the rest.
 - Comments are whole lines starting with `#`.
 
@@ -104,12 +104,13 @@ scenario "A new user can be read back" @api
   `auth` of `http` steps signs browser scenarios in too.
 - `http` takes `--json`, `--body`, `--form name=value`, `--multipart
   name=value|name=@file`, `--query name=value`, `--user name:password`,
-  `--bearer <token>`, `--header "Name: value"`. A
-  4xx/5xx fails the step unless a step under it checks `status`.
+  `--bearer <token>`, `--header "Name: value"`. A 4xx/5xx fails the
+  step unless a step under it checks `status`.
 - `expect status|body|header <name>|json <$.path>`, `json <$.path> count`,
   `json [<$.path>] schema <file.json>`, `json snapshot <name> [--ignore
-  $.id]` (a baseline written on the first run), `time < 2s`. `is`/`contains` with an
-  object or array compare it as JSON (`contains`: the keys it names).
+  $.id]` (a baseline written on the first run), `time < 2s`.
+  `is`/`contains` with an object or array compare it as JSON (`contains`:
+  the keys it names).
 - `print http` (or `body`, `json <$.path>`, `header <name>`) shows the
   answer; a failing check shows the request and the start of the body.
 - `retry [--timeout-ms n]` runs the steps under it again until all pass.
@@ -126,8 +127,8 @@ bitti lint cart.bt && bitti run cart.bt --base-url "$BASE_URL"
 ```
 
 An Electron desktop app instead of a site: `bitti run app.bt --electron
-./my-app` (the app's directory with Electron in its `node_modules`, or the
-app's executable). No `goto`: each scenario starts in a fresh app's first
+./my-app` (its directory, with Electron in its `node_modules`, or its
+executable). No `goto`: each scenario starts in a fresh app's first
 window; a window the app opens becomes the current tab. `expect js --main
 "({ app }) => app.getName()" is my-app` checks the app's main process.
 
@@ -147,9 +148,9 @@ FAIL  cart.bt:3  Adding a product counts it in the cart  (5.2 s)
 ```
 
 Paste the locator in, or run the `fix` line (`--use 2` for the second: the
-first is not always the element the test is about). When a click changed
-nothing, the failure notes it: the page may not have been ready, so add an
-`expect` for what shows it is ready before the click.
+nearest is not always the one meant). When a click changed nothing, the
+failure says so: the page may not have been ready, so add an `expect` for
+what shows it is ready before the click.
 
 ## Looking at the page
 
@@ -169,14 +170,14 @@ refs turned into locators; add the expects the test is for.
 
 Tags pick and mark scenarios: `--tag "smoke and not slow"`; `@skip` and
 `@fixme` aren't run, `@only` runs just those (an error under CI), `@slow`
-triples the checks' time, `@serial` runs one while no other scenario runs. `-x` stops at the first failure, `--last-failed`
-runs what failed last time. `--headed --slowmo 500` shows a run step by
-step; a `pause` step stops there until Enter, the browser open to `navigera
---attach` (the command is printed).
+triples the checks' time, `@serial` runs alone. `-x` stops at the first
+failure, `--last-failed` runs what failed last time. `--headed --slowmo
+500` shows a run step by step; a `pause` step waits for Enter, the browser
+open to `navigera --attach` (the command is printed).
 
-A sign-in's second step: `fill --label Code ${totp:SHOP_TOTP}` types the
-authenticator app's code now (SHOP_TOTP holds its base32 key or otpauth://
-URI); a passkey sign-in needs `passkey on` before the page asks.
+Two-factor sign-in: `fill --label Code ${totp:SHOP_TOTP}` types the
+app's current code (SHOP_TOTP holds the base32 key or otpauth:// URI); for
+a passkey, `passkey on` before the page asks.
 
 Exit codes of a run: 0 passed, 1 a scenario failed, 2 a file or argument is
 wrong, 3 the browser or the app server didn't start. More (flows, sign-in
