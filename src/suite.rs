@@ -987,8 +987,11 @@ pub fn parse(file: &Path, text: &str) -> Result<Suite, ParseError> {
 /// `use` files merged in: their flows and `set`s, then this file's own on
 /// top. Checks that every `run` names a flow with the right arguments.
 pub fn resolve(suites: &mut [Suite]) -> Result<(), ParseError> {
+    // A file `use`d by many suites is read and parsed once for the run,
+    // not once per suite that names it.
+    let mut parsed: std::collections::BTreeMap<PathBuf, Suite> = std::collections::BTreeMap::new();
     for suite in suites.iter_mut() {
-        resolve_uses(suite)?;
+        resolve_uses(suite, &mut parsed)?;
     }
     // A .feature file's steps: the `step` blocks of every .bt file in the run.
     let defs: Vec<Flow> =
@@ -1003,13 +1006,31 @@ pub fn resolve(suites: &mut [Suite]) -> Result<(), ParseError> {
 }
 
 /// `use <file.bt>`: the flows, auths and `set`s of the files it names.
-fn resolve_uses(suite: &mut Suite) -> Result<(), ParseError> {
+/// `parsed` is the run's cache, keyed by canonical path: a shared steps
+/// file is parsed the first time any suite uses it and never again.
+fn resolve_uses(
+    suite: &mut Suite,
+    parsed: &mut std::collections::BTreeMap<PathBuf, Suite>,
+) -> Result<(), ParseError> {
     {
         let mut seen = std::collections::BTreeSet::new();
         let mut todo: Vec<(usize, PathBuf)> = suite.uses.clone();
         while let Some((line, path)) = todo.pop() {
             let key = std::fs::canonicalize(&path).unwrap_or(path.clone());
-            if !seen.insert(key) {
+            if !seen.insert(key.clone()) {
+                continue;
+            }
+            if let Some(used) = parsed.get(&key).cloned() {
+                for (name, flow) in used.flows {
+                    suite.flows.entry(name).or_insert(flow);
+                }
+                for (name, auth) in used.auths {
+                    suite.auths.entry(name).or_insert(auth);
+                }
+                for (k, v) in used.vars {
+                    suite.vars.entry(k).or_insert(v);
+                }
+                todo.extend(used.uses);
                 continue;
             }
             let err = |m: String| ParseError { file: suite.file.clone(), line, message: m };
@@ -1022,6 +1043,7 @@ fn resolve_uses(suite: &mut Suite) -> Result<(), ParseError> {
                 })
             })?;
             let used = parse(&path, &text)?;
+            parsed.insert(key, used.clone());
             for (name, flow) in used.flows {
                 suite.flows.entry(name).or_insert(flow);
             }

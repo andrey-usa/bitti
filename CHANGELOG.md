@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A `step "…"` pattern containing `"` or `\` never matched its
+  `.feature` step: the run stored the pattern Debug-escaped and matched
+  against the escaped text. It matches as written now.
+- A step pattern may hold at most 32 placeholders. Each one is three
+  capture groups in the compiled regex, so a pattern with hundreds
+  compiled into gigabytes (800 took 2.7 GB and 16 s) before it could be
+  refused; it is refused at the definition now.
+
+### Changed
+
+- A file named by `use` is read and parsed once per run, however many
+  `.bt` files use it (40 files sharing one steps file: 9.0 s of parsing
+  became 0.2 s).
+
 ### Added
 
 - `expect inp < 200ms`: interaction to next paint, the slowest of the
