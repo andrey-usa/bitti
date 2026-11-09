@@ -26,8 +26,12 @@ All notable changes to this project are documented here. The format follows
   `pause` step still run one at a time, and say so only when
   `--workers` was given.
 - A file named by `use` is read and parsed once per run, however many
-  `.bt` files use it (40 files sharing one steps file: 9.0 s of parsing
-  became 0.2 s).
+  `.bt` files use it; each step pattern is compiled once per run, and
+  navigera reads each shared step once. `bitti lint` on generated suites
+  takes 56.7% fewer instructions than 0.1.0 on the small one and 81.2%
+  fewer on one 4 times its size, which costs 4.50 times the small one's
+  work instead of 10.34 (cachegrind, [gate run
+  42723794673](https://github.com/andrey-usa/bitti/actions/runs/42723794673)).
 
 ### Added
 
