@@ -31,6 +31,10 @@ All notable changes to this project are documented here. The format follows
   (#hero)`). Chrome keeps only interactions of 104 ms or more, so a
   budget of 104 ms or more is decided either way and one under it is
   refused.
+- `expect accessible` runs navigera's `a11y`: axe-core in a world of
+  its own in the page, which never sees a `window.axe`, and one copy of
+  it, stored deflated in navigera, where bitti carried its own 652 KB.
+  Messages are as before.
 - `@serial` (or `@exclusive`): a scenario that runs while no other one
   does, for one that changes what the others read. With `--workers` the
   others run in parallel first, then each `@serial` one alone.

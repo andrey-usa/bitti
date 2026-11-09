@@ -2185,30 +2185,45 @@ impl Runner {
                 (compare(&actual, e.matcher, value), actual)
             }
             Subject::Accessible { selector, tags, ignore } => {
-                // axe once per document: a page that moved on has lost it.
-                if self.command(&["eval".into(), "typeof axe === 'object' && typeof axe.run === 'function'".into()])?
-                    != Value::Bool(true)
-                {
-                    self.command(&["eval".into(), format!("(function () {{\n{AXE}\n}}).call(window), 1")])?;
+                // navigera's `a11y`: axe-core in a world of its own in the
+                // page, loaded once per document.
+                let mut w = vec!["a11y".to_string(), "--tags".into(), tags.join(",")];
+                if !ignore.is_empty() {
+                    w.extend(["--ignore".to_string(), ignore.join(",")]);
                 }
-                let context = match selector {
-                    Some(s) => serde_json::json!({"include": [scope.word(s)?]}).to_string(),
-                    None => "document".to_string(),
-                };
-                let js = format!(
-                    "axe.run({context}, {{ runOnly: {{ type: 'tag', values: {} }}, resultTypes: ['violations'] }}).then((r) => \
-                     r.violations.filter((v) => !{}.includes(v.id)).map((v) => \
-                     `${{v.id}} (${{v.impact}}, ${{v.nodes.length}}: ${{v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(', ')}}${{v.nodes.length > 3 ? ', …' : ''}}): ${{v.help}}`))",
-                    serde_json::json!(tags),
-                    serde_json::json!(ignore),
-                );
-                match self.command(&["eval".into(), js]) {
-                    Ok(Value::Array(found)) if found.is_empty() => (true, "no violations".into()),
-                    Ok(Value::Array(found)) => {
-                        let lines: Vec<String> = found.iter().filter_map(|v| v.as_str().map(String::from)).collect();
-                        (false, format!("{} violation(s): {}", lines.len(), lines.join("; ")))
+                if let Some(sel) = selector {
+                    w.extend(["--selector".to_string(), scope.word(sel)?]);
+                }
+                match self.command(&w) {
+                    Ok(r) => {
+                        let rules = r["rules"].as_array().cloned().unwrap_or_default();
+                        if rules.is_empty() {
+                            (true, "no violations".into())
+                        } else {
+                            let lines: Vec<String> = rules
+                                .iter()
+                                .map(|v| {
+                                    let count = v["count"].as_u64().unwrap_or(0);
+                                    let shown: Vec<&str> = v["nodes"]
+                                        .as_array()
+                                        .into_iter()
+                                        .flatten()
+                                        .take(3)
+                                        .filter_map(|n| n["selector"].as_str())
+                                        .collect();
+                                    format!(
+                                        "{} ({}, {count}: {}{}): {}",
+                                        v["rule"].as_str().unwrap_or("?"),
+                                        v["impact"].as_str().unwrap_or("?"),
+                                        shown.join(", "),
+                                        if count > 3 { ", …" } else { "" },
+                                        v["help"].as_str().unwrap_or("")
+                                    )
+                                })
+                                .collect();
+                            (false, format!("{} violation(s): {}", lines.len(), lines.join("; ")))
+                        }
                     }
-                    Ok(other) => (false, format!("axe said {other}")),
                     Err(err) => (false, err),
                 }
             }
@@ -2641,9 +2656,6 @@ const QUIET_CLOCK: &str = r#"(() => {
     }
   }).observe(document, { childList: true, subtree: true, attributes: true, characterData: true });
 })()"#;
-
-/// axe-core (vendor/axe-core), put in the page by `expect accessible`.
-const AXE: &str = include_str!("../vendor/axe-core/axe.min.js");
 
 /// What to click in the element a click hit instead of its own (by
 /// navigera's description's selector): the buttons and links of the
