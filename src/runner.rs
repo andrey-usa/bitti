@@ -1928,7 +1928,7 @@ impl Runner {
             match verdict {
                 Ok(d) => {
                     let diff = self.opts.evidence.join(format!("{stem}-{}-diff.png", shot.name));
-                    write(&diff, &d.image)?;
+                    write(&diff, &crate::shot::diff_image(&base, &img, shot.threshold))?;
                     format!(
                         "{} of {} pixels differ ({:.2}%), {} allowed{unsettled}; this run {}, the differences {}",
                         d.pixels,

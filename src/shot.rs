@@ -70,11 +70,28 @@ fn yiq(r: f64, g: f64, b: f64) -> (f64, f64, f64) {
     )
 }
 
+/// Two pixels' perceived colour distance (YIQ), and the first one's Y.
+fn delta(a: &[u8], b: &[u8]) -> (f64, f64) {
+    let (ya, ia, qa) = {
+        let (r, g, b) = blend(a);
+        yiq(r, g, b)
+    };
+    let (yb, ib, qb) = {
+        let (r, g, b) = blend(b);
+        yiq(r, g, b)
+    };
+    (0.5053 * (ya - yb).powi(2) + 0.299 * (ia - ib).powi(2) + 0.1957 * (qa - qb).powi(2), ya)
+}
+
+/// The largest YIQ distance, 35215, scaled by the threshold squared.
+fn max_delta(threshold: f64) -> f64 {
+    35_215.0 * threshold * threshold
+}
+
 #[derive(Debug)]
 pub struct Diff {
     pub pixels: u64,
     pub total: u64,
-    pub image: Image,
 }
 
 /// How many pixels of `actual` differ from `baseline` over `threshold`
@@ -87,33 +104,40 @@ pub fn compare(baseline: &Image, actual: &Image, threshold: f64) -> Result<Diff,
             actual.width, actual.height, baseline.width, baseline.height
         ));
     }
-    // The largest YIQ distance, 35215, scaled by the threshold squared.
-    let max = 35_215.0 * threshold * threshold;
+    let max = max_delta(threshold);
     let mut pixels = 0;
+    // A capture that matches its baseline is mostly the same bytes: a run
+    // of 16 pixels compares as memory, and only a run that differs is
+    // looked at pixel by pixel (an equal pixel's distance is 0).
+    const RUN: usize = 64;
+    for (a, b) in baseline.rgba.chunks(RUN).zip(actual.rgba.chunks(RUN)) {
+        if a == b {
+            continue;
+        }
+        for (a, b) in a.chunks(4).zip(b.chunks(4)) {
+            if a != b && delta(a, b).0 > max {
+                pixels += 1;
+            }
+        }
+    }
+    Ok(Diff { pixels, total: baseline.width as u64 * baseline.height as u64 })
+}
+
+/// What `compare` counted, as a picture: the pixels over the threshold
+/// red, the rest the baseline faded. Made only for a failure's evidence.
+pub fn diff_image(baseline: &Image, actual: &Image, threshold: f64) -> Image {
+    let max = max_delta(threshold);
     let mut out = Vec::with_capacity(baseline.rgba.len());
     for (a, b) in baseline.rgba.chunks(4).zip(actual.rgba.chunks(4)) {
-        let (ya, ia, qa) = {
-            let (r, g, b) = blend(a);
-            yiq(r, g, b)
-        };
-        let (yb, ib, qb) = {
-            let (r, g, b) = blend(b);
-            yiq(r, g, b)
-        };
-        let delta = 0.5053 * (ya - yb).powi(2) + 0.299 * (ia - ib).powi(2) + 0.1957 * (qa - qb).powi(2);
+        let (delta, ya) = delta(a, b);
         if delta > max {
-            pixels += 1;
             out.extend_from_slice(&[255, 0, 0, 255]);
         } else {
             let faded = (255.0 + (ya - 255.0) * 0.1) as u8;
             out.extend_from_slice(&[faded, faded, faded, 255]);
         }
     }
-    Ok(Diff {
-        pixels,
-        total: baseline.width as u64 * baseline.height as u64,
-        image: Image { width: baseline.width, height: baseline.height, rgba: out },
-    })
+    Image { width: baseline.width, height: baseline.height, rgba: out }
 }
 
 #[cfg(test)]
@@ -144,8 +168,27 @@ mod tests {
         b.rgba[4..8].copy_from_slice(&[250, 250, 250, 255]);
         let d = compare(&a, &b, 0.2).unwrap();
         assert_eq!((d.pixels, d.total), (1, 100));
-        assert_eq!(&d.image.rgba[0..4], &[255, 0, 0, 255]);
+        let img = diff_image(&a, &b, 0.2);
+        assert_eq!(&img.rgba[0..4], &[255, 0, 0, 255]);
+        assert_eq!(&img.rgba[4..8], &[255, 255, 255, 255]);
         assert_eq!(compare(&a, &b, 0.0).unwrap().pixels, 2);
         assert!(compare(&a, &solid(9, 10, [0; 4]), 0.2).unwrap_err().contains("9x10, the baseline 10x10"));
+    }
+
+    /// Runs of equal pixels are skipped whole: a difference anywhere in a
+    /// run, or in the short run at the end, is still counted.
+    #[test]
+    fn a_difference_anywhere_in_a_run_counts() {
+        let a = solid(37, 3, [40, 80, 120, 255]);
+        for at in [0, 15, 16, 17, 63, 64, 108, 110] {
+            let mut b = a.clone();
+            b.rgba[at * 4 + 1] = 250;
+            let d = compare(&a, &b, 0.1).unwrap();
+            assert_eq!((d.pixels, d.total), (1, 111), "pixel {at}");
+            let img = diff_image(&a, &b, 0.1);
+            assert_eq!(img.rgba.chunks(4).filter(|p| *p == [255, 0, 0, 255]).count(), 1, "pixel {at}");
+            assert_eq!(&img.rgba[at * 4..at * 4 + 4], &[255, 0, 0, 255]);
+        }
+        assert_eq!(compare(&a, &a.clone(), 0.0).unwrap().pixels, 0);
     }
 }
