@@ -13,13 +13,13 @@
 
 FROM rust:1-trixie AS build
 WORKDIR /src
-COPY navigera/Cargo.toml navigera/Cargo.lock navigera/
+COPY navigera/Cargo.toml navigera/Cargo.lock navigera/build.rs navigera/
 COPY navigera/src navigera/src
 COPY navigera/skills navigera/skills
+COPY navigera/vendor navigera/vendor
 COPY bitti/Cargo.toml bitti/Cargo.lock bitti/
 COPY bitti/src bitti/src
 COPY bitti/skills bitti/skills
-COPY bitti/vendor bitti/vendor
 RUN cd bitti && cargo build --release --locked && strip target/release/bitti
 
 FROM debian:trixie-slim
