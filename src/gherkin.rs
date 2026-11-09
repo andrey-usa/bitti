@@ -371,14 +371,18 @@ fn unescape_debug(s: &str) -> String {
 
 /// Every step of a `.feature` suite, found among the run's `step "…"`
 /// blocks (`defs`, flows named `step "<pattern>"`), else in the phrase book.
-pub fn resolve(suite: &mut Suite, defs: &[Flow]) -> Result<(), ParseError> {
-    let compiled: Vec<(&Flow, Regex)> = defs
-        .iter()
+/// The run's step definitions, each pattern compiled to its regex once for
+/// every `.feature` file of the run.
+pub fn compile(defs: &[Flow]) -> Vec<(&Flow, Regex)> {
+    defs.iter()
         .filter_map(|f| {
             let pattern = unescape_debug(f.name.strip_prefix("step \"")?.strip_suffix('"')?);
             step_pattern(&pattern).ok().map(|(re, _)| (f, re))
         })
-        .collect();
+        .collect()
+}
+
+pub fn resolve(suite: &mut Suite, compiled: &[(&Flow, Regex)]) -> Result<(), ParseError> {
     let file = suite.file.clone();
     let mut used: BTreeMap<String, Flow> = BTreeMap::new();
     let mut one = |st: &mut Step| -> Result<(), ParseError> {
@@ -564,7 +568,7 @@ Feature: Coupons
             line: 1,
             steps: vec![],
         };
-        resolve(&mut s, std::slice::from_ref(&def)).unwrap();
+        resolve(&mut s, &compile(std::slice::from_ref(&def))).unwrap();
         assert!(matches!(&s.before_each[0].action, Action::Command(w) if w == &["goto", "/cart"]));
         let steps = &s.scenarios[0].steps;
         assert!(matches!(&steps[0].action, Action::Command(w) if w == &["fill", "--label", "Coupon code", "SAVE10"]));
@@ -608,7 +612,7 @@ Feature: Coupons
             steps: vec![],
         })
         .collect();
-        resolve(&mut s, &defs).unwrap();
+        resolve(&mut s, &compile(&defs)).unwrap();
         let runs: Vec<&Vec<String>> = s.scenarios[0]
             .steps
             .iter()

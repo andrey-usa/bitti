@@ -993,14 +993,24 @@ pub fn resolve(suites: &mut [Suite]) -> Result<(), ParseError> {
     for suite in suites.iter_mut() {
         resolve_uses(suite, &mut parsed)?;
     }
-    // A .feature file's steps: the `step` blocks of every .bt file in the run.
-    let defs: Vec<Flow> =
-        suites.iter().flat_map(|s| s.flows.values()).filter(|f| f.name.starts_with("step \"")).cloned().collect();
+    // A .feature file's steps: the `step` blocks of every .bt file in the
+    // run, each once however many files `use` it, compiled once.
+    let mut defined = std::collections::BTreeSet::new();
+    let defs: Vec<Flow> = suites
+        .iter()
+        .flat_map(|s| s.flows.values())
+        .filter(|f| f.name.starts_with("step \"") && defined.insert((f.file.clone(), f.line)))
+        .cloned()
+        .collect();
+    let compiled = crate::gherkin::compile(&defs);
+    // Steps navigera has already read, by file and line: a flow shared
+    // through `use` is read once for the run, not once per suite using it.
+    let mut read = std::collections::HashSet::new();
     for suite in suites.iter_mut() {
         if suite.feature.is_some() {
-            crate::gherkin::resolve(suite, &defs)?;
+            crate::gherkin::resolve(suite, &compiled)?;
         }
-        check_suite(suite)?;
+        check_suite(suite, &mut read)?;
     }
     Ok(())
 }
@@ -1068,11 +1078,18 @@ thread_local! {
     static USE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-fn check_suite(suite: &Suite) -> Result<(), ParseError> {
+fn check_suite(suite: &Suite, read: &mut std::collections::HashSet<(PathBuf, usize)>) -> Result<(), ParseError> {
     {
         // Every `run`, wherever it is, names a known flow; every `as` a
-        // known auth.
-        fn check(steps: &[Step], file: &Path, suite: &Suite) -> Result<(), ParseError> {
+        // known auth (both per suite: a shared flow can lean on what the
+        // suite using it defines). What a step says on its own (its files,
+        // navigera's reading of it) is checked once per step in the run.
+        fn check(
+            steps: &[Step],
+            file: &Path,
+            suite: &Suite,
+            read: &mut std::collections::HashSet<(PathBuf, usize)>,
+        ) -> Result<(), ParseError> {
             let flows = &suite.flows;
             for st in steps {
                 // A script that isn't there is a mistake in the test, not
@@ -1087,7 +1104,8 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                     },
                     _ => None,
                 };
-                if let Some(Expect { subject: crate::expect::Subject::JsFile(f), .. }) = expect {
+                let first = read.insert((file.to_path_buf(), st.line));
+                if let (true, Some(Expect { subject: crate::expect::Subject::JsFile(f), .. })) = (first, expect) {
                     if !f.contains("${") && !Path::new(f).exists() {
                         return Err(ParseError {
                             file: file.to_path_buf(),
@@ -1096,7 +1114,9 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                         });
                     }
                 }
-                if let Some(Expect { subject: crate::expect::Subject::JsonSchema { file: f, .. }, .. }) = expect {
+                if let (true, Some(Expect { subject: crate::expect::Subject::JsonSchema { file: f, .. }, .. })) =
+                    (first, expect)
+                {
                     // `openapi.json#/components/schemas/Item`: the file before the `#`.
                     let f = f.split_once('#').map_or(f.as_str(), |(f, _)| f);
                     if !f.contains("${") && !Path::new(f).exists() {
@@ -1113,7 +1133,7 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                     | Action::Exec { steps, .. }
                     | Action::Http { steps, .. }
                     | Action::Retry { steps, .. } => {
-                        check(steps, file, suite)?;
+                        check(steps, file, suite, read)?;
                         continue;
                     }
                     a => a,
@@ -1132,7 +1152,7 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
                     }
                     _ => None,
                 };
-                if let Some(words) = words.filter(|w| w.first().is_some_and(|op| !op.contains("${"))) {
+                if let Some(words) = words.filter(|w| first && w.first().is_some_and(|op| !op.contains("${"))) {
                     let stand_in: Vec<String> =
                         words.iter().map(|w| if w.contains("${") { "1".to_string() } else { w.clone() }).collect();
                     if let Err(message) = crate::runner::parse(&stand_in) {
@@ -1167,16 +1187,16 @@ fn check_suite(suite: &Suite) -> Result<(), ParseError> {
         }
         let file = suite.file.clone();
         for steps in [&suite.before_all, &suite.before_each, &suite.after_each, &suite.after_all] {
-            check(steps, &file, suite)?;
+            check(steps, &file, suite, read)?;
         }
         for sc in &suite.scenarios {
-            check(&sc.steps, &file, suite)?;
+            check(&sc.steps, &file, suite, read)?;
         }
         for f in suite.flows.values() {
-            check(&f.steps, &f.file, suite)?;
+            check(&f.steps, &f.file, suite, read)?;
         }
         for a in suite.auths.values() {
-            check(&a.steps, &a.file, suite)?;
+            check(&a.steps, &a.file, suite, read)?;
         }
     }
     Ok(())
