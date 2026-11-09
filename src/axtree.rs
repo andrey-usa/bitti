@@ -228,7 +228,14 @@ fn subtree_end(tree: &[(usize, String)], i: usize) -> usize {
 
 struct Matcher<'a> {
     tree: &'a [(usize, String)],
-    memo: HashMap<(usize, usize, usize), bool>,
+    /// For a template line (with the siblings after it) and the end of the
+    /// range it is looked for in: the latest start known to hold and the
+    /// earliest known to fail. A later start only leaves fewer lines, so
+    /// once a start fails every later one does, and once one holds every
+    /// earlier one does: without this, a line that can't be placed is
+    /// looked for again after each of its earlier sibling's candidates,
+    /// quadratic in the rows of a long table.
+    memo: HashMap<(usize, usize), (Option<usize>, Option<usize>)>,
 }
 
 impl Matcher<'_> {
@@ -236,9 +243,13 @@ impl Matcher<'_> {
     /// of the one before it.
     fn siblings(&mut self, nodes: &[Node], from: usize, to: usize) -> bool {
         let Some((first, rest)) = nodes.split_first() else { return true };
-        let key = (first.id, from, to);
-        if let Some(&known) = self.memo.get(&key) {
-            return known;
+        let key = (first.id, to);
+        let (holds, fails) = self.memo.get(&key).copied().unwrap_or_default();
+        if holds.is_some_and(|h| from <= h) {
+            return true;
+        }
+        if fails.is_some_and(|f| from >= f) {
+            return false;
         }
         let mut found = false;
         for i in from..to {
@@ -251,7 +262,12 @@ impl Matcher<'_> {
                 break;
             }
         }
-        self.memo.insert(key, found);
+        let known = self.memo.entry(key).or_default();
+        if found {
+            known.0 = Some(known.0.map_or(from, |h| h.max(from)));
+        } else {
+            known.1 = Some(known.1.map_or(from, |f| f.min(from)));
+        }
         found
     }
 }
@@ -396,5 +412,22 @@ mod tests {
         let started = std::time::Instant::now();
         assert!(matches(&t, &page).is_err());
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    /// A line that isn't there, after one that every row matches: each
+    /// row's end is a new place to look from, and the look must not start
+    /// over from each of them (a table of thousands of rows took seconds).
+    #[test]
+    fn a_missing_line_after_many_rows_is_missed_quickly() {
+        let mut page = String::from("- table:\n");
+        for k in 0..20_000 {
+            page.push_str(&format!("  - row: \"r{k}\"\n    - cell \"c{k}\"\n"));
+        }
+        let started = std::time::Instant::now();
+        let e = matches(&tpl("- table\n  - row\n  - row: \"Total\""), &page).unwrap_err();
+        assert!(e.contains("no line matches `- row: \"Total\"`"), "{e}");
+        assert!(matches(&tpl("- row\n- button \"Next\""), &page).is_err());
+        assert_eq!(matches(&tpl("- table\n  - row\n  - row: \"r19999\""), &page), Ok(()));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
     }
 }
