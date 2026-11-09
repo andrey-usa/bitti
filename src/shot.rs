@@ -20,7 +20,15 @@ pub fn decode(bytes: &[u8]) -> Result<Image, String> {
     buf.truncate(info.buffer_size());
     let rgba = match info.color_type {
         png::ColorType::Rgba => buf,
-        png::ColorType::Rgb => buf.chunks(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
+        // Chrome's captures are RGB: into a buffer of the final size, which
+        // collecting a flat_map would grow by doubling.
+        png::ColorType::Rgb => {
+            let mut rgba = vec![255; buf.len() / 3 * 4];
+            for (to, p) in rgba.chunks_exact_mut(4).zip(buf.chunks_exact(3)) {
+                to[..3].copy_from_slice(p);
+            }
+            rgba
+        }
         png::ColorType::GrayscaleAlpha => buf.chunks(2).flat_map(|p| [p[0], p[0], p[0], p[1]]).collect(),
         png::ColorType::Grayscale => buf.iter().flat_map(|&g| [g, g, g, 255]).collect(),
         png::ColorType::Indexed => return Err("an indexed PNG wasn't expanded".into()),
@@ -190,5 +198,23 @@ mod tests {
             assert_eq!(&img.rgba[at * 4..at * 4 + 4], &[255, 0, 0, 255]);
         }
         assert_eq!(compare(&a, &a.clone(), 0.0).unwrap().pixels, 0);
+    }
+
+    #[test]
+    fn rgb_and_gray_captures_decode_as_rgba() {
+        for (color, px, rgba) in [
+            (png::ColorType::Rgb, vec![1, 2, 3, 4, 5, 6], vec![1, 2, 3, 255, 4, 5, 6, 255]),
+            (png::ColorType::Grayscale, vec![7, 8], vec![7, 7, 7, 255, 8, 8, 8, 255]),
+            (png::ColorType::GrayscaleAlpha, vec![7, 9, 8, 10], vec![7, 7, 7, 9, 8, 8, 8, 10]),
+        ] {
+            let mut bytes = Vec::new();
+            {
+                let mut e = png::Encoder::new(&mut bytes, 2, 1);
+                e.set_color(color);
+                e.set_depth(png::BitDepth::Eight);
+                e.write_header().unwrap().write_image_data(&px).unwrap();
+            }
+            assert_eq!(decode(&bytes).unwrap(), Image { width: 2, height: 1, rgba }, "{color:?}");
+        }
     }
 }
