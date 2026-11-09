@@ -13,6 +13,9 @@
 //! `#/components/schemas/…`). Anything else in a schema is
 //! ignored, as validators do with keywords they don't know.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+
 use serde_json::{Map, Value};
 
 /// The most errors a failure lists: the first ones say what is wrong.
@@ -101,8 +104,28 @@ fn key_path(at: &str, key: &str) -> String {
     }
 }
 
+/// Whether `s` matches the regular expression `p`, compiled once per
+/// thread: a schema's `pattern`s and `format`s are checked against every
+/// value of a long list, and compiling one costs more than checking a
+/// thousand values with it.
+fn is_match(p: &str, s: &str) -> Result<bool, regex::Error> {
+    thread_local! {
+        static COMPILED: RefCell<HashMap<String, Result<regex::Regex, regex::Error>>> = RefCell::default();
+    }
+    COMPILED.with(|compiled| {
+        let mut compiled = compiled.borrow_mut();
+        if !compiled.contains_key(p) {
+            compiled.insert(p.to_string(), regex::Regex::new(p));
+        }
+        match &compiled[p] {
+            Ok(re) => Ok(re.is_match(s)),
+            Err(e) => Err(e.clone()),
+        }
+    })
+}
+
 fn format_ok(format: &str, s: &str) -> bool {
-    let re = |p: &str| regex::Regex::new(p).is_ok_and(|r| r.is_match(s));
+    let re = |p: &str| is_match(p, s).unwrap_or(false);
     match format {
         "date-time" => re(r"^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$"),
         "date" => re(r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$"),
@@ -183,8 +206,8 @@ fn check(schema: &Value, v: &Value, at: &str, root: &Value, errors: &mut Vec<Str
                 }
             }
             if let Some(p) = s.get("pattern").and_then(Value::as_str) {
-                match regex::Regex::new(p) {
-                    Ok(re) if !re.is_match(text) => err2(format!("{} doesn't match the pattern {p:?}", shown(v))),
+                match is_match(p, text) {
+                    Ok(false) => err2(format!("{} doesn't match the pattern {p:?}", shown(v))),
                     Err(e) => err2(format!("the schema's pattern {p:?} isn't a regular expression here ({e})")),
                     _ => {}
                 }
@@ -306,12 +329,12 @@ fn check(schema: &Value, v: &Value, at: &str, root: &Value, errors: &mut Vec<Str
             }
         }
         let props = s.get("properties").and_then(Value::as_object);
-        let patterns: Vec<(regex::Regex, &Value)> = s
+        let patterns: Vec<(&str, &Value)> = s
             .get("patternProperties")
             .and_then(Value::as_object)
             .into_iter()
             .flatten()
-            .filter_map(|(p, sub)| Some((regex::Regex::new(p).ok()?, sub)))
+            .map(|(p, sub)| (p.as_str(), sub))
             .collect();
         for (k, item) in obj {
             let here = key_path(at, k);
@@ -320,8 +343,8 @@ fn check(schema: &Value, v: &Value, at: &str, root: &Value, errors: &mut Vec<Str
                 known = true;
                 check(sub, item, &here, root, errors, depth + 1);
             }
-            for (re, sub) in &patterns {
-                if re.is_match(k) {
+            for (p, sub) in &patterns {
+                if is_match(p, k).unwrap_or(false) {
                     known = true;
                     check(sub, item, &here, root, errors, depth + 1);
                 }
@@ -461,6 +484,31 @@ mod tests {
         let errs = validate(&schema, &json!([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).unwrap_err();
         assert_eq!(errs.len(), MAX_ERRORS + 1);
         assert_eq!(errs.last().unwrap(), "… 2 more");
+    }
+
+    /// Each `pattern` and `format` is compiled once, not once a value: a
+    /// list of a thousand items took most of a second (a test build, many).
+    #[test]
+    fn a_long_list_is_checked_without_compiling_its_patterns_again() {
+        let schema = json!({"type": "array", "items": {"type": "object",
+            "properties": {"at": {"format": "date-time"}, "mail": {"format": "email"}, "sku": {"pattern": "^[A-Z]{3}-\\d{4}$"}},
+            "patternProperties": {"^x-": {"type": "string"}}}});
+        let mut items: Vec<Value> = (0..2_000)
+            .map(|i| json!({"at": "2026-11-09T10:00:00Z", "mail": format!("u{i}@example.com"), "sku": format!("ABC-{:04}", i), "x-n": "n"}))
+            .collect();
+        let started = std::time::Instant::now();
+        assert!(validate(&schema, &Value::Array(items.clone())).is_ok());
+        items[1_999]["sku"] = json!("abc");
+        items[7]["x-n"] = json!(1);
+        let errs = validate(&schema, &Value::Array(items)).unwrap_err();
+        assert_eq!(
+            errs,
+            [
+                "$[7][\"x-n\"]: expected string, got integer 1",
+                "$[1999].sku: \"abc\" doesn't match the pattern \"^[A-Z]{3}-\\\\d{4}$\""
+            ]
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
     }
 }
 
