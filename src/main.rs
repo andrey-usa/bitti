@@ -1292,12 +1292,16 @@ fn worker(
         r.rep = job_rep;
         // Held to the end of its tries (a poisoned lock only means a worker
         // panicked: the scenarios still run).
-        let (_shared, _alone) = if runner::is_serial(&sc.tags) {
+        let serial = runner::is_serial(&sc.tags);
+        let (_shared, _alone) = if serial {
             (None, Some(alone.write().unwrap_or_else(|p| p.into_inner())))
         } else {
             (Some(alone.read().unwrap_or_else(|p| p.into_inner())), None)
         };
-        if stop.reached() {
+        // A serial one may have waited long for the others: if the run was
+        // stopped meanwhile, it is not run. (Any other scenario a worker
+        // took runs, and stops at the deadline itself, as before.)
+        if serial && stop.reached() {
             if let Ok(mut q) = queue.lock() {
                 q.push_front(job);
             }
