@@ -856,7 +856,7 @@ pub fn parse(file: &Path, text: &str) -> Result<Suite, ParseError> {
                     [_, p] if !p.trim().is_empty() => p.clone(),
                     _ => return Err(err(line_no, "expected `step \"<words, {placeholders}>\"`".into())),
                 };
-                let (_, params) = crate::gherkin::step_pattern(&pattern).map_err(|m| err(line_no, m))?;
+                let params = crate::gherkin::step_params(&pattern).map_err(|m| err(line_no, m))?;
                 let name = format!("step {pattern:?}");
                 if suite.flows.contains_key(&name) {
                     return Err(err(line_no, format!("a second step {pattern:?}")));
@@ -1923,6 +1923,83 @@ mod tests {
         // Variables stand in for values; `save … = json` is bitti's own.
         check("set w = 800\nscenario \"x\"\n  goto /${w}\n  click --text ${w}\n  save t = get title\n  save id = json $.id\n")
             .unwrap();
+    }
+
+    /// A steps file `use`d by other .bt files is one definition of each of
+    /// its steps, however many files bring it in; the same pattern written
+    /// in two places is still two matches.
+    #[test]
+    fn a_used_steps_file_defines_each_step_once() {
+        let dir = std::env::temp_dir().join(format!("bt-steps-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let steps = "step \"I open the cart\"\n  goto /cart\n";
+        std::fs::write(dir.join("steps.bt"), steps).unwrap();
+        let mut suites = vec![parse(&dir.join("steps.bt"), steps).unwrap()];
+        for name in ["a.bt", "b.bt"] {
+            let text = "use steps.bt\n\nscenario \"s\"\n  goto /\n";
+            std::fs::write(dir.join(name), text).unwrap();
+            suites.push(parse(&dir.join(name), text).unwrap());
+        }
+        let feature = "Feature: f\n  Scenario: s\n    When I open the cart\n";
+        suites.push(crate::gherkin::parse(&dir.join("f.feature"), feature).unwrap());
+        let mut twice = suites.clone();
+        resolve(&mut suites).unwrap();
+        assert!(
+            matches!(&suites[3].scenarios[0].steps[0].action, Action::Run { flow, .. } if flow == "step \"I open the cart\"")
+        );
+        twice.push(parse(&dir.join("more.bt"), steps).unwrap());
+        let e = resolve(&mut twice).unwrap_err();
+        assert!(e.message.contains("matches more than one step"), "{}", e.message);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A steps file `use`d by many .bt files is parsed for each of them,
+    /// and its `step` headers compile no pattern while parsed: compiling
+    /// there cost one regex per step per user (seconds for a large suite).
+    #[test]
+    fn a_steps_file_used_by_many_files_is_quick() {
+        let dir = std::env::temp_dir().join(format!("bt-many-uses-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut steps = String::new();
+        for d in 0..100 {
+            steps.push_str(&format!(
+                "step \"I do thing {d} with {{value}} and {{other}}\"\n  click --text \"Go {d}\"\n"
+            ));
+        }
+        std::fs::write(dir.join("steps.bt"), &steps).unwrap();
+        let mut suites = vec![parse(&dir.join("steps.bt"), &steps).unwrap()];
+        for k in 0..60 {
+            let text = format!("use steps.bt\n\nscenario \"s{k}\"\n  goto /\n");
+            suites.push(parse(&dir.join(format!("u{k}.bt")), &text).unwrap());
+        }
+        let started = std::time::Instant::now();
+        resolve(&mut suites).unwrap();
+        let took = started.elapsed();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(suites[60].flows.len(), 100);
+        assert!(took < std::time::Duration::from_secs(2), "{took:?}");
+    }
+
+    /// The run's step patterns are compiled once, not once per .feature
+    /// file: a suite of hundreds of features started seconds late.
+    #[test]
+    fn many_features_resolve_their_steps_quickly() {
+        let mut defs = String::new();
+        for d in 0..100 {
+            defs.push_str(&format!("step \"I do thing {d} with {{value}}\"\n  click --text \"Go {d}\"\n"));
+        }
+        let mut suites = vec![parse(Path::new("steps.bt"), &defs).unwrap()];
+        for k in 0..200 {
+            let text = format!("Feature: f{k}\n  Scenario: s{k}\n    When I do thing {} with \"v\"\n", k % 100);
+            suites.push(crate::gherkin::parse(&PathBuf::from(format!("f{k}.feature")), &text).unwrap());
+        }
+        let started = std::time::Instant::now();
+        resolve(&mut suites).unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
+        let step = &suites[200].scenarios[0].steps[0].action;
+        assert!(
+            matches!(step, Action::Run { flow, args } if flow == "step \"I do thing 99 with {value}\"" && args == &["v"])
+        );
     }
 
     #[test]

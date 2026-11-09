@@ -259,14 +259,19 @@ pub fn parse(file: &Path, text: &str) -> Result<Suite, ParseError> {
 /// needs anywhere near this many.
 pub const MAX_PLACEHOLDERS: usize = 32;
 
-/// A `step "…"` pattern as a regex: `{name}` takes a quoted string or one
-/// word. The names, in order.
-pub fn step_pattern(pattern: &str) -> Result<(Regex, Vec<String>), String> {
-    let mut re = String::from("^");
-    let mut names = Vec::new();
+/// A `step "…"` pattern split at its placeholders: the text before each
+/// `{name}` with the name, and the text after the last.
+struct Split<'a> {
+    parts: Vec<(&'a str, &'a str)>,
+    tail: &'a str,
+}
+
+/// A `step "…"` pattern split at its placeholders, which are checked.
+fn placeholders(pattern: &str) -> Result<Split<'_>, String> {
+    let mut parts: Vec<(&str, &str)> = Vec::new();
     let mut rest = pattern;
     while let Some(open) = rest.find('{') {
-        if names.len() == MAX_PLACEHOLDERS {
+        if parts.len() == MAX_PLACEHOLDERS {
             let shown: String = pattern.chars().take(60).collect();
             return Err(format!(
                 "too many placeholders in {shown:?}…: {} (at most {MAX_PLACEHOLDERS}); a step names a few values, not a table",
@@ -278,16 +283,35 @@ pub fn step_pattern(pattern: &str) -> Result<(Regex, Vec<String>), String> {
         if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return Err(format!("bad placeholder {{{name}}} in {pattern:?}"));
         }
-        if names.iter().any(|n| n == name) {
+        if parts.iter().any(|&(_, n)| n == name) {
             return Err(format!("{{{name}}} twice in {pattern:?}: name each placeholder once"));
         }
-        re.push_str(&regex::escape(&rest[..open]));
-        re.push_str(r#"(?:"([^"]*)"|'([^']*)'|(\S+))"#);
-        names.push(name.to_string());
+        parts.push((&rest[..open], name));
         rest = &rest[close + 1..];
     }
-    re.push_str(&regex::escape(rest));
+    Ok(Split { parts, tail: rest })
+}
+
+/// A `step "…"` pattern's placeholder names, in order, checked as
+/// [`step_pattern`] checks them but without compiling its regex: a .bt
+/// file's `step` header needs only the names, and the run compiles each
+/// pattern once, when the `.feature` steps are resolved.
+pub fn step_params(pattern: &str) -> Result<Vec<String>, String> {
+    Ok(placeholders(pattern)?.parts.into_iter().map(|(_, name)| name.to_string()).collect())
+}
+
+/// A `step "…"` pattern as a regex: `{name}` takes a quoted string or one
+/// word. The names, in order.
+pub fn step_pattern(pattern: &str) -> Result<(Regex, Vec<String>), String> {
+    let Split { parts, tail } = placeholders(pattern)?;
+    let mut re = String::from("^");
+    for (text, _) in &parts {
+        re.push_str(&regex::escape(text));
+        re.push_str(r#"(?:"([^"]*)"|'([^']*)'|(\S+))"#);
+    }
+    re.push_str(&regex::escape(tail));
     re.push('$');
+    let names = parts.into_iter().map(|(_, name)| name.to_string()).collect();
     Ok((Regex::new(&re).map_err(|e| e.to_string())?, names))
 }
 
@@ -641,6 +665,25 @@ Feature: Coupons
         assert_eq!((c.get(1).unwrap().as_str(), c.get(6).unwrap().as_str()), ("ada@x.io", "hunter2"));
         assert!(step_pattern("a {x} b {x}").is_err());
         assert!(!re.is_match("I sign in as ada"));
+    }
+
+    /// A `step` header's names are the pattern's, and a bad pattern is
+    /// refused with the same words, though nothing is compiled.
+    #[test]
+    fn step_params_are_the_patterns_names_and_errors() {
+        for p in [
+            "I sign in as {email} with {password}",
+            "no placeholders (a.b*c+?)",
+            "{a}{b} tail",
+            "a {x} b {x}",
+            "a {x",
+            "a {} b",
+            "a {x-y} b",
+            "é {ünï} b",
+            "a } b {c}",
+        ] {
+            assert_eq!(step_params(p), step_pattern(p).map(|(_, names)| names), "{p}");
+        }
     }
 
     #[test]
