@@ -1,5 +1,7 @@
 # bitti
 
+[![Documentation](https://img.shields.io/badge/documentation-site-blue.svg)](https://andrey-usa.github.io/bitti/)
+
 Plain-text web tests that run on real Chrome. One native binary drives the
 browser in-process through [navigera](https://github.com/andrey-usa/navigera):
 no Node, no transpile step, no driver process, and no model at run time.
