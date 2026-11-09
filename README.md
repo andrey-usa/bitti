@@ -52,6 +52,27 @@ $ bitti --version
 bitti 0.1.0
 ```
 
+## Quick start
+
+A scenario is a `.bt` file. Point `base` at your app, list the steps,
+and run the folder:
+
+```text
+# tests/shop.bt
+base http://127.0.0.1:8000
+
+scenario "Adding a product counts it in the cart"
+  goto /
+  click --text "Add to cart"
+  expect --selector "#cart-count" text is 1
+```
+
+```console
+$ bitti run tests
+PASS  tests/shop.bt:3  Adding a product counts it in the cart  (119 ms)
+1 passed, 0 failed in 219 ms
+```
+
 ## The format
 
 - Top-level lines: `base <url>`, `set NAME = value`, `use other.bt`,
