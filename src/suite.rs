@@ -1034,6 +1034,8 @@ fn resolve_uses(
                 continue;
             }
             let err = |m: String| ParseError { file: suite.file.clone(), line, message: m };
+            #[cfg(test)]
+            USE_READS.with(|n| n.set(n.get() + 1));
             let text = std::fs::read_to_string(&path).map_err(|e| {
                 err(match e.kind() {
                     std::io::ErrorKind::NotFound => {
@@ -1057,6 +1059,13 @@ fn resolve_uses(
         }
     }
     Ok(())
+}
+
+// How many `use` files the run read, for the test that holds a shared
+// file to one parse per run.
+#[cfg(test)]
+thread_local! {
+    static USE_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn check_suite(suite: &Suite) -> Result<(), ParseError> {
@@ -1772,6 +1781,31 @@ mod tests {
         assert_eq!(s.scenarios[0].tags, ["data"]);
         assert_eq!(s.vars["who"], "ada");
         assert!(s.flows.contains_key("hello"));
+    }
+
+    #[test]
+    fn a_file_many_suites_use_is_read_once_per_run() {
+        // 40 suites sharing one 200-step file read and parsed it 40 times
+        // (9.0 s); the run reads each `use`d file once, nested ones too.
+        let dir = std::env::temp_dir().join(format!("bt-use-once-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("shared.bt"), "use more.bt\nflow open\n  goto /\n").unwrap();
+        std::fs::write(dir.join("more.bt"), "set who = ada\nflow deep\n  goto /deep\n").unwrap();
+        let mut suites: Vec<Suite> = (0..40)
+            .map(|i| {
+                let file = dir.join(format!("s{i}.bt"));
+                let text = format!("use shared.bt\nscenario \"s{i}\"\n  run open\n  run deep\n");
+                std::fs::write(&file, &text).unwrap();
+                parse(&file, &text).unwrap()
+            })
+            .collect();
+        USE_READS.with(|n| n.set(0));
+        resolve(&mut suites).unwrap();
+        assert_eq!(USE_READS.with(|n| n.get()), 2, "shared.bt and more.bt, once each for the run");
+        for s in &suites {
+            assert!(s.flows.contains_key("open") && s.flows.contains_key("deep") && s.vars["who"] == "ada", "{:?}", s.file);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
