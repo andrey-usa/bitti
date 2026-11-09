@@ -31,6 +31,25 @@ browser](#api-tests-without-a-browser)).
 
 Status: 0.1.0. Everything below works in this build.
 
+## Install
+
+0.1.0 ships the same prebuilt binary on every channel:
+
+| | |
+|---|---|
+| pip / uv | `pip install bitti` · `uv tool install bitti` |
+| npm | `npm install -g @getbitti/bitti` |
+| Homebrew | `brew install andrey-usa/tap/bitti` |
+| Scoop | `scoop bucket add andrey-usa https://github.com/andrey-usa/scoop-bucket` then `scoop install bitti` |
+| GitHub release | download the archive for your platform from [v0.1.0](https://github.com/andrey-usa/bitti/releases/tag/v0.1.0) |
+
+Verify it:
+
+```console
+$ bitti --version
+bitti 0.1.0
+```
+
 ## The format
 
 - Top-level lines: `base <url>`, `set NAME = value`, `use other.bt`,
