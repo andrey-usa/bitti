@@ -21,6 +21,11 @@ png = "0.17"
 serde = { version = "1", features = ["derive"] }
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 
+# musl's allocator is slow on the many small allocations a large page's
+# snapshot makes: the static Linux builds use mimalloc (src/main.rs).
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = { version = "0.1", default-features = false }
+
 [profile.release]
 lto = true
 codegen-units = 1

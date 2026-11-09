@@ -29,6 +29,13 @@ use std::process::ExitCode;
 use std::sync::{mpsc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+/// The static Linux build's allocator: musl's own is several times slower
+/// on the small allocations of a large page's snapshot, which navigera
+/// takes in this process.
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// The agent skill: the format and the commands, for an agent writing tests.
 const SKILL_MD: &str = include_str!("../skills/bitti/SKILL.md");
 
