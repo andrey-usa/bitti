@@ -3140,6 +3140,12 @@ impl Scope {
             self.used_secrets.borrow_mut().insert(v.clone());
             return Some(v);
         }
+        // An authenticator app's code now, from its secret (masked like one).
+        if let Some(key) = name.strip_prefix("totp:") {
+            let v = std::env::var(key).ok().or_else(|| self.secrets.get(key).cloned())?;
+            self.used_secrets.borrow_mut().insert(v.clone());
+            return navigera::totp::Totp::parse(&v).ok().map(|t| t.now().0);
+        }
         match name {
             "run.id" => return Some(self.run_id.clone()),
             "scenario.name" => return Some(self.name.clone()),

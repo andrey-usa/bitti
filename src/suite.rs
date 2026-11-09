@@ -371,12 +371,18 @@ pub fn interpolate(word: &str, lookup: &dyn Fn(&str) -> Option<String>) -> Resul
                 Some((n, d)) => (n, Some(d)),
                 None => (inner, None),
             };
-            let bare = name.strip_prefix("secret:").unwrap_or(name);
+            let bare = name.strip_prefix("secret:").or_else(|| name.strip_prefix("totp:")).unwrap_or(name);
             if bare.is_empty() || !bare.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.') {
                 return Err(format!("bad variable name {name:?} in {word:?}"));
             }
             match lookup(name).or_else(|| default.map(str::to_string)) {
                 Some(v) => out.push_str(&v),
+                None if name.starts_with("totp:") => {
+                    return Err(format!(
+                        "${{{name}}}: set {bare} (the environment, or --secrets) to the authenticator's base32 key \
+                         or the otpauth:// URI of the site's QR code"
+                    ))
+                }
                 None => return Err(format!("unknown variable ${{{name}}}")),
             }
             rest = &body[end + 1..];
@@ -553,7 +559,8 @@ pub fn unset_vars(suite: &Suite, sc: &Scenario, run_vars: &[String]) -> Vec<(usi
         }
         for w in &ws {
             for (name, has_default) in used_vars(w) {
-                let env = std::env::var_os(name.strip_prefix("secret:").unwrap_or(&name)).is_some();
+                let bare = name.strip_prefix("secret:").or_else(|| name.strip_prefix("totp:")).unwrap_or(&name);
+                let env = std::env::var_os(bare).is_some();
                 if !has_default && !known.contains(&name) && !env {
                     out.push((st.line, name));
                 }

@@ -18,6 +18,9 @@ All notable changes to this project are documented here. The format follows
 - `@serial` (or `@exclusive`): a scenario that runs while no other one
   does, for one that changes what the others read. With `--workers` the
   others run in parallel first, then each `@serial` one alone.
+- `${totp:NAME}`: the code an authenticator app shows now, for a
+  sign-in's second step, from a secret (the environment or `--secrets`)
+  holding its base32 key or `otpauth://` URI, masked like one.
 - From navigera: `passkey on` (a virtual authenticator: passkey sign-up
   and sign-in with no person or phone), kept by `state save` and so by
   `auth`; `set cpu 4` (a slower phone's main thread); `screenshot` of one

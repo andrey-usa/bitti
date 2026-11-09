@@ -174,6 +174,10 @@ runs what failed last time. `--headed --slowmo 500` shows a run step by
 step; a `pause` step stops there until Enter, the browser open to `navigera
 --attach` (the command is printed).
 
+A sign-in's second step: `fill --label Code ${totp:SHOP_TOTP}` types the
+authenticator app's code now (SHOP_TOTP holds its base32 key or otpauth://
+URI); a passkey sign-in needs `passkey on` before the page asks.
+
 Exit codes of a run: 0 passed, 1 a scenario failed, 2 a file or argument is
 wrong, 3 the browser or the app server didn't start. More (flows, sign-in
 once with `auth`, data rows, workers, retries, reports): `bitti run

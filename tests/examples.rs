@@ -301,6 +301,39 @@ fn workers_retries_and_reporters() {
 }
 
 #[test]
+fn a_totp_variable_is_the_authenticators_code_now() {
+    // RFC 6238's key; Python works the code out on its own and takes this
+    // window's or, across a boundary, the one before.
+    let dir = std::env::temp_dir().join(format!("bt-totp-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let secrets = dir.join("secrets.env");
+    std::fs::write(&secrets, "SHOP_TOTP=otpauth://totp/Shop:ada?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Shop\n")
+        .unwrap();
+    std::fs::write(
+        dir.join("check.py"),
+        "import hmac, hashlib, struct, sys, time\nk = b'12345678901234567890'\n\
+         def code(t):\n    h = hmac.new(k, struct.pack('>Q', t // 30), hashlib.sha1).digest(); o = h[19] & 15\n\
+         \x20   return '%06d' % ((struct.unpack('>I', h[o:o + 4])[0] & 0x7fffffff) % 1000000)\n\
+         now = int(time.time())\nsys.exit(0 if sys.argv[1] in (code(now), code(now - 30)) else 1)\n",
+    )
+    .unwrap();
+    let file = dir.join("totp.bt");
+    std::fs::write(
+        &file,
+        "scenario \"The code checks out\"\n  exec ${PY} check.py ${totp:SHOP_TOTP}\n    expect exit 0\n\n\
+         scenario \"A missing secret says what to set\"\n  exec ${PY} check.py ${totp:NOPE_TOTP}\n",
+    )
+    .unwrap();
+    let py = if cfg!(windows) { "PY=python" } else { "PY=python3" };
+    let (code, out) = bitti(&["run", file.to_str().unwrap(), "--secrets", secrets.to_str().unwrap(), "--var", py]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("1 passed, 1 failed"), "{out}");
+    assert!(out.contains("set NOPE_TOTP (the environment, or --secrets)"), "{out}");
+    assert!(!out.contains("GEZDGNBV"), "the key never shows: {out}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn a_serial_scenario_runs_while_no_other_does() {
     // API-only scenarios (no browser): each logs when it starts and ends,
     // 300 ms apart. Four at two workers, one of them @serial.

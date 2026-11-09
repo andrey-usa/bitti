@@ -76,6 +76,12 @@ Status: 0.1.0. Everything below works in this build.
   (`NAME=value` lines; the environment wins). Its value is masked as `***` in everything the run
   prints and saves (messages, the page's URL and title, saved values,
   JUnit and JSON lines).
+- `${totp:NAME}`: the code an authenticator app shows right now, for a
+  sign-in's second step (`fill --label "Authentication code"
+  ${totp:SHOP_TOTP}`). NAME is found as a secret's is and holds the
+  authenticator's base32 key or the `otpauth://` URI of the site's QR
+  code; the key is masked like a secret. A code with under 3 s left
+  waits for the next one, so it can't run out before the site checks it.
 - A default with spaces is one word: quote it whole,
   `"${GREETING:-hello there}"` (words split before `${…}` is filled in).
 - A `set` value can hold `${…}` too (a default, a `--var`, another `set`,
