@@ -253,6 +253,12 @@ pub fn parse(file: &Path, text: &str) -> Result<Suite, ParseError> {
     Ok(suite)
 }
 
+/// The most placeholders a step pattern may hold. Each one is three
+/// capture groups in the compiled regex, so a pattern with hundreds of
+/// them compiles into gigabytes (800 took 2.7 GB and 16 s); no real step
+/// needs anywhere near this many.
+pub const MAX_PLACEHOLDERS: usize = 32;
+
 /// A `step "…"` pattern as a regex: `{name}` takes a quoted string or one
 /// word. The names, in order.
 pub fn step_pattern(pattern: &str) -> Result<(Regex, Vec<String>), String> {
@@ -260,6 +266,13 @@ pub fn step_pattern(pattern: &str) -> Result<(Regex, Vec<String>), String> {
     let mut names = Vec::new();
     let mut rest = pattern;
     while let Some(open) = rest.find('{') {
+        if names.len() == MAX_PLACEHOLDERS {
+            let shown: String = pattern.chars().take(60).collect();
+            return Err(format!(
+                "too many placeholders in {shown:?}…: {} (at most {MAX_PLACEHOLDERS}); a step names a few values, not a table",
+                pattern.matches('{').count()
+            ));
+        }
         let close = rest[open..].find('}').ok_or_else(|| format!("`{{` without `}}` in {pattern:?}"))? + open;
         let name = &rest[open + 1..close];
         if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
@@ -322,14 +335,48 @@ fn phrase(text: &str) -> Option<Vec<String>> {
     None
 }
 
+/// What a `{:?}`-quoted string holds: a flow's name carries its step
+/// pattern Debug-escaped (`step "say \"hi\""`), so the pattern a
+/// `.feature` step must match is the unescaped text.
+fn unescape_debug(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some('0') => out.push('\0'),
+            Some('u') => {
+                let hex: String = chars.by_ref().take_while(|c| *c != '}').filter(|c| *c != '{').collect();
+                match u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
+                    Some(c) => out.push(c),
+                    None => {
+                        out.push('\\');
+                        out.push('u');
+                        out.push_str(&hex);
+                    }
+                }
+            }
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
 /// Every step of a `.feature` suite, found among the run's `step "…"`
 /// blocks (`defs`, flows named `step "<pattern>"`), else in the phrase book.
 pub fn resolve(suite: &mut Suite, defs: &[Flow]) -> Result<(), ParseError> {
     let compiled: Vec<(&Flow, Regex)> = defs
         .iter()
         .filter_map(|f| {
-            let pattern = f.name.strip_prefix("step \"")?.strip_suffix('"')?;
-            step_pattern(pattern).ok().map(|(re, _)| (f, re))
+            let pattern = unescape_debug(f.name.strip_prefix("step \"")?.strip_suffix('"')?);
+            step_pattern(&pattern).ok().map(|(re, _)| (f, re))
         })
         .collect();
     let file = suite.file.clone();
@@ -539,6 +586,47 @@ Feature: Coupons
         let e = resolve(&mut bad, &[]).unwrap_err();
         assert_eq!(e.line, 3);
         assert!(e.message.contains("`step \"I dance\"`"), "{e}");
+    }
+
+    #[test]
+    fn patterns_with_quotes_or_backslashes_match() {
+        // The run names a step flow by its Debug-quoted pattern
+        // (`step "I say \"hi\"…"`); the pattern it must match is the
+        // unescaped text, quotes and backslashes as written.
+        let feature = "Feature: x\n  Scenario: y\n    Given I say \"hi\" to \"ada\"\n    Given the file C:\\docs\\readme opens\n";
+        let mut s = parse(Path::new("c.feature"), feature).unwrap();
+        let defs: Vec<Flow> = [
+            ("I say \"hi\" to {name}", vec!["name"]),
+            ("the file C:\\docs\\{name} opens", vec!["name"]),
+        ]
+        .iter()
+        .map(|(p, params)| Flow {
+            name: format!("step {p:?}"),
+            params: params.iter().map(|p| p.to_string()).collect(),
+            file: "steps.bt".into(),
+            line: 1,
+            steps: vec![],
+        })
+        .collect();
+        resolve(&mut s, &defs).unwrap();
+        let runs: Vec<&Vec<String>> = s.scenarios[0]
+            .steps
+            .iter()
+            .map(|st| match &st.action {
+                Action::Run { args, .. } => args,
+                other => panic!("not resolved to a step: {other:?}"),
+            })
+            .collect();
+        assert_eq!(runs, [&vec!["ada".to_string()], &vec!["readme".to_string()]]);
+    }
+
+    #[test]
+    fn a_pattern_caps_its_placeholders() {
+        let many = |n: usize| (0..n).map(|i| format!("{{a{i}}}")).collect::<Vec<_>>().join(" ");
+        assert!(step_pattern(&many(MAX_PLACEHOLDERS)).is_ok());
+        let e = step_pattern(&many(MAX_PLACEHOLDERS + 1)).unwrap_err();
+        assert!(e.contains("too many placeholders"), "{e}");
+        assert!(e.len() < 200, "the error stays short: {e}");
     }
 
     #[test]
