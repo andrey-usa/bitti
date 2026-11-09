@@ -76,7 +76,7 @@ const RUN_OPTIONS: &[(&str, &str)] = &[
     ("--last-failed", "only the scenarios that failed in the last run (also --lf)"),
     ("--max-failures <n>", "start no scenario once n have failed (-x: 1); the rest are reported as not run"),
     ("--forbid-only", "a scenario tagged @only is an error (on by itself under CI); without it, @only runs just those"),
-    ("--workers <n|auto>", "scenarios at once (default 1; auto: half the CPUs, at most 8); also -j <n>"),
+    ("--workers <n|auto>", "scenarios at once (default auto: half the CPUs, at most 8); also -j <n>"),
     ("--isolation <how>", "context (default): one browser, a browser context per worker; browser: a browser each"),
     ("--retries <n>", "run a failing scenario again, up to n times; one that then passes is flaky"),
     ("--fail-on-flaky", "a flaky scenario fails the run"),
@@ -225,6 +225,9 @@ struct Args {
     /// bitti.toml's `[server]`.
     server: Option<config::Server>,
     workers: usize,
+    /// `--workers` (or `workers` in bitti.toml) was given: a run that can
+    /// only take one says it dropped them.
+    workers_given: bool,
     retries: u32,
     fail_on_flaky: bool,
     shard: Option<(usize, usize)>,
@@ -243,6 +246,14 @@ struct Args {
     /// `--forbid-only` (on by itself under CI): a scenario tagged `@only`
     /// is an error, not a filter.
     forbid_only: bool,
+}
+
+/// The default and `--workers auto`: half the CPUs this process may use
+/// (cgroup quotas and affinity included), at most 8. A run never starts
+/// more workers than it has scenarios.
+fn auto_workers() -> usize {
+    let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
+    (cpus / 2).clamp(1, 8)
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -282,7 +293,7 @@ fn parse_args() -> Result<Args, String> {
     let mut allure = None;
     let mut html = None;
     let mut base_flag = None;
-    let mut workers = 1usize;
+    let mut workers = None;
     let mut retries = 0u32;
     let mut fail_on_flaky = false;
     let mut shard = None;
@@ -387,15 +398,14 @@ fn parse_args() -> Result<Args, String> {
             "--evidence" => opts.evidence = PathBuf::from(val("--evidence")?),
             "--workers" | "-j" => {
                 let v = val("--workers")?;
-                workers = if v == "auto" {
-                    let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
-                    (cpus / 2).clamp(1, 8)
+                workers = Some(if v == "auto" {
+                    auto_workers()
                 } else {
                     v.parse::<usize>()
                         .ok()
                         .filter(|n| *n > 0)
                         .ok_or_else(|| format!("--workers takes a number or auto, not {v:?}"))?
-                };
+                });
             }
             "--retries" => {
                 let v = val("--retries")?;
@@ -476,7 +486,8 @@ fn parse_args() -> Result<Args, String> {
         allure,
         html,
         server: config.and_then(|c| c.profile.server),
-        workers,
+        workers: workers.unwrap_or_else(auto_workers),
+        workers_given: workers.is_some(),
         retries,
         fail_on_flaky,
         shard,
@@ -921,13 +932,13 @@ fn run(args: Args) -> ExitCode {
     let github = args.reporters.iter().any(|r| r == "github");
     // A pause holds the run at one failure: one worker. An Electron app
     // runs one copy at a time (two would share its user data).
-    if opts.electron.is_some() && args.workers > 1 {
+    if opts.electron.is_some() && args.workers_given && args.workers > 1 {
         eprintln!("bitti: --electron runs one app at a time: --workers {} becomes 1", args.workers);
     }
-    if opts.attach.is_some() && args.workers > 1 {
+    if opts.attach.is_some() && args.workers_given && args.workers > 1 {
         eprintln!("bitti: --attach runs in the one browser it attached to: --workers {} becomes 1", args.workers);
     }
-    if pausing && args.workers > 1 {
+    if pausing && args.workers_given && args.workers > 1 {
         eprintln!("bitti: a `pause` step waits for Enter: --workers {} becomes 1", args.workers);
     }
     let one = opts.pause || pausing || opts.electron.is_some() || opts.attach.is_some();
@@ -952,7 +963,9 @@ fn run(args: Args) -> ExitCode {
                 owner = Some(r);
             }
             Err(e) => {
+                // Said as the one-worker path says it: none of them ran.
                 eprintln!("{}", runner::browser_failed(&format!("{e:#}")));
+                eprintln!("{} not run", counted(jobs.len(), "scenario"));
                 return ExitCode::from(3);
             }
         }
@@ -1027,8 +1040,11 @@ fn run(args: Args) -> ExitCode {
             ms as f64 / 1000.0
         );
     } else if left > 0 && stopped && launch_errors.is_empty() {
+        // The count, not the limit: scenarios already running when the
+        // limit was reached finish, and may fail too.
         let m = args.max_failures.unwrap_or(1);
-        eprintln!("{} not run: {} failed (--max-failures {m})", counted(left, "scenario"), counted(m, "scenario"));
+        let n = failed.load(std::sync::atomic::Ordering::Relaxed);
+        eprintln!("{} not run: {} failed (--max-failures {m})", counted(left, "scenario"), counted(n, "scenario"));
     } else if left > 0 {
         eprintln!("{}", runner::browser_failed(launch_errors.first().map(String::as_str).unwrap_or("?")));
         eprintln!("{} not run", counted(left, "scenario"));

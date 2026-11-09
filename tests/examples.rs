@@ -1477,8 +1477,10 @@ fn a_pause_leaves_the_failing_tab_to_navigera() {
 #[test]
 fn repeat_and_shuffle_hunt_flakes() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let (code, out) =
-        bitti(&["run", "tests/fixtures/flaky.bt", "--base-url", &site.1, "--repeat", "3", "--shuffle", "42"]);
+    // One worker: the seed fixes the order scenarios start in, and with one
+    // worker that is also the order they finish and print in.
+    let one = ["--repeat", "3", "--shuffle", "42", "--workers", "1"];
+    let (code, out) = bitti(&[&["run", "tests/fixtures/flaky.bt", "--base-url", &site.1][..], &one].concat());
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("shuffled with seed 42"), "{out}");
     assert!(out.contains("FLAKY 2/3  tests/fixtures/flaky.bt  Fails once, then passes"), "{out}");
@@ -1494,8 +1496,7 @@ fn repeat_and_shuffle_hunt_flakes() {
     let (_, again) = bitti(&["list", "tests/fixtures/flaky.bt"]);
     assert_eq!(again.lines().count(), 2, "{again}");
     let site2 = own_site().unwrap();
-    let (_, out2) =
-        bitti(&["run", "tests/fixtures/flaky.bt", "--base-url", &site2.1, "--repeat", "3", "--shuffle", "42"]);
+    let (_, out2) = bitti(&[&["run", "tests/fixtures/flaky.bt", "--base-url", &site2.1][..], &one].concat());
     assert_eq!(order(&out), order(&out2), "{out}\n{out2}");
 }
 
@@ -1860,8 +1861,9 @@ fn run_control_picks_and_stops() {
     let (code, out) = bitti_in(&dir, &["list", "t.bt", "--tag", "smoke and"], &[]);
     assert_eq!(code, 2, "{out}");
 
-    // One failure stops the run: the rest are not started.
-    let (code, out) = bitti_in(&dir, &["run", "t.bt", "--base-url", &site.1, "-x"], &[]);
+    // One failure stops the run: the rest are not started. (One worker: with
+    // more, a scenario already running when the first fails still finishes.)
+    let (code, out) = bitti_in(&dir, &["run", "t.bt", "--base-url", &site.1, "-x", "--workers", "1"], &[]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("2 scenarios not run: 1 scenario failed (--max-failures 1)"), "{out}");
     // The whole run, then only what failed in it.

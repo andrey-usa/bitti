@@ -18,6 +18,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- `--workers` defaults to `auto` (half the CPUs, at most 8, never more
+  than there are scenarios) instead of 1, as Playwright Test does. Each
+  worker is a browser context in the one shared browser. Scenarios that
+  must run alone keep `@serial`; `--workers 1` (or `workers = 1` in
+  `bitti.toml`) gives the old order. `--electron`, `--attach` and a
+  `pause` step still run one at a time, and say so only when
+  `--workers` was given.
 - A file named by `use` is read and parsed once per run, however many
   `.bt` files use it (40 files sharing one steps file: 9.0 s of parsing
   became 0.2 s).

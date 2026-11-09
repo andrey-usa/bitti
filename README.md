@@ -464,7 +464,8 @@ bitti --version
 ```
 
 `--base-url` falls back to `base` in the file, then `BITTI_BASE_URL`.
-`--workers auto` is half the CPUs, at most 8.
+`--workers` is `auto` unless given: half the CPUs, at most 8, and never
+more than there are scenarios. `--workers 1` runs them one at a time.
 
 - `--tag smoke` runs the scenarios tagged `@smoke`; a tag expression picks
   by several, as Cucumber writes them: `--tag "smoke and not slow"`,
