@@ -1,6 +1,6 @@
 //! What a run prints, and the JUnit XML CI systems read.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -215,11 +215,19 @@ fn xml(s: &str) -> String {
 
 /// JUnit XML: one `<testsuite>` per file, one `<testcase>` per scenario.
 pub fn junit(results: &[ScenarioResult], ms: f64) -> String {
+    // Each file's results in one pass, the files in the order they first
+    // finished: a search of the list per result, and of the results per
+    // file, was quadratic in a large suite (`merge` of 20,000 took 28 s).
     let mut files: Vec<&Path> = Vec::new();
+    let mut of_file: HashMap<&Path, Vec<&ScenarioResult>> = HashMap::new();
     for r in results {
-        if !files.contains(&r.file.as_path()) {
-            files.push(&r.file);
-        }
+        of_file
+            .entry(&r.file)
+            .or_insert_with(|| {
+                files.push(&r.file);
+                Vec::new()
+            })
+            .push(r);
     }
     let failures = results.iter().filter(|r| !r.passed()).count();
     let skipped = results.iter().filter(|r| r.skipped.is_some()).count();
@@ -231,7 +239,7 @@ pub fn junit(results: &[ScenarioResult], ms: f64) -> String {
         ms / 1000.0
     );
     for file in files {
-        let rs: Vec<&ScenarioResult> = results.iter().filter(|r| r.file == file).collect();
+        let rs = std::mem::take(of_file.get_mut(file).expect("grouped above"));
         let name = xml(&rel(file));
         let _ = writeln!(
             out,
@@ -848,6 +856,22 @@ mod tests {
         assert_eq!((j["status"].as_str(), j["attempt"].as_u64()), (Some("flaky"), Some(2)));
         assert!(junit(&[flaky], 1.0).contains("flaky: passed on try 2"));
         assert!(summary(&[fail_case()], 1.0).contains("0 passed, 1 failed"));
+    }
+
+    /// A file's scenarios are one testsuite, files in the order they first
+    /// finished, however many files: grouping was quadratic in a large run.
+    #[test]
+    fn junit_groups_thousands_of_files_in_their_order() {
+        let one =
+            |file: &str, name: &str| ScenarioResult { file: PathBuf::from(file), name: name.into(), ..fail_case() };
+        let x = junit(&[one("/b.bt", "b1"), one("/a.bt", "a1"), one("/b.bt", "b2")], 1.0);
+        let b = x.find("<testsuite name=\"/b.bt\" tests=\"2\" failures=\"2\"").expect(&x);
+        let a = x.find("<testsuite name=\"/a.bt\" tests=\"1\"").expect(&x);
+        assert!(b < a && x.find("name=\"b2\"").unwrap() < a, "{x}");
+        let many: Vec<ScenarioResult> = (0..20_000).map(|i| one(&format!("/t/{i}.bt"), "s")).collect();
+        let started = std::time::Instant::now();
+        assert_eq!(junit(&many, 1.0).matches("<testsuite ").count(), 20_000);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
     }
 
     fn fail_case() -> ScenarioResult {
