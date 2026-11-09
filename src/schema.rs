@@ -85,6 +85,73 @@ fn equal(a: &Value, b: &Value) -> bool {
     }
 }
 
+/// A value written so that two values are [`equal`] exactly when they
+/// are written the same: numbers by their `f64` (0 and -0 alike), object
+/// keys sorted, strings and numbers delimited.
+fn canonical(v: &Value, out: &mut String) {
+    use std::fmt::Write as _;
+    match v {
+        Value::Null => out.push('n'),
+        Value::Bool(b) => out.push(if *b { 't' } else { 'f' }),
+        Value::Number(n) => match n.as_f64() {
+            Some(x) => {
+                let x = if x == 0.0 { 0.0 } else { x };
+                let _ = write!(out, "d{:x};", x.to_bits());
+            }
+            None => out.push_str("d;"),
+        },
+        Value::String(t) => {
+            let _ = write!(out, "s{}:", t.len());
+            out.push_str(t);
+        }
+        Value::Array(items) => {
+            out.push('[');
+            for item in items {
+                canonical(item, out);
+            }
+            out.push(']');
+        }
+        Value::Object(m) => {
+            let mut keys: Vec<&String> = m.keys().collect();
+            keys.sort_unstable();
+            out.push('{');
+            for k in keys {
+                let _ = write!(out, "s{}:", k.len());
+                out.push_str(k);
+                canonical(&m[k], out);
+            }
+            out.push('}');
+        }
+    }
+}
+
+/// `uniqueItems`: the first item that comes again later, and where it
+/// first does (as comparing every pair in order finds them), by one key
+/// per item: comparing pairs is quadratic in a long list.
+fn first_repeat(items: &[Value]) -> Option<(usize, usize)> {
+    let mut first: HashMap<String, (usize, bool)> = HashMap::with_capacity(items.len());
+    let mut found: Option<(usize, usize)> = None;
+    let mut key = String::new();
+    for (j, item) in items.iter().enumerate() {
+        key.clear();
+        canonical(item, &mut key);
+        match first.get_mut(key.as_str()) {
+            Some((i, again)) => {
+                if !*again {
+                    *again = true;
+                    if found.is_none_or(|(f, _)| *i < f) {
+                        found = Some((*i, j));
+                    }
+                }
+            }
+            None => {
+                first.insert(key.clone(), (j, false));
+            }
+        }
+    }
+    found
+}
+
 /// `#/$defs/user` (or `#`) in the root schema.
 fn resolve<'a>(root: &'a Value, reference: &str) -> Option<&'a Value> {
     let pointer = reference.strip_prefix('#')?;
@@ -264,13 +331,8 @@ fn check(schema: &Value, v: &Value, at: &str, root: &Value, errors: &mut Vec<Str
             }
         }
         if s.get("uniqueItems").and_then(Value::as_bool) == Some(true) {
-            'outer: for (i, a) in items.iter().enumerate() {
-                for (j, b) in items.iter().enumerate().skip(i + 1) {
-                    if equal(a, b) {
-                        err2(format!("items {i} and {j} are the same ({}), and they must be unique", shown(a)));
-                        break 'outer;
-                    }
-                }
+            if let Some((i, j)) = first_repeat(items) {
+                err2(format!("items {i} and {j} are the same ({}), and they must be unique", shown(&items[i])));
             }
         }
         // `prefixItems` (2020-12) or `items` as a list (older): one schema per place.
@@ -508,6 +570,28 @@ mod tests {
                 "$[1999].sku: \"abc\" doesn't match the pattern \"^[A-Z]{3}-\\\\d{4}$\""
             ]
         );
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
+    }
+
+    /// `uniqueItems` names the first item that comes again and where, as
+    /// a pairwise look would, without comparing every pair of a long list.
+    #[test]
+    fn unique_items_name_the_first_repeat_and_a_long_list_is_quick() {
+        let unique = json!({"uniqueItems": true});
+        let first = |doc: Value| validate(&unique, &doc).err().map(|e| e[0].clone());
+        assert_eq!(
+            first(json!(["a", "b", "b", "a"])).unwrap(),
+            "$: items 0 and 3 are the same (\"a\"), and they must be unique"
+        );
+        assert!(first(json!([1, 1.0])).unwrap().starts_with("$: items 0 and 1"));
+        assert!(first(json!([{"a": 1, "b": [0]}, {"b": [-0.0], "a": 1.0}])).unwrap().starts_with("$: items 0 and 1"));
+        assert_eq!(first(json!([1, "1", [1], {"1": 1}, null, false, "s1:a", ["a"]])), None);
+        let list: Vec<Value> = (0..20_000).map(|i| json!({"id": i, "tags": ["a", i % 7]})).collect();
+        let started = std::time::Instant::now();
+        assert!(validate(&unique, &Value::Array(list.clone())).is_ok());
+        let mut twice = list;
+        twice.push(json!({"tags": ["a", 19_999 % 7], "id": 19_999.0}));
+        assert!(first(Value::Array(twice)).unwrap().starts_with("$: items 19999 and 20000"));
         assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
     }
 }
