@@ -7,7 +7,7 @@ edition = "2021"
 cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
-navigera = { path = "../../navigera" }
+navigera = { path = "../../navigera", features = ["http"] }
 anyhow = "1"
 serde_json = "1"
 regex = "1"
