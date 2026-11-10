@@ -91,8 +91,19 @@ source = { file = "docs/config.md" }
 [[part.page]]
 title = "bitti --help"
 path = "reference/help.md"
-about = "The commands exactly as this build prints them."
-source = { run = ["--help"] }
+about = "The commands and each one's options, exactly as this build prints them."
+source = [
+  { run = ["--help"] },
+  { intro = "## run", run = ["run", "--help"] },
+  { intro = "## lint", run = ["lint", "--help"] },
+  { intro = "## list", run = ["list", "--help"] },
+  { intro = "## merge", run = ["merge", "--help"] },
+  { intro = "## trace", run = ["trace", "--help"] },
+  { intro = "## fix", run = ["fix", "--help"] },
+  { intro = "## record", run = ["record", "--help"] },
+  { intro = "## from-session", run = ["from-session", "--help"] },
+  { intro = "## mcp", run = ["mcp", "--help"] },
+]
 
 [[part]]
 title = "Agents"

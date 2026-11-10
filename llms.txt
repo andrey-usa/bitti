@@ -25,7 +25,7 @@ Each page below is markdown. The whole site in one file: https://andrey-usa.gith
 - [The .bt format](https://andrey-usa.github.io/bitti/reference/format.md): Every top-level line, step, variable and check a .bt file can hold.
 - [Running](https://andrey-usa.github.io/bitti/reference/running.md): bitti's commands and flags, what a run prints and saves, and the tools that write and fix tests.
 - [Config: bitti.toml](https://andrey-usa.github.io/bitti/reference/config.md): What a run takes by default from bitti.toml, the app it starts first, and named environments.
-- [bitti --help](https://andrey-usa.github.io/bitti/reference/help.md): The commands exactly as this build prints them.
+- [bitti --help](https://andrey-usa.github.io/bitti/reference/help.md): The commands and each one's options, exactly as this build prints them.
 
 ## Agents
 
