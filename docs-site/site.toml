@@ -1,0 +1,141 @@
+# The docs site: its parts, its pages, and where each page's text comes from.
+# docs-site/build.py writes every page from this (python3 docs-site/build.py --help).
+# The parts and their order are the same for every tool; the pages in them differ.
+
+name = "bitti"
+repo = "andrey-usa/bitti"
+branch = "next"
+binary = "bitti"
+summary = """
+bitti runs plain-text web tests (.bt files, and Gherkin .feature files) on real
+Chrome through navigera, in-process: one native binary, no Node, no driver
+process, no model at run time; API tests run with no browser at all.
+"""
+
+[coverage.ignore]
+# README sections that point at the site rather than hold text of their own.
+"README.md" = ["Documentation", "Contributing", "License"]
+
+[[part]]
+title = "Start"
+
+[[part.page]]
+title = "Install"
+path = "start/install.md"
+about = "Every way to install bitti, and how to check it worked."
+source = { file = "README.md", section = "Install" }
+
+[[part.page]]
+title = "Quick start"
+path = "start/quick-start.md"
+about = "One .bt file, one scenario, one run."
+source = { file = "README.md", section = "Quick start" }
+
+[[part.page]]
+title = "Worked examples"
+path = "start/tutorial.md"
+about = "The example suites in the repository, as they are: a shop, a sign-in, data rows and shared flows, and a Kubernetes Job."
+source = { file = "docs/examples.md" }
+
+[[part]]
+title = "Guides"
+
+[[part.page]]
+title = "Test an API without a browser"
+path = "guides/api-tests.md"
+about = "Scenarios of http and exec steps that start no browser, and what each request costs."
+source = { file = "docs/api-tests.md" }
+
+[[part.page]]
+title = "Run Gherkin feature files"
+path = "guides/gherkin.md"
+about = "Run .feature files as they are, beside .bt files, with their steps defined in .bt."
+source = { file = "docs/gherkin.md" }
+
+[[part.page]]
+title = "Run bitti in GitHub Actions or a container"
+path = "guides/ci.md"
+about = "The GitHub Action, the container image, and a Kubernetes Job."
+source = { file = "docs/guides/ci.md" }
+
+[[part]]
+title = "Concepts"
+
+[[part.page]]
+title = "Flows, sign-ins and hooks"
+path = "concepts/flows.md"
+about = "Steps shared between scenarios: flows, optional steps and conditions, signing in once per run, the hooks around scenarios, and handing a step to a person."
+source = { file = "docs/format.md", section = "Flows, conditions, sign-ins and hooks" }
+
+[[part]]
+title = "Reference"
+
+[[part.page]]
+title = "The .bt format"
+path = "reference/format.md"
+about = "Every top-level line, step, variable and check a .bt file can hold."
+source = { file = "docs/format.md", sections = ["Files, steps and variables", "HTTP requests", "Retries, pauses and the clock", "Data rows", "Checks: expect"] }
+
+[[part.page]]
+title = "Running"
+path = "reference/running.md"
+about = "bitti's commands and flags, what a run prints and saves, and the tools that write and fix tests."
+source = { file = "docs/running.md" }
+
+[[part.page]]
+title = "Config: bitti.toml"
+path = "reference/config.md"
+about = "What a run takes by default from bitti.toml, the app it starts first, and named environments."
+source = { file = "docs/config.md" }
+
+[[part.page]]
+title = "bitti --help"
+path = "reference/help.md"
+about = "The commands exactly as this build prints them."
+source = { run = ["--help"] }
+
+[[part]]
+title = "Agents"
+
+[[part.page]]
+title = "For AI agents"
+path = "agents/overview.md"
+about = "What an agent gets: the skill, the MCP server with the browser and the test tools, and these docs as markdown."
+source = { file = "README.md", section = "For AI agents" }
+
+[[part.page]]
+title = "Skill"
+path = "agents/skill.md"
+about = "The guide `bitti skill` gives an agent, as this version prints it."
+source = { file = "skills/bitti/SKILL.md" }
+
+[[part]]
+title = "Benchmarks"
+
+[[part.page]]
+title = "The 40-scenario suite"
+path = "benchmarks/suite40.md"
+about = "bitti's 40-scenario suite and its Playwright Test twin, on a shop and a gauntlet of awkward pages, which CI runs on three operating systems."
+source = { file = "bench/suite40/README.md" }
+
+[[part]]
+title = "Project"
+
+[[part.page]]
+title = "Changelog"
+path = "project/changelog.md"
+about = "What changed in each release, and what is on the way."
+source = { file = "CHANGELOG.md" }
+long = true
+
+[[part.page]]
+title = "Contributing"
+path = "project/contributing.md"
+about = "How to build bitti against navigera, run its tests, and keep its performance gate green."
+source = { file = "CONTRIBUTING.md" }
+
+[[part.page]]
+title = "Security"
+path = "project/security.md"
+about = "What bitti protects and how, and how to report a problem."
+source = { file = "SECURITY.md" }
