@@ -34,6 +34,8 @@ Each page below is markdown. The whole site in one file: https://andrey-usa.gith
 
 ## Benchmarks
 
+- [Results](https://andrey-usa.github.io/bitti/benchmarks/results.md): bitti against Playwright Test on Node and on Bun, on Playwright's own TodoMVC suite, from one CI run: time, CPU, and runner and browser memory.
+- [Where bitti is not ahead](https://andrey-usa.github.io/bitti/benchmarks/losses.md): Each measure on which Playwright beat bitti in the same run.
 - [The 40-scenario suite](https://andrey-usa.github.io/bitti/benchmarks/suite40.md): bitti's 40-scenario suite and its Playwright Test twin, on a shop and a gauntlet of awkward pages, which CI runs on three operating systems.
 
 ## Project

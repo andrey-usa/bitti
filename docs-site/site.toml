@@ -14,7 +14,7 @@ process, no model at run time; API tests run with no browser at all.
 
 [coverage.ignore]
 # README sections that point at the site rather than hold text of their own.
-"README.md" = ["Documentation", "Contributing", "License"]
+"README.md" = ["Benchmarks", "Documentation", "Contributing", "License"]
 
 [[part]]
 title = "Start"
@@ -111,6 +111,18 @@ source = { file = "skills/bitti/SKILL.md" }
 
 [[part]]
 title = "Benchmarks"
+
+[[part.page]]
+title = "Results"
+path = "benchmarks/results.md"
+about = "bitti against Playwright Test on Node and on Bun, on Playwright's own TodoMVC suite, from one CI run: time, CPU, and runner and browser memory."
+source = { file = "docs/benchmarks.md" }
+
+[[part.page]]
+title = "Where bitti is not ahead"
+path = "benchmarks/losses.md"
+about = "Each measure on which Playwright beat bitti in the same run."
+source = { file = "docs/losses.md" }
 
 [[part.page]]
 title = "The 40-scenario suite"

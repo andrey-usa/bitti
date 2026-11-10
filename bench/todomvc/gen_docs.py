@@ -19,6 +19,7 @@ import urllib.request
 REPO = "andrey-usa/bitti"
 SITE = "https://andrey-usa.github.io/bitti/"
 GROUPS = {"serial": "one worker each", "default": "each tool's default workers"}
+TIE = 0.02  # closer than 2% is a tie, not a loss: about what the same run varies by
 
 
 def fetch(run):
@@ -63,7 +64,9 @@ def main():
     names = {"bitti": v["bitti"] or "bitti",
              "playwright-node": f"Playwright Test {v['playwright']}, Node {(v['node'] or '').lstrip('v')}",
              "playwright-bun": f"Playwright Test {v['playwright']}, Bun {v['bun']}"}
-    browsers = {b: (ver or b) for b, ver in v["browsers"].items()}
+    label = {"chrome": "Chrome for Testing", "chrome-headless-shell": "chrome-headless-shell"}
+    browsers = {b: f"{label.get(b, b)} {(re.search(r'[0-9][0-9.]+', ver or '') or [''])[0]}".strip()
+                for b, ver in v["browsers"].items()}
 
     def rows(browser, groups):
         return [r for g in groups for r in doc["rows"] if r["browser"] == browser and r["group"] == g]
@@ -97,10 +100,10 @@ def main():
                                ("browser memory", lambda x: x["rss_mib"]["browser"], lambda x: f"{x:,.0f} MiB"),
                                ("browser PSS", lambda x: (x.get("pss_mib") or {}).get("browser"), lambda x: f"{x:,.0f} MiB")):
             mine, theirs = get(b), get(r)
-            if mine is not None and theirs is not None and theirs < mine:
+            if mine is not None and theirs is not None and theirs < mine * (1 - TIE):
                 losses.append(f"{what} on {where}: {names[r['tool']]} {fmt(theirs)}, bitti {fmt(mine)}")
-    loss_line = ("Where Playwright did better in this run: " + "; ".join(losses) + "."
-                 if losses else "Playwright did better than bitti on no measure in this run.")
+    loss_line = ("Where Playwright did better in this run (by more than 2%): " + "; ".join(losses) + "."
+                 if losses else "Playwright did better than bitti by more than 2% on no measure in this run.")
     first = next(iter(browsers))
     what = (f"Playwright's own TodoMVC suite (`demo-todo-app.spec.ts`, {doc['tests']} tests) and its "
             f"one-to-one bitti port, on the same local app and the same browser binary, headless, every "
@@ -162,8 +165,9 @@ def main():
     if "--page" in opts:
         open(opts["--page"], "w").write("\n".join(page))
     lose = ["# Where bitti is not ahead", "", f"Numbers: {link}, {date}.", "",
-            "Each measure of the benchmarks on which Playwright beat bitti in this run, with the same "
-            "browser and the same workers setting: time, CPU, runner and browser memory, browser PSS.", ""]
+            "Each measure of the benchmarks on which Playwright beat bitti in this run by more than 2%, "
+            "with the same browser and the same workers setting: time, CPU, runner and browser memory, "
+            "browser PSS. Closer than that is a tie.", ""]
     lose += [f"- {x[0].upper() + x[1:]}." for x in losses] or ["- None in this run."]
     if "--losses" in opts:
         open(opts["--losses"], "w").write("\n".join(lose) + "\n")
