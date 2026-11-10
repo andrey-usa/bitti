@@ -336,13 +336,16 @@ fn a_totp_variable_is_the_authenticators_code_now() {
 #[test]
 fn a_serial_scenario_runs_while_no_other_does() {
     // API-only scenarios (no browser): each logs when it starts and ends,
-    // 300 ms apart. Four at two workers, one of them @serial.
+    // 300 ms apart. Four at two workers, one of them @serial. A file each:
+    // two processes appending to one file can lose a line on Windows, where
+    // an append is a seek and then a write, and a lost "end" read here as
+    // scenarios that never overlapped.
     let dir = std::env::temp_dir().join(format!("bt-serial-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let log = dir.join("log.txt");
     std::fs::write(
         dir.join("mark.py"),
-        "import sys, time\nlog = open(sys.argv[2], 'a')\nlog.write(f'{time.time()} start {sys.argv[1]}\\n'); log.flush()\n\
+        "import sys, time\nlog = open(sys.argv[2] + '.' + sys.argv[1], 'w')\nlog.write(f'{time.time()} start {sys.argv[1]}\\n'); log.flush()\n\
          time.sleep(0.3)\nlog.write(f'{time.time()} end {sys.argv[1]}\\n')\n",
     )
     .unwrap();
@@ -361,7 +364,10 @@ fn a_serial_scenario_runs_while_no_other_does() {
     let (code, out) = bitti(&["run", file.to_str().unwrap(), "--workers", "2", "--var", py, "--var", &log_var]);
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("4 passed"), "{out}");
-    let text = std::fs::read_to_string(&log).unwrap();
+    let text: String = ["a", "b", "c", "d"]
+        .iter()
+        .map(|n| std::fs::read_to_string(format!("{}.{n}", log.display())).unwrap())
+        .collect();
     let mut spans: std::collections::BTreeMap<String, (f64, f64)> = Default::default();
     for line in text.lines() {
         let w: Vec<&str> = line.split_whitespace().collect();
@@ -372,6 +378,10 @@ fn a_serial_scenario_runs_while_no_other_does() {
         } else {
             e.1 = t
         }
+    }
+    assert_eq!(spans.len(), 4, "{text}");
+    for (name, s) in &spans {
+        assert!(s.0 > 0.0 && s.1 >= s.0, "{name} has no start or no end {s:?}:\n{text}");
     }
     let b = spans["b"];
     for (name, s) in &spans {
@@ -1964,7 +1974,6 @@ fn a_scenario_controls_the_pages_clock() {
 #[test]
 fn a_scenario_stops_when_its_time_is_up() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
-    let started = std::time::Instant::now();
     let (code, out) = bitti(&[
         "run",
         "tests/fixtures/timeout.bt",
@@ -1981,21 +1990,35 @@ fn a_scenario_stops_when_its_time_is_up() {
     // In the long wait, or (a slow machine's goto) before it.
     assert!(out.contains("the scenario's 1.5 s (--scenario-timeout-ms 1500) ran out"), "{out}");
     assert!(out.contains("PASS  tests/fixtures/timeout.bt:10  Slow, so three times the time"), "{out}");
-    assert!(started.elapsed() < std::time::Duration::from_secs(15), "{:?}", started.elapsed());
+    // The wait was cut to what the scenario had left, not its own 10 s.
+    // (Read from what bitti says, not from a clock here: the browser's
+    // start is in this test's time and takes 10 s and more on a loaded
+    // Windows runner.)
+    let cut = out.split("within ").nth(1).and_then(|s| s.split(" ms").next()).and_then(|n| n.parse::<u64>().ok());
+    assert!(cut.map_or(out.contains("out of time before this step"), |ms| ms <= 1500), "{out}");
     // `--global-timeout-ms`: the scenario running then stops, the rest don't start, the run fails.
-    let started = std::time::Instant::now();
-    let (code, out) = bitti(&[
-        "run",
-        "tests/fixtures/timeout.bt",
-        "--base-url",
-        &site.1,
-        "--global-timeout-ms",
-        "1000",
-        "--workers",
-        "1",
-    ]);
-    assert_eq!(code, 1, "{out}");
-    assert!(out.contains("the run's 1 s (--global-timeout-ms 1000) ran out"), "{out}");
-    assert!(out.contains("not run: the run's 1 s ran out (--global-timeout-ms 1000)"), "{out}");
-    assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
+    // The time has to run out while a scenario runs, so after the browser
+    // is up: when it ran out before that (all three not run, which is
+    // right too), the run is tried again with twice the time.
+    for seconds in [1, 2, 4, 8] {
+        let ms = (seconds * 1000).to_string();
+        let (code, out) = bitti(&[
+            "run",
+            "tests/fixtures/timeout.bt",
+            "--base-url",
+            &site.1,
+            "--global-timeout-ms",
+            &ms,
+            "--workers",
+            "1",
+        ]);
+        assert_eq!(code, 1, "{out}");
+        assert!(out.contains(&format!("not run: the run's {seconds} s ran out (--global-timeout-ms {ms})")), "{out}");
+        if out.contains("3 scenarios not run") && seconds < 8 {
+            continue;
+        }
+        assert!(out.contains(&format!("the run's {seconds} s (--global-timeout-ms {ms}) ran out")), "{out}");
+        assert!(out.contains("2 scenarios not run"), "{out}");
+        break;
+    }
 }

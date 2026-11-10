@@ -1037,7 +1037,7 @@ fn run(args: Args) -> ExitCode {
         eprintln!(
             "{} not run: the run's {} s ran out (--global-timeout-ms {ms})",
             counted(left, "scenario"),
-            ms as f64 / 1000.0
+            runner::secs(Duration::from_millis(ms))
         );
     } else if left > 0 && stopped && launch_errors.is_empty() {
         // The count, not the limit: scenarios already running when the

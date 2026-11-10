@@ -3300,19 +3300,32 @@ fn schema_name(file: &str) -> String {
     }
 }
 
-/// Seconds, as a person reads a limit: `30`, `1.5`.
-fn secs(d: Duration) -> String {
-    let s = d.as_secs_f64();
-    if s.fract() == 0.0 {
-        format!("{s:.0}")
-    } else {
-        format!("{s:.1}")
+/// Seconds, as a person reads a limit: `30`, `1.5`, `0.15`. Exact to the
+/// millisecond the limit was given in: one decimal made 150 ms `0.1` and
+/// 40 ms `0.0`.
+pub(crate) fn secs(d: Duration) -> String {
+    let ms = d.as_millis();
+    let whole = ms / 1000;
+    match ms % 1000 {
+        0 => whole.to_string(),
+        part => format!("{whole}.{}", format!("{part:03}").trim_end_matches('0')),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_limit_is_printed_to_the_millisecond_it_was_given_in() {
+        let secs = |ms| super::secs(std::time::Duration::from_millis(ms));
+        assert_eq!(secs(30_000), "30");
+        assert_eq!(secs(1_500), "1.5");
+        assert_eq!(secs(1_000), "1");
+        assert_eq!(secs(150), "0.15");
+        assert_eq!(secs(40), "0.04");
+        assert_eq!(secs(1_005), "1.005");
+    }
 
     #[test]
     fn a_long_value_says_how_much_was_cut_and_how_to_see_it() {

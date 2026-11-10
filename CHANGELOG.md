@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A time limit that ran out is named exactly: `--global-timeout-ms 150`
+  read "the run's 0.1 s" in the failing step and "0.15 s" in the line
+  about the scenarios not run, and a 40 ms limit read "0.0 s". Both say
+  `0.15 s` and `0.04 s` now.
 - A `step "…"` pattern containing `"` or `\` never matched its
   `.feature` step: the run stored the pattern Debug-escaped and matched
   against the escaped text. It matches as written now.
