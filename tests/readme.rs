@@ -51,21 +51,37 @@ fn serve() -> String {
 }
 
 /// A time, `119 ms` or `1.2 s` (bitti prints seconds past one), becomes
-/// `<n> <unit>`, in brackets or not; a Windows path separator becomes `/`.
+/// `<n> <unit>`, in brackets or not, so a slow runner's `1.2 s` matches the
+/// README's `119 ms`; a Windows path separator becomes `/`.
 fn mask(line: &str) -> String {
     let words: Vec<&str> = line.split(' ').collect();
     let mut out = Vec::with_capacity(words.len());
-    for (i, word) in words.iter().enumerate() {
+    let mut i = 0;
+    while i < words.len() {
+        let word = words[i];
         let bare = word.trim_start_matches('(');
         let number = !bare.is_empty() && bare.bytes().all(|b| b.is_ascii_digit() || b == b'.');
-        let unit = |next: &&str| ["ms", "s"].contains(&next.trim_end_matches([')', ','].as_slice()));
-        if number && words.get(i + 1).is_some_and(unit) {
-            out.push(format!("{}<n>", &word[..word.len() - bare.len()]));
-        } else {
-            out.push(word.replace('\\', "/"));
+        let unit = words.get(i + 1).map(|next| (next, next.trim_end_matches([')', ','].as_slice())));
+        match unit {
+            Some((next, u)) if number && ["ms", "s"].contains(&u) => {
+                out.push(format!("{}<n>", &word[..word.len() - bare.len()]));
+                out.push(format!("<unit>{}", &next[u.len()..]));
+                i += 2;
+            }
+            _ => {
+                out.push(word.replace('\\', "/"));
+                i += 1;
+            }
         }
     }
     out.join(" ")
+}
+
+#[test]
+fn a_time_in_seconds_masks_like_one_in_milliseconds() {
+    assert_eq!(mask("ok  (1.2 s)"), mask("ok  (119 ms)"));
+    assert_eq!(mask("1 passed, 0 failed in 1.4 s"), "1 passed, 0 failed in <n> <unit>");
+    assert_eq!(mask("run 3 tests"), "run 3 tests");
 }
 
 fn scratch() -> PathBuf {

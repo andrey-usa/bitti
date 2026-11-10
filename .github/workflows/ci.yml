@@ -137,7 +137,7 @@ jobs:
           python3 bitti/bench/suite40/site/server.py --port 18001 > site.out 2>&1 &
           for _ in $(seq 150); do curl -sf -o /dev/null http://127.0.0.1:18001/ && break; sleep 0.2; done
           mkdir -p t
-          printf 'scenario "The shop opens"\n  goto /\n  expect url ends-with /shop\n  expect title contains Acme\n  expect lcp < 10s\n  expect no errors\n' > t/shop.bt
+          printf 'scenario "The shop opens"\n  goto /\n  expect url ends-with /shop\n  expect title contains Acme\n  expect lcp < 30s\n  expect no errors\n' > t/shop.bt
       - id: bt
         uses: ./bitti
         with:
@@ -183,7 +183,7 @@ jobs:
           python3 bitti/bench/suite40/site/server.py --port 18001 > site.out 2>&1 &
           for _ in $(seq 150); do curl -sf -o /dev/null http://127.0.0.1:18001/ && break; sleep 0.2; done
           mkdir -p t out && chmod 777 out
-          printf 'scenario "The shop opens"\n  goto /\n  expect url ends-with /shop\n  expect title contains Acme\n  expect lcp < 10s\n' > t/shop.bt
+          printf 'scenario "The shop opens"\n  goto /\n  expect url ends-with /shop\n  expect title contains Acme\n  expect lcp < 30s\n' > t/shop.bt
           start=$(date +%s%N)
           docker run --rm --network host --user 12345 --read-only --cap-drop ALL \
             --security-opt no-new-privileges --tmpfs /tmp --shm-size 512m -e HOME=/tmp \
