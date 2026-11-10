@@ -4,9 +4,9 @@ name: scorecard
 # protection, pinned dependencies, token permissions, …), as code-scanning
 # alerts and on the public Scorecard API.
 
+# Scorecard reads the default branch only. Here that is next, which moves
+# with every push, so it runs weekly and on request, not on each of them.
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: "19 6 * * 3"
   workflow_dispatch:
@@ -16,6 +16,7 @@ permissions: read-all
 jobs:
   analysis:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       security-events: write
       id-token: write

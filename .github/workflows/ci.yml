@@ -18,8 +18,10 @@ on:
 permissions:
   contents: read
 
+# A newer push to a branch replaces the run of the one before it; a
+# dispatch on the same commit runs beside it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -192,9 +194,11 @@ jobs:
           echo "::notice title=bitti image ${{ matrix.os }}::one scenario, docker run to exit: ${ms} ms"
 
   lightpanda:
-    # The smoke tier: the suite's site scenarios on Lightpanda, but the three
-    # that need layout or a second tab (s19 hover, s20 new tab, s25 the
-    # request read after the page left).
+    # The smoke tier: the suite's site scenarios on Lightpanda, but the four
+    # that need layout or a second tab (s02 the grid, whose next page loads
+    # when a marker scrolls into view: with no layout everything is in view
+    # and all 60 products load at once; s19 hover, s20 new tab, s25 the
+    # request read after the page left). Any other failure fails the job.
     name: "lightpanda smoke"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -230,9 +234,12 @@ jobs:
           cargo build --locked
           python3 bench/suite40/site/server.py --port 18001 > site.out 2>&1 &
           for _ in $(seq 150); do curl -sf -o /dev/null http://127.0.0.1:18001/ && break; sleep 0.2; done
-          files=$(ls bench/suite40/bt/s*.bt | grep -v -e s19- -e s20- -e s25-)
-          ./target/debug/bitti run $files --base-url http://127.0.0.1:18001 --engine lightpanda --workers 4 | tee lp.log
-          echo "::notice title=bitti on Lightpanda::$(tail -1 lp.log)"
+          files=$(ls bench/suite40/bt/s*.bt | grep -v -e s02- -e s19- -e s20- -e s25-)
+          code=0
+          ./target/debug/bitti run $files --base-url http://127.0.0.1:18001 --engine lightpanda --workers 4 > lp.log 2>&1 || code=$?
+          cat lp.log
+          echo "::notice title=bitti on Lightpanda::$(grep -E '^[0-9]+ passed' lp.log | tail -1)"
+          exit $code
 
   electron:
     # Electron apps: the example against navigera's fixture app (a fresh app

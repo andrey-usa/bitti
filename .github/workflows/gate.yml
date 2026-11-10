@@ -24,8 +24,10 @@ on:
 permissions:
   contents: read
 
+# A newer push to a branch replaces the run of the one before it; a
+# dispatch on the same commit runs beside it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
