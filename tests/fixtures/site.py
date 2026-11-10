@@ -5,6 +5,7 @@ newer expect subjects read, `/login` signs in (counted at `/logins`), and
 API `api.bt` tests with no browser."""
 import email
 import json
+import socketserver
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -256,9 +257,22 @@ class Handler(BaseHTTPRequestHandler):
         return self.page("<h1>Home</h1><a href=/late>Late</a>")
 
 
+class Server(ThreadingHTTPServer):
+    """A ThreadingHTTPServer that binds without looking up its host's name.
+
+    HTTPServer.server_bind ends with socket.getfqdn(host), a reverse lookup
+    whose answer nothing here reads. On GitHub's macOS runners it takes
+    about 35 s, paid at every start.
+    """
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
 if __name__ == "__main__":
     port = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 0
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    srv = Server(("127.0.0.1", port), Handler)
     print(f"LISTENING http://127.0.0.1:{srv.server_address[1]}", flush=True)
     try:
         srv.serve_forever()

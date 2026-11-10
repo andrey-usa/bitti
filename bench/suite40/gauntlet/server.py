@@ -21,6 +21,7 @@ import argparse
 import html as htmlmod
 import json
 import random
+import socketserver
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -840,6 +841,19 @@ def free_port():
     return port
 
 
+class Server(ThreadingHTTPServer):
+    """A ThreadingHTTPServer that binds without looking up its host's name.
+
+    HTTPServer.server_bind ends with socket.getfqdn(host), a reverse lookup
+    whose answer nothing here reads. On GitHub's macOS runners it takes
+    about 35 s, paid at every start.
+    """
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=18201)
@@ -863,9 +877,9 @@ def main():
                port=port, xo_port=xo_port, download_served=False,
                telemetry=args.telemetry, fixed=args.fixed_delays)
 
-    main_srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    main_srv = Server(("127.0.0.1", port), Handler)
     main_srv.is_xo = False
-    xo_srv = ThreadingHTTPServer(("127.0.0.1", xo_port), Handler)
+    xo_srv = Server(("127.0.0.1", xo_port), Handler)
     xo_srv.is_xo = True
 
     threading.Thread(target=xo_srv.serve_forever, daemon=True).start()
