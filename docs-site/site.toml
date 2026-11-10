@@ -73,8 +73,20 @@ title = "Reference"
 [[part.page]]
 title = "The .bt format"
 path = "reference/format.md"
-about = "Every top-level line, step, variable and check a .bt file can hold."
-source = { file = "docs/format.md", sections = ["Files, steps and variables", "HTTP requests", "Retries, pauses and the clock", "Data rows", "Checks: expect"] }
+about = "Every top-level line, step and variable a .bt file can hold."
+source = { file = "docs/format.md", sections = ["Files, steps and variables", "HTTP requests", "Retries, pauses and the clock", "Data rows"], intro = "Checks have their own pages: [Checks: expect](checks.md), [Checks: soft, ax and screenshots](checks-soft.md)." }
+
+[[part.page]]
+title = "Checks: expect"
+path = "reference/checks.md"
+about = "The expect table: every check a step can make, and how each comparison reads."
+source = { file = "docs/format.md", section = "Checks: expect" }
+
+[[part.page]]
+title = "Checks: soft, ax and screenshots"
+path = "reference/checks-soft.md"
+about = "`--soft` failures that fail a scenario at its end, matching the accessibility tree, and screenshot baselines and diffs."
+source = { file = "docs/format.md", section = "Checks: soft, ax and screenshots" }
 
 [[part.page]]
 title = "Running"

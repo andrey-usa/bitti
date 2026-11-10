@@ -237,42 +237,44 @@
 | `screenshot <name> [<target>]` [`--full-page`] [`--threshold 0.2`] [`--max-diff-pixels <n>` \| `--max-diff-ratio <r>`] [`--mask <css>`]… | the viewport (or the element, or the whole page) as its baseline shows it, pixel by pixel; see below |
 | `not …` | any of them, negated |
 
-  `--soft` on any `expect` notes a failure and goes on; the scenario fails
-  at its end with all of them. A `${var}` can stand for any compared value
-  (a count, a regex), checked once it is filled in; `--timeout-ms` takes a
-  number as written.
+## Checks: soft, ax and screenshots
 
-  ```text
-  expect ax --role form --name Checkout matches
-    - textbox "Email" value=/.+@example\.com/
-    - combobox "Country" value="Canada"
-    - button "Place order"
-  ```
+`--soft` on any `expect` notes a failure and goes on; the scenario fails
+at its end with all of them. A `${var}` can stand for any compared value
+(a count, a regex), checked once it is filled in; `--timeout-ms` takes a
+number as written.
 
-  Each template line matches a tree line holding its words in order,
-  indented lines inside the line above's subtree. Sibling `- text:` lines
-  count as one text on both sides, so a template keeps matching however
-  navigera splits adjacent text into lines.
+```text
+expect ax --role form --name Checkout matches
+  - textbox "Email" value=/.+@example\.com/
+  - combobox "Country" value="Canada"
+  - button "Place order"
+```
 
-  A screenshot's baseline is beside the `.bt` file, in
-  `<file>.bt.screenshots/<name>-<os>.png` (fonts differ between systems,
-  so each OS keeps its own). Keep it with the tests. With none yet the run
-  writes it and the step fails, so a person looks at it first.
-  `--update-snapshots` (or `--update-screenshots`) writes or replaces
-  baselines and passes. While it
-  is taken, animations and transitions stop, the caret hides and each
-  `--mask` element is painted over in magenta (a mask that matches nothing
-  fails the step). An element is scrolled into view first, inside its
-  scroll containers and frames, and cropped where it is on the page, in an
-  iframe too. Two pixels differ when their
-  colour distance is over `--threshold` (0 to 1). `--max-diff-pixels` and
-  `--max-diff-ratio` (a share of the pixels, 0 to 1) set how many may
-  differ. When both are given, both must hold, and with neither, none may. A
-  mismatch writes this run's image and a diff (the differing pixels red) to
-  the evidence directory and names both.
+Each template line matches a tree line holding its words in order,
+indented lines inside the line above's subtree. Sibling `- text:` lines
+count as one text on both sides, so a template keeps matching however
+navigera splits adjacent text into lines.
 
-  Copy the lines from `navigera ax` and keep the ones that matter. A miss
-  names the first line that has no place and the nearest line of its role
-  (`no line matches \`- combobox "Country" value="Mexico"\`; nearest:
-  \`- combobox "Country" value="Canada" options: …\``, the line as `ax`
-  prints it).
+A screenshot's baseline is beside the `.bt` file, in
+`<file>.bt.screenshots/<name>-<os>.png` (fonts differ between systems,
+so each OS keeps its own). Keep it with the tests. With none yet the run
+writes it and the step fails, so a person looks at it first.
+`--update-snapshots` (or `--update-screenshots`) writes or replaces
+baselines and passes. While it
+is taken, animations and transitions stop, the caret hides and each
+`--mask` element is painted over in magenta (a mask that matches nothing
+fails the step). An element is scrolled into view first, inside its
+scroll containers and frames, and cropped where it is on the page, in an
+iframe too. Two pixels differ when their
+colour distance is over `--threshold` (0 to 1). `--max-diff-pixels` and
+`--max-diff-ratio` (a share of the pixels, 0 to 1) set how many may
+differ. When both are given, both must hold, and with neither, none may. A
+mismatch writes this run's image and a diff (the differing pixels red) to
+the evidence directory and names both.
+
+Copy the lines from `navigera ax` and keep the ones that matter. A miss
+names the first line that has no place and the nearest line of its role
+(`no line matches \`- combobox "Country" value="Mexico"\`; nearest:
+\`- combobox "Country" value="Canada" options: …\``, the line as `ax`
+prints it).
