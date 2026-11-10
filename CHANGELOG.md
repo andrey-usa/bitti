@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-10
+
 ### Fixed
 
 - A time limit that ran out is named exactly: `--global-timeout-ms 150`
