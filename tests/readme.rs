@@ -88,7 +88,10 @@ fn the_readme_quick_start_runs_as_written() {
         eprintln!("skipped: no Chrome/Chromium found");
         return;
     }
-    let readme = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md")).unwrap();
+    let readme = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"))
+        .unwrap()
+        // A Windows checkout has CRLF line ends.
+        .replace("\r\n", "\n");
     let section = &readme[readme.find("\n## Quick start\n").expect("README.md has a Quick start")..];
 
     let scenario = block(section, "text");
