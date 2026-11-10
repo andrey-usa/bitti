@@ -621,21 +621,20 @@ Feature: Coupons
         // The run names a step flow by its Debug-quoted pattern
         // (`step "I say \"hi\"…"`); the pattern it must match is the
         // unescaped text, quotes and backslashes as written.
-        let feature = "Feature: x\n  Scenario: y\n    Given I say \"hi\" to \"ada\"\n    Given the file C:\\docs\\readme opens\n";
+        let feature =
+            "Feature: x\n  Scenario: y\n    Given I say \"hi\" to \"ada\"\n    Given the file C:\\docs\\readme opens\n";
         let mut s = parse(Path::new("c.feature"), feature).unwrap();
-        let defs: Vec<Flow> = [
-            ("I say \"hi\" to {name}", vec!["name"]),
-            ("the file C:\\docs\\{name} opens", vec!["name"]),
-        ]
-        .iter()
-        .map(|(p, params)| Flow {
-            name: format!("step {p:?}"),
-            params: params.iter().map(|p| p.to_string()).collect(),
-            file: "steps.bt".into(),
-            line: 1,
-            steps: vec![],
-        })
-        .collect();
+        let defs: Vec<Flow> =
+            [("I say \"hi\" to {name}", vec!["name"]), ("the file C:\\docs\\{name} opens", vec!["name"])]
+                .iter()
+                .map(|(p, params)| Flow {
+                    name: format!("step {p:?}"),
+                    params: params.iter().map(|p| p.to_string()).collect(),
+                    file: "steps.bt".into(),
+                    line: 1,
+                    steps: vec![],
+                })
+                .collect();
         resolve(&mut s, &compile(&defs)).unwrap();
         let runs: Vec<&Vec<String>> = s.scenarios[0]
             .steps

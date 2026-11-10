@@ -24,7 +24,7 @@ pub fn decode(bytes: &[u8]) -> Result<Image, String> {
         // collecting a flat_map would grow by doubling.
         png::ColorType::Rgb => {
             let mut rgba = vec![255; buf.len() / 3 * 4];
-            for (to, p) in rgba.chunks_exact_mut(4).zip(buf.chunks_exact(3)) {
+            for (to, p) in rgba.as_chunks_mut::<4>().0.iter_mut().zip(buf.as_chunks::<3>().0) {
                 to[..3].copy_from_slice(p);
             }
             rgba

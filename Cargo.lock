@@ -463,6 +463,7 @@ dependencies = [
  "anyhow",
  "base64",
  "futures-util",
+ "memchr",
  "mimalloc",
  "miniz_oxide 0.9.1",
  "rustls",

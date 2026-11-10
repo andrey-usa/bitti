@@ -1018,10 +1018,7 @@ pub fn resolve(suites: &mut [Suite]) -> Result<(), ParseError> {
 /// `use <file.bt>`: the flows, auths and `set`s of the files it names.
 /// `parsed` is the run's cache, keyed by canonical path: a shared steps
 /// file is parsed the first time any suite uses it and never again.
-fn resolve_uses(
-    suite: &mut Suite,
-    parsed: &mut std::collections::BTreeMap<PathBuf, Suite>,
-) -> Result<(), ParseError> {
+fn resolve_uses(suite: &mut Suite, parsed: &mut std::collections::BTreeMap<PathBuf, Suite>) -> Result<(), ParseError> {
     {
         let mut seen = std::collections::BTreeSet::new();
         let mut todo: Vec<(usize, PathBuf)> = suite.uses.clone();
@@ -1823,7 +1820,11 @@ mod tests {
         resolve(&mut suites).unwrap();
         assert_eq!(USE_READS.with(|n| n.get()), 2, "shared.bt and more.bt, once each for the run");
         for s in &suites {
-            assert!(s.flows.contains_key("open") && s.flows.contains_key("deep") && s.vars["who"] == "ada", "{:?}", s.file);
+            assert!(
+                s.flows.contains_key("open") && s.flows.contains_key("deep") && s.vars["who"] == "ada",
+                "{:?}",
+                s.file
+            );
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
