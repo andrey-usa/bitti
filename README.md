@@ -117,3 +117,6 @@ Building against navigera, the tests and the performance gate:
 ## License
 
 MIT: [LICENSE](https://github.com/andrey-usa/bitti/blob/next/LICENSE).
+`expect accessible` runs axe-core, which navigera carries
+(`vendor/axe-core` there), unmodified, under the Mozilla Public License
+2.0 (its `LICENSE` beside it).
