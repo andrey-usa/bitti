@@ -119,7 +119,7 @@ fn the_readme_quick_start_runs_as_written() {
         ran += 1;
         let text = String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
         let got: Vec<String> = text.lines().map(mask).collect();
-        assert_eq!(got, expected, "README.md's Quick start: `{command}` printed something else");
+        assert_eq!(got, expected, "README.md's Quick start: `{command}` printed {got:?}, not {expected:?}");
     }
     assert!(ran >= 1, "the Quick start ran no command");
     let _ = std::fs::remove_dir_all(&dir);
