@@ -23,7 +23,9 @@ Each page below is markdown. The whole site in one file: https://andrey-usa.gith
 ## Reference
 
 - [The .bt format](https://andrey-usa.github.io/bitti/reference/format.md): Every top-level line, step, variable and check a .bt file can hold.
-- [Running](https://andrey-usa.github.io/bitti/reference/running.md): bitti's commands and flags, what a run prints and saves, and the tools that write and fix tests.
+- [Running](https://andrey-usa.github.io/bitti/reference/running.md): bitti run and its flags: which scenarios run, and in which browsers and apps.
+- [Reports and evidence](https://andrey-usa.github.io/bitti/reference/reports.md): What a run prints and saves: console, jsonl, JUnit, Allure, the HTML report, video, traces, watch and shards.
+- [Failures and fixes](https://andrey-usa.github.io/bitti/reference/failures.md): What a failure prints, fixing locators with bitti fix, and the tools that write scenarios: navigera, from-session, record, mcp.
 - [Config: bitti.toml](https://andrey-usa.github.io/bitti/reference/config.md): What a run takes by default from bitti.toml, the app it starts first, and named environments.
 - [bitti --help](https://andrey-usa.github.io/bitti/reference/help.md): The commands and each one's options, exactly as this build prints them.
 

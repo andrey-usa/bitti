@@ -79,8 +79,20 @@ source = { file = "docs/format.md", sections = ["Files, steps and variables", "H
 [[part.page]]
 title = "Running"
 path = "reference/running.md"
-about = "bitti's commands and flags, what a run prints and saves, and the tools that write and fix tests."
-source = { file = "docs/running.md" }
+about = "bitti run and its flags: which scenarios run, and in which browsers and apps."
+source = { file = "docs/running.md", preamble = true, sections = ["Picking what runs", "Browsers and apps"] }
+
+[[part.page]]
+title = "Reports and evidence"
+path = "reference/reports.md"
+about = "What a run prints and saves: console, jsonl, JUnit, Allure, the HTML report, video, traces, watch and shards."
+source = { file = "docs/running.md", section = "Reports and evidence" }
+
+[[part.page]]
+title = "Failures and fixes"
+path = "reference/failures.md"
+about = "What a failure prints, fixing locators with bitti fix, and the tools that write scenarios: navigera, from-session, record, mcp."
+source = { file = "docs/running.md", section = "Failures and fixes" }
 
 [[part.page]]
 title = "Config: bitti.toml"

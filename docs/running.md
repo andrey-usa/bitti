@@ -28,6 +28,8 @@ bitti --version
 `--workers` is `auto` unless given: half the CPUs, at most 8, and never
 more than there are scenarios. `--workers 1` runs them one at a time.
 
+## Picking what runs
+
 - `--tag smoke` runs the scenarios tagged `@smoke`; a tag expression picks
   by several, as Cucumber writes them: `--tag "smoke and not slow"`,
   `--tag "(checkout or cart) and not wip"`. Repeated, any of them.
@@ -58,6 +60,8 @@ more than there are scenarios. `--workers 1` runs them one at a time.
 - `--slowmo <ms>` waits that long before each step that acts on the page
   (`goto`, `click`, `fill` …), to follow a `--headed` run by eye; checks
   and `http` steps aren't slowed.
+
+## Browsers and apps
 
 - A click that opens a tab or a popup (`target=_blank`, `window.open`)
   moves the scenario to it, as navigera does: the next steps read and act
@@ -103,6 +107,9 @@ more than there are scenarios. `--workers 1` runs them one at a time.
   the one before left it, and the app keeps running after the run. In a
   browser, each scenario gets a clean context of its own. One worker. The
   example: `tests/fixtures/electron-attached`.
+
+## Reports and evidence
+
 - `--html report.html` writes the run as one page that needs nothing
   else to open: failed scenarios first and open, each with its steps and
   their times, the failure (message, where the page was, what came
@@ -170,6 +177,9 @@ more than there are scenarios. `--workers 1` runs them one at a time.
   the failing lines, beside the console (on by itself under GitHub
   Actions). `--json` prints
   what the scenarios saved, for a pipeline's next step.
+
+## Failures and fixes
+
 - A failure prints the step, what was expected and seen, where the page
   was, a screenshot (under `.bitti/runs/`), and a note when an earlier
   click changed nothing on the page (navigera's `no_effect`), the usual
