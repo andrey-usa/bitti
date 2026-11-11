@@ -49,9 +49,6 @@ fn flags(t: &TargetArgs, locators: &Value) -> Result<Vec<String>, String> {
             locators.get(0).and_then(|l| l["flags"].as_array()).ok_or(format!("{who}: no locator found it again"))?;
         return Ok(best.iter().filter_map(|f| f.as_str().map(String::from)).collect());
     }
-    if let Some(f) = &t.find {
-        return Err(format!("--find {f:?} was not turned into a ref"));
-    }
     let mut out = Vec::new();
     let mut add = |flag: &str, v: &Option<String>| {
         if let Some(v) = v {

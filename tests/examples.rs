@@ -1046,48 +1046,6 @@ fn a_recording_extends_a_scenario_from_where_it_ends() {
 }
 
 #[test]
-fn an_unsure_failure_asks_the_decision_model_when_there_is_one() {
-    let (Some(_turn), Some(site)) = (chrome(), site()) else { return };
-    // navigera's stand-in for the model: it picks by words in common.
-    let python = if cfg!(windows) { "python" } else { "python3" };
-    let mock = concat!(env!("CARGO_MANIFEST_DIR"), "/../navigera/bench/decide/mock_jev.py");
-    let mut child = Command::new(python).arg(mock).stdout(Stdio::piped()).spawn().unwrap();
-    let mut line = String::new();
-    BufReader::new(child.stdout.take().unwrap()).read_line(&mut line).unwrap();
-    let jev = Site(child, line.trim().strip_prefix("LISTENING ").unwrap().to_string());
-    let dir = std::env::temp_dir().join(format!("bt-decider-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("t.bt"),
-        "scenario \"Consents\"\n  goto /login\n  click --role button --name \"Agree to the cookie banner\" --timeout-ms 300\n",
-    )
-    .unwrap();
-    let bt = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
-            .args(args)
-            .current_dir(&dir)
-            .env("NAVIGERA_DECIDER_URL", &jev.1)
-            .env("TYPESAFE_API_KEY", "test-key")
-            .output()
-            .unwrap();
-        (
-            out.status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr),
-        )
-    };
-    let (code, out) = bt(&["run", "t.bt", "--base-url", &site.1, "--evidence", "ev"]);
-    assert_eq!(code, 1, "{out}");
-    assert!(out.contains("1. button \"Accept all\""), "{out}");
-    assert!(out.contains("(decider)"), "{out}");
-    let (code, out) = bt(&["fix", "t.bt:3", "--use", "1"]);
-    assert_eq!(code, 0, "{out}");
-    assert!(out.contains("+ click --role button --name \"Accept all\" --timeout-ms 300"), "{out}");
-    let (code, out) = bt(&["run", "t.bt", "--base-url", &site.1, "--evidence", "ev"]);
-    assert_eq!(code, 0, "{out}");
-    std::fs::remove_dir_all(&dir).ok();
-}
-
-#[test]
 fn a_missing_element_in_a_frame_gets_suggestions_from_the_frame() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let dir = std::env::temp_dir().join(format!("bt-framed-{}", std::process::id()));

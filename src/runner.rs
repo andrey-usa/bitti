@@ -925,25 +925,7 @@ impl Runner {
         if let Ok(Value::String(tree)) = self.command(&["ax".into(), "--limit".into(), "0".into()]) {
             nodes.extend(crate::nearest::from_tree(&tree));
         }
-        let mut ranked = crate::nearest::rank(&Value::Array(nodes), &want, 3);
-        // Unsure (nothing close, or the two best close together): with a
-        // decision model configured, its pick on the page as it is goes first.
-        let unsure = ranked.first().is_none_or(|t| t.2 < 0.6) || (ranked.len() > 1 && ranked[0].2 - ranked[1].2 < 0.1);
-        if unsure && navigera::decide::Decider::from_env().is_some() {
-            if let Some(pick) = self.decide(&want) {
-                ranked.retain(|r| r.1 != pick.1);
-                // First only when the model is as sure as navigera's own
-                // `--find` needs to act (0.5); else one more candidate, last.
-                if pick.2 >= 0.5 {
-                    ranked.insert(0, pick);
-                    ranked.truncate(3);
-                } else {
-                    ranked.truncate(2);
-                    ranked.push(pick);
-                }
-            }
-        }
-        ranked
+        crate::nearest::rank(&Value::Array(nodes), &want, 3)
     }
 
     /// A click under something else (a consent bar, a modal): what in it a
@@ -963,29 +945,6 @@ impl Runner {
                 Some((element, format!("{}{step}", crate::fix::BEFORE), f["p"].as_f64().unwrap_or(0.5)))
             })
             .collect()
-    }
-
-    /// The decision model's pick for what a step wanted: the element (marked
-    /// `decider`), the locator that finds it again, its probability.
-    fn decide(&mut self, want: &crate::nearest::Wanted) -> Option<(String, String, f64)> {
-        let what = match (&want.role, &want.name) {
-            (Some(r), Some(n)) => format!("the {r} {n:?}"),
-            (None, Some(n)) => format!("the element {n:?}"),
-            (Some(r), None) => format!("the {r}"),
-            (None, None) => return None,
-        };
-        let found = self.command(&["find".into(), what]).ok()?;
-        let node = found["ref"].as_u64()?;
-        let located = self.command(&["locate".into(), node.to_string()]).ok()?;
-        let flags: Vec<String> =
-            located["locators"][0]["flags"].as_array()?.iter().filter_map(|f| f.as_str().map(String::from)).collect();
-        let element = found["element"].as_str().unwrap_or("").trim_start_matches("- ").to_string();
-        let p = found["p"].as_f64().unwrap_or(0.0);
-        Some((
-            format!("{element} (decider)"),
-            flags.iter().map(|f| crate::fix::quote(f)).collect::<Vec<_>>().join(" "),
-            p,
-        ))
     }
 
     /// `d`, or less: no more than the scenario has left.

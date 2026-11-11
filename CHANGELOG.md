@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- A failing step no longer asks a decision model for the element it
+  meant (`TYPESAFE_API_KEY` or `NAVIGERA_DECIDER_URL`): navigera dropped
+  its decision model, which saved agents no turn and cost more in its
+  measurements. "nearest on the page" lists bitti's own ranking, as it
+  always did without a model.
+
 ## [0.2.0] - 2026-11-10
 
 ### Fixed

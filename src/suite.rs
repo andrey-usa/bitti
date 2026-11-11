@@ -1283,7 +1283,6 @@ fn anchor_inputs(action: &mut Action, dir: &Path) {
                 "--selector",
                 "--ref",
                 "--text",
-                "--find",
                 "--role",
                 "--name",
                 "--label",

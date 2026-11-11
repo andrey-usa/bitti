@@ -194,14 +194,8 @@ more than there are scenarios. `--workers 1` runs them one at a time.
           1. button "Accept all"   --role button --name "Accept all"   0.63
   ```
 
-  When that list is unsure (the best under 0.6, or the first two within
-  0.1) and a decision model is set up for navigera (`TYPESAFE_API_KEY`, or
-  `NAVIGERA_DECIDER_URL`), bitti also asks it which element the step
-  meant (navigera's `find`, on the failing page) and adds its pick, marked
-  `(decider)`: first when the model is at least 0.5 sure, else last (the
-  list stays at three). There is one call per such failure and none otherwise. The
-  list covers frames too: a step with `--frame` keeps it, and `fix` changes
-  only the locator.
+  The list covers frames too: a step with `--frame` keeps it, and `fix`
+  changes only the locator.
 - `bitti fix <file>:<line> [--use <n>]` puts the last run's n-th
   "nearest on the page" into that step (only its locator flags change, and
   only if the line still reads as it did); `bitti fix --all [--min
