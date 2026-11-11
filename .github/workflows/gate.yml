@@ -56,7 +56,9 @@ jobs:
         with:
           toolchain: stable
           target: x86_64-unknown-linux-musl
-          cache: false
+          # bitti is checked out under bitti/ (navigera beside it).
+          cache-workspaces: bitti
+          cache-on-failure: false
       - name: valgrind and musl
         uses: ./bitti/.github/actions/apt-install
         with:

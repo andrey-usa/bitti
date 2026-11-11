@@ -61,7 +61,9 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2
         with:
           toolchain: stable
-          cache: false
+          # bitti is checked out under bitti/ (navigera beside it).
+          cache-workspaces: bitti
+          cache-on-failure: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
@@ -219,7 +221,9 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2
         with:
           toolchain: stable
-          cache: false
+          # bitti is checked out under bitti/ (navigera beside it).
+          cache-workspaces: bitti
+          cache-on-failure: false
       - name: Lightpanda 1.0.1
         env:
           GH_TOKEN: ${{ github.token }}
@@ -270,7 +274,9 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2
         with:
           toolchain: stable
-          cache: false
+          # bitti is checked out under bitti/ (navigera beside it).
+          cache-workspaces: bitti
+          cache-on-failure: false
       - name: Electron for navigera's fixture app
         working-directory: navigera/tests/fixtures/electron-app
         run: |
