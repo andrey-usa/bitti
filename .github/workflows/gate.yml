@@ -58,7 +58,7 @@ jobs:
           target: x86_64-unknown-linux-musl
           cache: false
       - name: valgrind and musl
-        uses: ./.github/actions/apt-install
+        uses: ./bitti/.github/actions/apt-install
         with:
           packages: valgrind musl-tools
       - name: The candidate (static musl, as a release builds it)

@@ -79,7 +79,7 @@ jobs:
           cache: false
       - name: musl tools
         if: contains(matrix.target, 'musl')
-        uses: ./.github/actions/apt-install
+        uses: ./bitti/.github/actions/apt-install
         with:
           packages: musl-tools
       - name: Build
