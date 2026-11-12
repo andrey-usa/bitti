@@ -13,7 +13,8 @@ use crate::fix::quote;
 /// The session's history, oldest first.
 pub fn history(session: &str) -> Result<Vec<Value>, String> {
     let mut out = Vec::new();
-    navigera::session::client(&SessionConfig::default(), session, &Command::History { clear: false }, &mut out);
+    // The answer itself says whether it worked: `ok` is read below.
+    let _ = navigera::session::client(&SessionConfig::default(), session, &Command::History { clear: false }, &mut out);
     let text = String::from_utf8_lossy(&out);
     let v: Value = serde_json::from_str(text.trim()).map_err(|_| format!("navigera said: {}", text.trim()))?;
     if v["ok"] != true {

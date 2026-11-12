@@ -309,7 +309,7 @@ mod tests {
         let input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}\n\
                      {\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n\
                      {\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n";
-        serve(&config, &mut input.as_bytes(), &mut out);
+        let _ = serve(&config, &mut input.as_bytes(), &mut out);
         let lines: Vec<Value> =
             String::from_utf8(out).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
         assert_eq!(lines.len(), 2);
