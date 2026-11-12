@@ -806,7 +806,8 @@ impl Drop for EarlyBrowser {
 /// parse) is reported and the watching goes on.
 fn run_watching(args: Args) -> ExitCode {
     let mut seen = watch::stamps(&args.paths);
-    run(args.clone());
+    // Watching goes on whatever a run ends with.
+    let _ = run(args.clone());
     loop {
         eprintln!("watching {} (Ctrl-C to stop)", counted(seen.len(), "file"));
         let files = watch::wait(&args.paths, &mut seen);
@@ -822,7 +823,7 @@ fn run_watching(args: Args) -> ExitCode {
                 .unwrap_or_default();
             next.opts.evidence = PathBuf::from(format!(".bitti/runs/{stamp}"));
         }
-        run(next);
+        let _ = run(next);
     }
 }
 
