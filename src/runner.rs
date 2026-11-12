@@ -3148,8 +3148,7 @@ impl Scope {
 
     /// Replaces the secrets' values in a text with `***`.
     fn masker(&self) -> impl Fn(&str) -> String {
-        let mut values: Vec<String> = self.used_secrets.borrow().iter().filter(|v| v.len() >= 3).cloned().collect();
-        values.sort_by_key(|v| std::cmp::Reverse(v.len()));
+        let values = secret_forms(self.used_secrets.borrow().iter());
         move |text: &str| values.iter().fold(text.to_string(), |t, v| t.replace(v.as_str(), "***"))
     }
 
@@ -3160,6 +3159,32 @@ impl Scope {
     fn words(&self, ws: &[String]) -> Result<Vec<String>, String> {
         ws.iter().map(|w| self.word(w)).collect()
     }
+}
+
+/// Every way a secret's value can stand in what a run writes, longest
+/// first: as it is, as a JSON string holds it (the trace is JSON lines: a
+/// `"` or `\` in a password is written escaped there), and as a URL or a
+/// form body holds it (percent-encoded, a space as `+` or `%20`). Values
+/// under three characters are left: masking them would blank ordinary text.
+fn secret_forms<'a>(values: impl Iterator<Item = &'a String>) -> Vec<String> {
+    let mut forms = BTreeSet::new();
+    for v in values.filter(|v| v.len() >= 3) {
+        let json = serde_json::Value::String(v.clone()).to_string();
+        let url = |space: &str| {
+            v.bytes().fold(String::new(), |mut out, b| {
+                match b {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => out.push(b as char),
+                    b' ' => out.push_str(space),
+                    _ => out.push_str(&format!("%{b:02X}")),
+                }
+                out
+            })
+        };
+        forms.extend([v.clone(), json[1..json.len() - 1].to_string(), url("+"), url("%20")]);
+    }
+    let mut forms: Vec<String> = forms.into_iter().collect();
+    forms.sort_by_key(|v| std::cmp::Reverse(v.len()));
+    forms
 }
 
 /// A `set` value with its `${…}` filled in: another `set` by its own
@@ -3274,6 +3299,19 @@ pub(crate) fn secs(d: Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A password with a quote, a backslash or a space is written
+    /// differently in the trace's JSON and in a URL: each form is masked.
+    #[test]
+    fn a_secret_is_masked_as_json_and_urls_write_it() {
+        let secret = r#"p"ss\w rd+1"#.to_string();
+        let forms = secret_forms([&secret, &"ab".to_string()].into_iter());
+        let mask = |text: &str| forms.iter().fold(text.to_string(), |t, v| t.replace(v.as_str(), "***"));
+        assert_eq!(mask(&serde_json::json!({ "value": secret }).to_string()), r#"{"value":"***"}"#);
+        assert_eq!(mask("https://h/?t=p%22ss%5Cw+rd%2B1&x=1"), "https://h/?t=***&x=1");
+        assert_eq!(mask("https://h/p%22ss%5Cw%20rd%2B1"), "https://h/***");
+        assert_eq!(mask(&format!("typed {secret} into ab")), "typed *** into ab");
+    }
 
     #[test]
     fn a_limit_is_printed_to_the_millisecond_it_was_given_in() {

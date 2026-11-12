@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A secret with a `"`, a `\` or another character JSON or a URL writes
+  differently was masked in the printed report but stood escaped in
+  `trace.jsonl`, and percent-encoded in a failure's URL. Each written
+  form of a `${secret:…}` value is now replaced by `***`.
+- From navigera: a cookie an `http` step's answer sets is taken only for
+  the answering host or a parent of it (another site's `Domain` was
+  stored as given), and a `Domain` cookie now reaches the subdomains it
+  names.
+
 ### Removed
 
 - A failing step no longer asks a decision model for the element it
