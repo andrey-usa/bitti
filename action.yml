@@ -22,8 +22,8 @@ inputs:
     description: "a bitti release tag (v0.3.0), latest, or source (a build from this action's own commit)"
     default: "latest"
   navigera-ref:
-    description: "the navigera branch or commit a source build uses"
-    default: "session-history"
+    description: "the navigera branch, tag or commit a source build uses"
+    default: "next"
 
 outputs:
   evidence:

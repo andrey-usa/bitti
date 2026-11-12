@@ -16,6 +16,17 @@ All notable changes to this project are documented here. The format follows
   the answering host or a parent of it (another site's `Domain` was
   stored as given), and a `Domain` cookie now reaches the subdomains it
   names.
+- The screenshot taken for each traced step passed through the shared
+  temp directory under a name another account on the machine could guess
+  (`bitti-step-<pid>-<n>.jpg`), readable by all. It now goes through this
+  user's own temp directory (`navigera-<uid>`, mode 0700).
+
+### Fixed
+
+- The GitHub action's source build (a runner with no release binary, or
+  `version: source`) checked navigera out at a branch that no longer
+  exists and stopped on git's `pathspec` error. `navigera-ref` defaults
+  to `next`, and a ref navigera does not have is named in the error.
 
 ### Removed
 

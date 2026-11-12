@@ -2060,7 +2060,11 @@ impl Runner {
         // Workers are threads of one process: the name must be unique per capture.
         static CAPTURES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let seq = CAPTURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("bitti-step-{}-{seq}.jpg", std::process::id()));
+        // In this user's own temp directory: the shared one would show each
+        // step's page to every account on the machine, under a name they can guess.
+        let tmp = navigera::session::private_temp_dir()
+            .unwrap_or_else(|_| std::env::temp_dir())
+            .join(format!("bitti-step-{}-{seq}.jpg", std::process::id()));
         // A capture that cannot finish (a page stuck behind a native dialog never
         // answers) is dropped after a second, not after navigera's 35 s.
         let words = [

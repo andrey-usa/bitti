@@ -49,7 +49,8 @@ source_build() {
   nav="$BT_ACTION/../navigera"
   if [ ! -f "$nav/Cargo.toml" ]; then
     git clone --quiet --filter=blob:none https://github.com/andrey-usa/navigera "$nav"
-    git -C "$nav" checkout --quiet "$BT_NAVIGERA_REF"
+    git -C "$nav" checkout --quiet "$BT_NAVIGERA_REF" || {
+      echo "::error title=bitti::navigera has no branch, tag or commit '$BT_NAVIGERA_REF' (the action's navigera-ref input)"; exit 1; }
   fi
   echo "building bitti from $BT_ACTION with navigera $(git -C "$nav" rev-parse --short HEAD)"
   CARGO_TARGET_DIR="$temp/bitti-target" cargo install --quiet --locked --path "$BT_ACTION" --root "$root"
