@@ -109,26 +109,24 @@ jobs:
           exit $code
 
   action:
-    # The GitHub Action as a workflow uses it: no release yet, so it builds
-    # bitti from this commit (navigera beside it), then runs a file
-    # against the 40-scenario suite's site.
-    name: "the action (${{ matrix.os }})"
+    # The GitHub Action as a workflow uses it, against the 40-scenario
+    # suite's site: with the latest release's binary, and built from this
+    # commit the way a runner with no release binary gets it (the action
+    # clones navigera itself: nothing is checked out beside it here).
+    name: "the action (${{ matrix.os }}, ${{ matrix.version }})"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        include:
+          - { os: ubuntu-24.04, version: latest }
+          - { os: windows-latest, version: latest }
+          - { os: ubuntu-24.04, version: source }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: bitti
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: andrey-usa/navigera
-          ref: ${{ env.NAVIGERA_REF }}
-          path: navigera
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -146,6 +144,8 @@ jobs:
           paths: t
           base-url: http://127.0.0.1:18001
           args: --junit t/report.xml
+          version: ${{ matrix.version }}
+          navigera-ref: ${{ env.NAVIGERA_REF }}
       - name: What it left
         shell: bash
         env:
