@@ -240,9 +240,12 @@ jobs:
           for _ in $(seq 150); do curl -sf -o /dev/null http://127.0.0.1:18001/ && break; sleep 0.2; done
           files=$(ls bench/suite40/bt/s*.bt | grep -v -e s02- -e s19- -e s20- -e s25-)
           code=0
-          ./target/debug/bitti run $files --base-url http://127.0.0.1:18001 --engine lightpanda --workers 4 > lp.log 2>&1 || code=$?
+          # Lightpanda drops an action now and then (s08 read 60 cards for 12
+          # in ci 43115995578 and passed on the rerun): a scenario that fails
+          # once is run again and reported flaky; one that fails twice is red.
+          ./target/debug/bitti run $files --base-url http://127.0.0.1:18001 --engine lightpanda --workers 4 --retries 1 > lp.log 2>&1 || code=$?
           cat lp.log
-          echo "::notice title=bitti on Lightpanda::$(grep -E '^[0-9]+ passed' lp.log | tail -1)"
+          echo "::notice title=bitti on Lightpanda::$(grep -E '^[0-9]+ passed' lp.log | tail -1) (flaky: $(grep -cE '^FLAKY' lp.log))"
           exit $code
 
   electron:
