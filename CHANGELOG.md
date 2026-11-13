@@ -13,7 +13,7 @@ All notable changes to this project are documented here. The format follows
 - Built on navigera 0.13.0. A step reaches the browser in fewer round
   trips (a click after a look 20 commands to 13, a fill 6 to 5) and
   navigera's page scripts are compiled once per page instead of on every
-  call. In navigera's bench on one runner (run 43491069940), against
+  call. In navigera's bench on one runner ([run 43491069940](https://github.com/andrey-usa/navigera/actions/runs/43491069940)), against
   the commit before that work: a fill, fill, click, read batch 39.4 to
   26.3 ms, a click 13.9 to 13.2 ms, a submitting click 13.1 to 10.5 ms.
 - From navigera: a browser bitti starts no longer asks Google for the
