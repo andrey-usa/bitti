@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-13
+
+### Changed
+
+- Built on navigera 0.13.1. A browser bitti starts makes two fewer
+  requests to Google at every start, whatever the scenario opens: the
+  list of on-device AI models from the update server (Chrome 154 to 156
+  have no switch for it and still ask) and, headless, whether the user
+  may use the address bar's AI mode.
+
 ## [0.3.0] - 2026-11-13
 
 ### Changed

@@ -1,6 +1,6 @@
 [package]
 name = "bitti"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Plain-text web tests that run on real Chrome through navigera: one native binary, no Node."
 license = "MIT"
