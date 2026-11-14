@@ -51,7 +51,7 @@ Verify it:
 
 ```console
 $ bitti --version
-bitti 0.2.0
+bitti 0.3.1
 ```
 
 ## Quick start
