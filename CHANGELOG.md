@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-14
+
+### Changed
+
+- Built on navigera 0.14.0. Scenarios run on Chrome exactly as before:
+  nothing in the format, the runner or its reports changes. The built-in
+  `bitti navigera` is navigera 0.14.0, so it gains `cdp` (any Chrome
+  DevTools Protocol command, for what no navigera command covers) and
+  navigera's experimental Firefox, Safari and WebDriver engines. A `.bt`
+  file does not select an engine yet.
+
 ## [0.3.1] - 2026-11-13
 
 ### Changed
