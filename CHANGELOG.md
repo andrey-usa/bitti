@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-15
+
+### Changed
+
+- Built on navigera 0.14.1. Scenarios run as before. The built-in
+  `bitti navigera` reads more of what agents write as meant: grep's own
+  flags and alternation around `--grep`, `ax --selector main --grep
+  word`, and a role word the tree prints as `--selector`. A failed `eval
+  fetch` names `http`, and a click held back by a cover names the
+  commands that dismiss it.
+
 ## [0.3.2] - 2026-11-14
 
 ### Changed
