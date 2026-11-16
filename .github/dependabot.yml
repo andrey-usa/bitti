@@ -1,14 +1,10 @@
 version: 2
 updates:
-  - package-ecosystem: cargo
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      cargo:
-        patterns: ["*"]
-    cooldown:
-      default-days: 7
+  # No cargo updates here: Cargo.toml names navigera by a path outside
+  # this repository (../navigera), which Dependabot cannot read, so its
+  # weekly cargo run failed every time. Advisories on the dependencies
+  # are caught by cargo-deny in security.yml; the lock moves with a
+  # navigera release.
   - package-ecosystem: github-actions
     directory: /
     schedule:
