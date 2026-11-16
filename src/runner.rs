@@ -401,6 +401,9 @@ pub struct Runner {
     /// What runs now needs no browser: cookies are the jar's, and a
     /// failure has no page to show.
     bare: bool,
+    /// One `expect screenshot` as it is polled: when its first capture was
+    /// taken, and whether two captures in a row have differed since.
+    shot_watch: Option<(Instant, bool)>,
 }
 
 impl Runner {
@@ -441,6 +444,7 @@ impl Runner {
             rep: 0,
             jar: Default::default(),
             bare: false,
+            shot_watch: None,
         }
     }
 
@@ -1586,6 +1590,7 @@ impl Runner {
         let deadline = Instant::now() + limit;
         let value = scope.word(&e.value)?;
         let mut woken = false;
+        self.shot_watch = None;
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
             let (holds, actual) = self.check(e, &value, scope, left)?;
@@ -1692,7 +1697,9 @@ impl Runner {
     /// waits for a settled page: two captures a frame apart must agree and
     /// the page's quiet clock (QUIET_CLOCK) must show no DOM change for
     /// half a second; the expectation's own time caps the wait, the last
-    /// capture stands, and a failed compare says the page never settled.
+    /// capture stands, and a failed compare says the page never settled,
+    /// or, when no two captures in a row differed, that the time was too
+    /// short to tell.
     fn screenshot(&mut self, shot: &Shot, scope: &Scope, left: Duration) -> Result<(bool, String), String> {
         let stem = scope.bt.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let dir = scope.bt.parent().unwrap_or(Path::new(".")).join(format!("{stem}.screenshots"));
@@ -1763,6 +1770,8 @@ impl Runner {
         // is cropped and compared at once, and a match passes on that one
         // capture, with no quiet clock. Only a mismatch runs the stability
         // loop below before the final compare.
+        self.shot_watch.get_or_insert((Instant::now(), false));
+        let mut prev: Option<crate::shot::Image> = None;
         if !self.opts.update_shots {
             if let Ok(base_bytes) = std::fs::read(&baseline) {
                 let first = (|| -> Result<crate::shot::Image, String> {
@@ -1772,6 +1781,7 @@ impl Runner {
                 })();
                 match first {
                     Ok(img) => {
+                        prev = Some(img.clone());
                         let img = crop(img);
                         let base =
                             crate::shot::decode(&base_bytes).map_err(|e| format!("{}: {e}", baseline.display()))?;
@@ -1803,7 +1813,6 @@ impl Runner {
         // Keep room after the last capture for the crop and the compare.
         let deadline = Instant::now() + left;
         let reserve = Duration::from_millis(250);
-        let budget_ms = left.as_millis();
         // A fixed beat between captures, then how quiet the page is in
         // milliseconds (-1: the clock is not on this document, which
         // predates both the init script and the direct install, as a
@@ -1811,7 +1820,6 @@ impl Runner {
         // starve animation frames between captures.
         let frame = "new Promise(r=>setTimeout(()=>r(window.__btQuiet === undefined ? -1 : performance.now() - window.__btQuiet), 50))";
         let started = Instant::now();
-        let mut prev: Option<crate::shot::Image> = None;
         let (img, stable) = loop {
             let took = self.command(&words);
             if let Err(e) = took {
@@ -1833,6 +1841,9 @@ impl Runner {
                 }
             };
             let agreed = prev.as_ref() == Some(&this);
+            if let (Some(watch), true) = (&mut self.shot_watch, prev.is_some() && !agreed) {
+                watch.1 = true;
+            }
             let quiet = self.command(&["eval".into(), frame.into()]).ok().and_then(|v| v.as_f64()).unwrap_or(-1.0);
             // Without the clock, half a second of looking stands in.
             if agreed && (quiet >= 500.0 || (quiet < 0.0 && started.elapsed() >= Duration::from_millis(500))) {
@@ -1863,10 +1874,19 @@ impl Runner {
             ));
         };
         let base = crate::shot::decode(&base_bytes).map_err(|e| format!("{}: {e}", baseline.display()))?;
+        // Over the whole expectation, which is polled: its last look has
+        // little time left and may be one capture.
+        let (since, changed) = self.shot_watch.unwrap_or((started, false));
+        let watched_ms = since.elapsed().as_millis();
         let unsettled = if stable {
             String::new()
+        } else if changed {
+            format!("; the page never settled: still changing after {watched_ms} ms")
         } else {
-            format!("; the page never settled: still changing after {budget_ms} ms")
+            format!(
+                "; the captures agree, but {watched_ms} ms was too short to see the page settle \
+                 (it has to stay as it is for 500 ms)"
+            )
         };
         let verdict = crate::shot::compare(&base, &img, shot.threshold);
         let ok = match &verdict {

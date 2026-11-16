@@ -602,6 +602,9 @@ fn screenshots_match_their_baselines() {
     let (code, out) = run(&["--var", "color=red"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("pixels differ") && out.contains("pay-diff.png"), "{out}");
+    // A still page that differs is not called a changing one, however
+    // little time the expectation has.
+    assert!(!out.contains("still changing"), "{out}");
     assert!(dir.join("ev").join("look.bt-pay-actual.png").exists());
     // A share of the pixels is allowed by `--max-diff-ratio` on its own: the
     // whole button differs, so 100% lets the shots pass and 0.1% does not.

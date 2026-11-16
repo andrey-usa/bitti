@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `expect screenshot`: a still page that differs from its baseline is no
+  longer reported as "the page never settled: still changing". That is
+  said only when two captures in a row differed while the expectation
+  waited; when they agreed and the time ran out before the page had
+  been quiet for 500 ms, the message says the time was too short. The
+  time it names is the whole wait, not what the last look had left.
+
 ## [0.3.3] - 2026-11-15
 
 ### Changed
