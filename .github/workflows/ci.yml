@@ -87,6 +87,24 @@ jobs:
           print(f"::notice title={sys.argv[2]}::" + msg[:3800].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
           PY
           exit $code
+      # A screenshot test that fails leaves its directory behind: baselines,
+      # the capture that differed and the diff. The numbers in the log don't
+      # say what the capture showed.
+      - name: A failed screenshot test's pictures
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, os, shutil, tempfile
+          for d in glob.glob(os.path.join(tempfile.gettempdir(), "bt-shots-*")):
+              shutil.copytree(d, os.path.join("failed-shots", os.path.basename(d)), dirs_exist_ok=True)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: failed-shots-${{ matrix.os }}
+          path: bitti/failed-shots
+          if-no-files-found: ignore
+          retention-days: 14
       - name: The 40-scenario suite
         if: always()
         run: |
