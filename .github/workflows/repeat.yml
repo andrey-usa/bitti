@@ -85,9 +85,11 @@ jobs:
             printf '%s=%s\n' "$v" "$(printf '%s' "${!name}" | tr -d '\n\r')"
           done >> "$GITHUB_ENV"
       - name: Build
+        # Every line of cargo's output is read: a reader that stops at the
+        # first match closes the pipe under it (Windows: os error 232).
         run: |
           cargo test --locked --test "$TARGET" --no-run --message-format=json \
-            | python3 -c "import json,sys; print(next(m['executable'] for m in map(json.loads, sys.stdin) if m.get('executable') and m['target']['kind'] == ['test']))" > bin.txt
+            | python3 -c "import json,sys; ms = [json.loads(l) for l in sys.stdin]; print([m['executable'] for m in ms if m.get('executable') and m['target']['kind'] == ['test']][0])" > bin.txt
           bin=$(cat bin.txt)
           if [ "$RUNNER_OS" = Windows ]; then bin=$(cygpath -u "$bin"); fi
           echo "BIN=$bin" >> "$GITHUB_ENV"
