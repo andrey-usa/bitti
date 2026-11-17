@@ -32,6 +32,10 @@ impl AuthCache {
     }
 }
 
+/// The least an `expect download` without its own `--timeout-ms` waits
+/// for the file (see `Runner::expect`), whatever the run's expect timeout.
+pub const DOWNLOAD_BEGIN_MS: u64 = 30_000;
+
 #[derive(Debug, Clone)]
 pub struct Options {
     pub base: Option<String>,
@@ -1586,6 +1590,16 @@ impl Runner {
     fn expect(&mut self, e: &Expect, scope: &mut Scope) -> Result<(), String> {
         // In a `retry`, the block is the wait: a check looks once.
         let default_ms = if scope.retrying { 0 } else { self.opts.expect_ms };
+        // A download is given longer to begin than a page is to change: a
+        // browser's first one waits for its profile's history database,
+        // which a slow disk takes seconds to make (each sync held 1.5 s:
+        // 16 s, the next download 50 ms; Windows runners missed it at 5 s).
+        let default_ms = match (&e.subject, e.negate) {
+            (Subject::Download(_) | Subject::DownloadCompare { .. }, false) if !scope.retrying => {
+                default_ms.max(DOWNLOAD_BEGIN_MS)
+            }
+            _ => default_ms,
+        };
         let limit = self.capped(Duration::from_millis(e.timeout_ms.unwrap_or(default_ms)));
         let deadline = Instant::now() + limit;
         let value = scope.word(&e.value)?;

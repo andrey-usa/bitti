@@ -1500,6 +1500,31 @@ fn set_values_fill_in_their_variables() {
 }
 
 #[test]
+fn a_download_that_begins_late_is_still_waited_for() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let dir = std::env::temp_dir().join(format!("bt-late-dl-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // The run's expect timeout is 5 s; the download begins 5.5 s into the
+    // expectation, as a browser's first one can on a slow disk (its
+    // history database first).
+    let bt = dir.join("t.bt");
+    std::fs::write(
+        &bt,
+        "scenario \"Late\"\n  goto /m1\n  \
+         eval \"setTimeout(() => document.getElementById('dl').click(), 5500), 1\"\n  \
+         expect download report-*.csv\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--evidence", dir.join("ev").to_str().unwrap()])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn a_script_file_runs_once_in_the_form_that_parses() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let dir = std::env::temp_dir().join(format!("bt-jsfile-{}", std::process::id()));

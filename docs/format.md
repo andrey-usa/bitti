@@ -199,7 +199,9 @@
 ## Checks: expect
 
 - `expect` retries until it holds or its timeout (5 s, `--timeout-ms` on the
-  line or the run) runs out; `exit`, `stdout`, `stderr`, `status`, `body`,
+  line or the run) runs out; `expect download` waits at least 30 s unless
+  its line says `--timeout-ms` (a browser's first download waits for its
+  profile's history database, seconds on a slow disk); `exit`, `stdout`, `stderr`, `status`, `body`,
   `json` and `header` read the last `exec` or `http` answer once. `is`
   compares numbers as numbers (`1` is `1.0`). A glob (`request`,
   `download`) has `*` for any run of characters and matches the whole URL

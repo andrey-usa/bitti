@@ -14,6 +14,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `expect download` waits at least 30 s for the file unless its line
+  says `--timeout-ms` (it waited the run's expect timeout, 5 s). A
+  browser's first download begins only once its profile's history
+  database is made, which on a slow disk takes seconds: with each disk
+  sync held 1.5 s, 16 s for the first download and 50 ms for the next.
+  Windows runners missed the first download of a fresh browser this way
+  about once in 30 runs (both of two browsers started together, once).
+
 - `expect js --file`: a file whose code threw a SyntaxError as it ran
   (`JSON.parse` of bad text, an invalid selector) was run a second time
   as a function body, and the step reported that run's error. It runs
