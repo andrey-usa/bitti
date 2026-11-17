@@ -1128,8 +1128,19 @@ fn load_metrics_are_budgets() {
          scenario \"Finer than the browser keeps\"\n  goto /clicks\n  click --text Quick\n  expect inp < 50ms\n",
     )
     .unwrap();
-    let (code, out) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
-    assert_eq!(code, 1, "{out}");
+    // A quick click on a loaded machine can take over the 104 ms Chrome
+    // keeps (112 ms seen with two runs at once on macOS): then the budget
+    // is checked and missed, not refused. Measured again, three times at
+    // most, as navigera's own vitals test does.
+    let mut out = String::new();
+    for _ in 0..3 {
+        let (code, o) = bitti(&["run", file.to_str().unwrap(), "--base-url", &site.1]);
+        assert_eq!(code, 1, "{o}");
+        out = o;
+        if out.contains("a budget under 104 ms can't be checked") {
+            break;
+        }
+    }
     assert!(out.contains("1 passed") && out.contains("2 failed"), "{out}");
     assert!(out.contains("expected inp < 200 ms within 300 ms; saw ") && out.contains("(#slow)"), "{out}");
     assert!(out.contains("a budget under 104 ms can't be checked"), "{out}");
