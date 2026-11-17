@@ -14,6 +14,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `expect js --file`: a file whose code threw a SyntaxError as it ran
+  (`JSON.parse` of bad text, an invalid selector) was run a second time
+  as a function body, and the step reported that run's error. It runs
+  once now, in the form navigera's `eval` finds it parses (an
+  expression, statements, or an async function's body that `return`s
+  its answer), and its own error is the step's.
+
 - `expect screenshot`: a still page that differs from its baseline is no
   longer reported as "the page never settled: still changing". That is
   said only when two captures in a row differed while the expectation

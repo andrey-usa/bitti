@@ -2264,28 +2264,16 @@ impl Runner {
                         let src = std::fs::read_to_string(&f).map_err(|_| {
                             format!("expect js --file: no file {f} (a relative name is found next to the .bt)")
                         })?;
-                        // An expression, or a function body that `return`s
-                        // its answer: tried as the first, then run as the
-                        // second. A syntax error in both forms won't go away
-                        // by waiting either.
-                        let tm = ["--timeout-ms".to_string(), eval_ms.clone()];
-                        let mut first = vec!["eval".to_string(), src.clone()];
-                        first.extend(tm.clone());
-                        match self.command(&first) {
+                        // navigera's `eval` reads it as an expression, as
+                        // statements, then as the body of an async function
+                        // that `return`s its answer, and runs only the form
+                        // that parses: a SyntaxError (none parses, or one the
+                        // code threw) won't go away by waiting.
+                        let mut cmd = vec!["eval".to_string(), src];
+                        cmd.extend(["--timeout-ms".to_string(), eval_ms.clone()]);
+                        match self.command(&cmd) {
                             Err(e) if e.contains("SyntaxError") => {
-                                let body = format!("(async () => {{\n{src}\n}})()");
-                                let mut second = vec!["eval".to_string(), body];
-                                second.extend(tm);
-                                match self.command(&second) {
-                                    Err(e2) if e2.contains("SyntaxError") => {
-                                        return Err(format!(
-                                            "expect js --file {f}: {} (the file is read as an expression, \
-                                             then as a function body that returns its answer)",
-                                            e2.trim_start_matches("eval: ")
-                                        ))
-                                    }
-                                    other => other,
-                                }
+                                return Err(format!("expect js --file {f}: {}", e.trim_start_matches("eval: ")))
                             }
                             other => other,
                         }

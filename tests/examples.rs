@@ -1500,6 +1500,34 @@ fn set_values_fill_in_their_variables() {
 }
 
 #[test]
+fn a_script_file_runs_once_in_the_form_that_parses() {
+    let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
+    let dir = std::env::temp_dir().join(format!("bt-jsfile-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // A function body (`return`, `await`), and code that throws a
+    // SyntaxError as it runs: run once, its error the step's.
+    std::fs::write(dir.join("body.js"), "const n = await Promise.resolve(6);\nreturn n * 7 === 42;\n").unwrap();
+    std::fs::write(dir.join("bad.js"), "window.runs = (window.runs || 0) + 1;\nJSON.parse('{bad');\n").unwrap();
+    let bt = dir.join("t.bt");
+    std::fs::write(
+        &bt,
+        "scenario \"Body\"\n  goto /login\n  expect js --file body.js\n\
+         scenario \"Thrown\"\n  goto /login\n  expect js --file bad.js --soft\n  expect js \"window.runs\" is 1\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
+        .args(["run", bt.to_str().unwrap(), "--base-url", &site.1, "--evidence", dir.join("ev").to_str().unwrap()])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert!(text.contains("PASS  ") && text.contains("Body"), "{text}");
+    assert!(text.contains("bad.js: SyntaxError"), "{text}");
+    assert!(!text.contains("is 1\n       expected"), "the file's code ran once: {text}");
+    assert!(text.contains("1 passed, 1 failed"), "{text}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn a_script_that_never_settles_is_bounded_by_the_step_and_an_optional_miss_shows() {
     let (Some(_turn), Some(site)) = (chrome(), own_site()) else { return };
     let dir = std::env::temp_dir().join(format!("bt-t125-{}", std::process::id()));
