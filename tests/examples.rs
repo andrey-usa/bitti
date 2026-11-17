@@ -58,8 +58,15 @@ fn chrome() -> Option<std::sync::MutexGuard<'static, ()>> {
 
 fn bitti(args: &[&str]) -> (i32, String) {
     let evidence = tempfile_dir();
+    // `BITTI_TEST_TRACE=on-failure` (the repeat workflow): a run's failed
+    // scenarios leave what each step saw, with its time, beside the screenshot.
+    let trace: Vec<String> = match std::env::var("BITTI_TEST_TRACE") {
+        Ok(when) if args.first() == Some(&"run") && !when.is_empty() => vec!["--trace".into(), when],
+        _ => Vec::new(),
+    };
     let out = Command::new(env!("CARGO_BIN_EXE_bitti"))
         .args(args)
+        .args(&trace)
         .args(["--evidence", &evidence])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()

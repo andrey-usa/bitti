@@ -1,0 +1,139 @@
+name: repeat
+
+# A test that fails now and then on one runner image, repeated there: the
+# same test binary run `repeat` times, `copies` at once (the load of a full
+# ci job), with navigera's diagnostics on. Every failure's output, and the
+# evidence its scenarios left (screenshots; trace.jsonl with each step's
+# time and page when `trace` is set), is kept as the artifact `repeat-<os>`.
+#
+#   gh workflow run repeat.yml -f os=windows-latest -f target=examples \
+#     -f filter=the_newer_subjects_and_isolation_between_scenarios -f repeat=30 -f copies=2
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "runner image: ubuntu-24.04, macos-15 or windows-latest"
+        default: "windows-latest"
+      target:
+        description: "the test target (`cargo test --test <target>`)"
+        default: "examples"
+      filter:
+        description: "which tests of it (a name or part of one)"
+        default: "the_newer_subjects_and_isolation_between_scenarios"
+      repeat:
+        description: "rounds"
+        default: "20"
+      copies:
+        description: "runs of the test binary at once in each round"
+        default: "2"
+      trace:
+        description: "bitti --trace for the tests' runs (on-failure, all; empty: none)"
+        default: "on-failure"
+      navigera:
+        description: "navigera branch or commit to build against"
+        default: "next"
+
+permissions:
+  contents: read
+
+jobs:
+  repeat:
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+        working-directory: bitti
+    env:
+      BITTI_REQUIRE_BROWSER: "1"
+      NAVIGERA_VERBOSE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: bitti
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: andrey-usa/navigera
+          ref: ${{ inputs.navigera }}
+          path: navigera
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2
+        with:
+          toolchain: stable
+          cache-workspaces: bitti
+          cache-on-failure: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: compara (for `expect download … compare`)
+        continue-on-error: true
+        run: python -m pip install --quiet compara && compara --version
+      - name: Inputs
+        env:
+          IN_TARGET: ${{ inputs.target }}
+          IN_FILTER: ${{ inputs.filter }}
+          IN_REPEAT: ${{ inputs.repeat }}
+          IN_COPIES: ${{ inputs.copies }}
+          IN_TRACE: ${{ inputs.trace }}
+        run: |
+          # Copied, not interpolated into a script, so an input can't inject
+          # shell; a newline would add a variable, so drop them.
+          for v in TARGET FILTER REPEAT COPIES TRACE; do
+            name="IN_$v"
+            printf '%s=%s\n' "$v" "$(printf '%s' "${!name}" | tr -d '\n\r')"
+          done >> "$GITHUB_ENV"
+      - name: Build
+        run: |
+          cargo test --locked --test "$TARGET" --no-run --message-format=json \
+            | python3 -c "import json,sys; print(next(m['executable'] for m in map(json.loads, sys.stdin) if m.get('executable') and m['target']['kind'] == ['test']))" > bin.txt
+          bin=$(cat bin.txt)
+          if [ "$RUNNER_OS" = Windows ]; then bin=$(cygpath -u "$bin"); fi
+          echo "BIN=$bin" >> "$GITHUB_ENV"
+          "$bin" --list "$FILTER" | tail -3
+      - name: Repeat
+        run: |
+          set +e
+          out=repeat-out; mkdir -p $out
+          pass=0; fail=0; first=""
+          for i in $(seq "$REPEAT"); do
+            pids=()
+            for c in $(seq "$COPIES"); do
+              BITTI_TEST_TRACE="$TRACE" "$BIN" "$FILTER" > "$out/run-$i-$c.log" 2>&1 &
+              pids+=($!)
+            done
+            failed=0
+            for j in "${!pids[@]}"; do
+              log="$out/run-$i-$((j + 1)).log"
+              if wait "${pids[$j]}"; then
+                pass=$((pass + 1)); rm -f "$log"
+              else
+                fail=$((fail + 1)); failed=1
+                [ -n "$first" ] || first="round $i: $(grep -m1 -A1 -E 'panicked at' "$log" | tail -1 | tr '|\n' '/ ' | cut -c1-300)"
+              fi
+            done
+            # What the round's runs left in the temp directory: kept when one
+            # failed, else dropped so the next round starts clean.
+            python3 - "$out/round-$i" "$failed" <<'PY'
+          import glob, os, shutil, sys, tempfile
+          dest, keep = sys.argv[1], sys.argv[2] == "1"
+          for d in glob.glob(os.path.join(tempfile.gettempdir(), "bitti-test-*")):
+              if keep:
+                  shutil.copytree(d, os.path.join(dest, os.path.basename(d)), dirs_exist_ok=True)
+              shutil.rmtree(d, ignore_errors=True)
+          PY
+            echo "round $i: $pass passed, $fail failed"
+          done
+          total=$((pass + fail))
+          msg="$TARGET $FILTER on $RUNNER_OS ($ImageOS): $pass/$total passed ($COPIES at once). ${first:-no failure}"
+          echo "::notice title=repeat::$msg"
+          echo "### repeat: $msg" >> "$GITHUB_STEP_SUMMARY"
+          [ "$fail" -eq 0 ]
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: repeat-${{ inputs.os }}
+          path: bitti/repeat-out
+          if-no-files-found: ignore
+          retention-days: 14
