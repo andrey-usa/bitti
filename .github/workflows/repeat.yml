@@ -3,8 +3,8 @@ name: repeat
 # A test that fails now and then on one runner image, repeated there: the
 # same test binary run `repeat` times, `copies` at once (the load of a full
 # ci job), with navigera's diagnostics on. Every failure's output, and the
-# evidence its scenarios left (screenshots; trace.jsonl with each step's
-# time and page when `trace` is set), is kept as the artifact `repeat-<os>`.
+# evidence its scenarios left (screenshots, a screenshot test's baselines
+# and diffs; trace.jsonl with each step's time and page when `trace` is set), is kept as the artifact `repeat-<os>`.
 #
 #   gh workflow run repeat.yml -f os=windows-latest -f target=examples \
 #     -f filter=the_newer_subjects_and_isolation_between_scenarios -f repeat=30 -f copies=2
@@ -118,7 +118,8 @@ jobs:
             python3 - "$out/round-$i" "$failed" <<'PY'
           import glob, os, shutil, sys, tempfile
           dest, keep = sys.argv[1], sys.argv[2] == "1"
-          for d in glob.glob(os.path.join(tempfile.gettempdir(), "bitti-test-*")):
+          tmp = tempfile.gettempdir()
+          for d in glob.glob(os.path.join(tmp, "bitti-test-*")) + glob.glob(os.path.join(tmp, "bt-shots-*")):
               if keep:
                   shutil.copytree(d, os.path.join(dest, os.path.basename(d)), dirs_exist_ok=True)
               shutil.rmtree(d, ignore_errors=True)
