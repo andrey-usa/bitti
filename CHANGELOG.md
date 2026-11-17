@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Screenshots are decoded with png 0.18 (was 0.17): the same pixels,
+  from its newer inflate and unfiltering code. A PNG whose image is too
+  large to hold in memory is refused as not a PNG.
+
 ### Fixed
 
 - `expect screenshot`: a still page that differs from its baseline is no

@@ -696,8 +696,8 @@ fn screenshots_wait_for_a_stable_render() {
     assert_eq!(code, 0, "{out}");
     let baseline =
         std::fs::read(dir.join("late.bt.screenshots").join(format!("box-{}.png", std::env::consts::OS))).unwrap();
-    let mut reader = png::Decoder::new(&baseline[..]).read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let mut reader = png::Decoder::new(std::io::Cursor::new(&baseline[..])).read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size().unwrap()];
     reader.next_frame(&mut buf).unwrap();
     let blue = buf.chunks(4).any(|p| p[0] == 0 && p[1] == 0 && p[2] == 255);
     assert!(blue, "the baseline caught the blank shell, not the painted box");
@@ -818,8 +818,9 @@ fn element_screenshots_find_their_element_in_frames_and_scroll_containers() {
     // Each crop is the button, solid blue to its corners.
     for name in ["low", "framed"] {
         let path = dir.join("el.bt.screenshots").join(format!("{name}-{}.png", std::env::consts::OS));
-        let mut reader = png::Decoder::new(std::fs::File::open(&path).unwrap()).read_info().unwrap();
-        let mut buf = vec![0; reader.output_buffer_size()];
+        let mut reader =
+            png::Decoder::new(std::io::BufReader::new(std::fs::File::open(&path).unwrap())).read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size().unwrap()];
         let info = reader.next_frame(&mut buf).unwrap();
         let px = info.color_type.samples();
         let at = |x: u32, y: u32| {

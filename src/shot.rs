@@ -12,10 +12,10 @@ pub struct Image {
 }
 
 pub fn decode(bytes: &[u8]) -> Result<Image, String> {
-    let mut d = png::Decoder::new(bytes);
+    let mut d = png::Decoder::new(std::io::Cursor::new(bytes));
     d.set_transformations(png::Transformations::normalize_to_color8());
     let mut r = d.read_info().map_err(|e| format!("not a PNG: {e}"))?;
-    let mut buf = vec![0; r.output_buffer_size()];
+    let mut buf = vec![0; r.output_buffer_size().ok_or("not a PNG: its image is too large to hold")?];
     let info = r.next_frame(&mut buf).map_err(|e| format!("not a PNG: {e}"))?;
     buf.truncate(info.buffer_size());
     let rgba = match info.color_type {
