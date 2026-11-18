@@ -4,9 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-11-18
 
 ### Changed
+
+- Built on navigera 0.15.0. Scenarios run as before. The built-in
+  `bitti navigera` is navigera 0.15.0, so it gains the WebDriver
+  engines (Firefox, Safari, chromedriver classic and BiDi), `ax --grep`
+  with its containing title, and the redirect URLs decoded in `ax`.
 
 - Screenshots are decoded with png 0.18 (was 0.17): the same pixels,
   from its newer inflate and unfiltering code. A PNG whose image is too
