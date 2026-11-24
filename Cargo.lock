@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "navigera"
-version = "0.15.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "base64",

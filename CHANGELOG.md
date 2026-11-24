@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Built on navigera 0.17 (its `next`, 0.17.0 and later). The built-in
+  `bitti navigera` gains what navigera added since 0.15.0: Firefox's
+  `network` and `route`, screencasts over WebDriver BiDi, request bodies on
+  BiDi, and the Obscura and Moli engines (experimental).
+
 ## [0.4.0] - 2026-11-18
 
 ### Changed
