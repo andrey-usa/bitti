@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-25
+
 ### Added
 
 - A failure after a submit the browser held back says so: when a click or
@@ -17,10 +19,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- Built on navigera 0.17 (its `next`, 0.17.0 and later). The built-in
-  `bitti navigera` gains what navigera added since 0.15.0: Firefox's
-  `network` and `route`, screencasts over WebDriver BiDi, request bodies on
-  BiDi, and the Obscura and Moli engines (experimental).
+- Built on navigera 0.18.0. Scenarios run as before. The built-in
+  `bitti navigera` is navigera 0.18.0, so it gains what navigera added
+  since 0.15.0: Firefox's `network` and `route`, screencasts over
+  WebDriver BiDi, request bodies on BiDi, the Obscura and Moli engines
+  (experimental), a submit the form's checks hold back named as
+  `not_submitted`, and Enter in a form without a needless navigation wait.
 
 ## [0.4.0] - 2026-11-18
 

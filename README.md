@@ -37,7 +37,7 @@ browser](https://andrey-usa.github.io/bitti/guides/api-tests.html)).
 
 ## Install
 
-0.4.0 ships the same prebuilt binary on every channel:
+0.5.0 ships the same prebuilt binary on every channel:
 
 | Channel | Command |
 |---|---|
@@ -45,13 +45,13 @@ browser](https://andrey-usa.github.io/bitti/guides/api-tests.html)).
 | npm | `npm install -g @getbitti/bitti` |
 | Homebrew | `brew install andrey-usa/tap/bitti` |
 | Scoop | `scoop bucket add andrey-usa https://github.com/andrey-usa/scoop-bucket` then `scoop install bitti` |
-| GitHub release | download the archive for your platform from [v0.4.0](https://github.com/andrey-usa/bitti/releases/tag/v0.4.0) |
+| GitHub release | download the archive for your platform from [v0.5.0](https://github.com/andrey-usa/bitti/releases/tag/v0.5.0) |
 
 Verify it:
 
 ```console
 $ bitti --version
-bitti 0.4.0
+bitti 0.5.0
 ```
 
 ## Quick start
