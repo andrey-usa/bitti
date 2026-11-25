@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A failure after a submit the browser held back says so: when a click or
+  `press Enter` didn't send its form because fields failed their checks
+  (`required`, `type=email`, `pattern`, ...), the failure's `note:` names
+  them with the browser's own messages (navigera's `not_submitted`), as it
+  does for a click that changed nothing. The next check used to fail with
+  only "it isn't on the page".
+
 ### Changed
 
 - Built on navigera 0.17 (its `next`, 0.17.0 and later). The built-in

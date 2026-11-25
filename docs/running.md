@@ -183,8 +183,10 @@ more than there are scenarios. `--workers 1` runs them one at a time.
 - A failure prints the step, what was expected and seen, where the page
   was, a screenshot (under `.bitti/runs/`), and a note when an earlier
   click changed nothing on the page (navigera's `no_effect`), the usual
-  reason the next check fails. When the element isn't there, it lists the
-  closest ones on the page as locators to paste in:
+  reason the next check fails, or when the form's checks held a submit
+  back (a click or `press Enter`; navigera's `not_submitted`): the fields
+  that failed, each with the browser's message. When the element isn't
+  there, it lists the closest ones on the page as locators to paste in:
 
   ```text
   FAIL  shop.bt:21  Accept the cookies  (611 ms)

@@ -246,7 +246,13 @@ fn a_failure_says_what_was_expected_seen_and_why() {
     assert!(out.contains("nearest on the page:"), "{out}");
     assert!(out.contains("1. button \"Accept all\""), "{out}");
     assert!(out.contains("--role button --name \"Accept all\""), "{out}");
-    assert!(out.contains("0 passed, 5 failed"), "{out}");
+    // A submit the form's checks held back: the note names the field.
+    assert!(
+        out.contains("note: the step at line 34 (click \"Sign up\"): the browser did not submit the form: \"Email\": "),
+        "{out}"
+    );
+    assert!(out.contains("Fill in that field, then submit again"), "{out}");
+    assert!(out.contains("0 passed, 6 failed"), "{out}");
 }
 
 #[test]

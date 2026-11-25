@@ -991,10 +991,16 @@ impl Runner {
                     std::thread::sleep(Duration::from_millis(ms));
                 }
                 let outcome = self.command(&words)?;
-                // A click that changed nothing explains a failure soon after.
-                scope.noop = outcome.get("no_effect").and_then(Value::as_str).map(|n| {
-                    format!("the step at line {} ({}) changed nothing on the page: {n}", step.line, step.text)
-                });
+                // A click that changed nothing, or a submit the form's checks
+                // held back, explains a failure soon after.
+                let said = |k: &str| outcome.get(k).and_then(Value::as_str);
+                scope.noop = match (said("not_submitted"), said("no_effect")) {
+                    (Some(n), _) => Some(format!("the step at line {} ({}): {n}", step.line, step.text)),
+                    (None, Some(n)) => {
+                        Some(format!("the step at line {} ({}) changed nothing on the page: {n}", step.line, step.text))
+                    }
+                    (None, None) => None,
+                };
                 Ok(())
             }
             Action::Save { name, command }

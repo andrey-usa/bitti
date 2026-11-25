@@ -27,3 +27,9 @@ scenario "A flow's failure says where in the flow"
 scenario "A missing button names the closest ones"
   goto /shop
   click --role button --name "Accept everything" --timeout-ms 300
+
+scenario "A submit the form's checks hold back, then an expect"
+  goto /docs
+  eval "(document.body.innerHTML = '<form action=/docs><label>Email <input type=email required></label><button>Sign up</button></form>', 1)"
+  click "Sign up"
+  expect text "Welcome" --timeout-ms 400

@@ -150,7 +150,8 @@ FAIL  cart.bt:3  Adding a product counts it in the cart  (5.2 s)
 Paste the locator in, or run the `fix` line (`--use 2` for the second: the
 nearest is not always the one meant). When a click changed nothing, the
 failure says so: the page may not have been ready, so add an `expect` for
-what shows it is ready before the click.
+what shows it is ready before the click. When the browser held a submit
+back, the note names the fields that failed their checks: fill them first.
 
 ## Looking at the page
 
