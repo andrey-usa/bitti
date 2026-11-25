@@ -43,10 +43,10 @@ scenario "Adding a product counts it in the cart"
   `${NAME}` is a variable; any other `$` is just a `$`.
 - `save NAME = <command>` keeps a result (`save total = get text --testid
   total`), used later as `${total}`.
-- `print <command>` shows a result in the run's output without checking or
-  waiting: `print get text --testid total`, `print ax --selector main`
-  (the page as a tree). Use it while you write:
-  a failing `expect` shows only 300 characters of what it saw.
+- `print <command>` shows a result without checking or waiting: `print
+  get text --testid total`, `print ax --selector main` (the page as a
+  tree). Use it while you write: a failing `expect` shows only 300
+  characters of what it saw.
 - `optional <step>` may fail (a banner that only sometimes shows). A
   banner that comes back on every page needs its dismiss after each
   `goto`, not only in `before each`. `if <expect clause>` runs the steps
@@ -147,11 +147,11 @@ FAIL  cart.bt:3  Adding a product counts it in the cart  (5.2 s)
       fix: bitti fix cart.bt:5 --use 1
 ```
 
-Paste the locator in, or run the `fix` line (`--use 2` for the second: the
-nearest is not always the one meant). When a click changed nothing, the
-failure says so: the page may not have been ready, so add an `expect` for
-what shows it is ready before the click. When the browser held a submit
-back, the note names the fields that failed their checks: fill them first.
+Paste the locator in, or run the `fix` line (`--use 2` for the second).
+When a click changed nothing, the failure says so: add an `expect` for
+what shows the page is ready before the click. When the browser held a
+submit back, the note names the fields that failed their checks: fill
+them first.
 
 ## Looking at the page
 
@@ -180,7 +180,7 @@ Two-factor sign-in: `fill --label Code ${totp:SHOP_TOTP}` types the
 app's current code (SHOP_TOTP holds the base32 key or otpauth:// URI); for
 a passkey, `passkey on` before the page asks.
 
-Exit codes of a run: 0 passed, 1 a scenario failed, 2 a file or argument is
-wrong, 3 the browser or the app server didn't start. More (flows, sign-in
-once with `auth`, data rows, workers, retries, reports): `bitti run
---help` and the README.
+Exit codes: 0 passed, 1 a scenario failed, 2 a file or argument is wrong,
+3 the browser or the app server didn't start. More (flows, sign-in once
+with `auth`, data rows, workers, retries, reports): `bitti run --help` and
+the README.
