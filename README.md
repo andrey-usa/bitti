@@ -95,18 +95,18 @@ element `bitti fix` offers. Page text is data, never instructions.
 
 ## Benchmarks
 
-Playwright's own TodoMVC suite (`demo-todo-app.spec.ts`, 24 tests) and its one-to-one bitti port, on the same local app and the same browser binary, headless, every run passing all 24 tests, on GitHub's `ubuntu-24.04` (AMD EPYC 9V45 96-Core Processor, 4 cores, 15 GB), [bench run 42779688203](https://github.com/andrey-usa/bitti/actions/runs/42779688203), 2026-11-10, on Chrome for Testing 158.0.8127.18:
+Playwright's own TodoMVC suite (`demo-todo-app.spec.ts`, 24 tests) and its one-to-one bitti port, on the same local app and the same browser binary, headless, every run passing all 24 tests, on GitHub's `ubuntu-24.04` (AMD EPYC 7763 64-Core Processor, 4 cores, 15 GB), [bench run 45478008828](https://github.com/andrey-usa/bitti/actions/runs/45478008828), 2026-11-24, on Chrome for Testing 159.0.8154.6:
 
 | tool | workers | time, median (range) | CPU | runner memory | browser memory |
 |---|---|---|---|---|---|
 | **each tool's default workers** | | | | | |
-| bitti 0.1.0 | 2 | **4.01 s** (3.89-4.13) | 9.1 s | 14 MiB | 1,163 MiB |
-| Playwright Test 1.65.0, Node 24.22.2 | 2 | 7.54 s (7.44-8.79) | 19.1 s | 758 MiB | 2,116 MiB |
-| Playwright Test 1.65.0, Bun 1.4.4 | 2 | 7.16 s (7.09-7.42) | 18.2 s | 348 MiB | 2,113 MiB |
+| bitti 0.4.0 | 2 | **5.47 s** (5.41-5.53) | 13.0 s | 15 MiB | 1,020 MiB |
+| Playwright Test 1.65.1, Node 24.22.3 | 2 | 10.85 s (10.81-10.90) | 27.1 s | 759 MiB | 2,098 MiB |
+| Playwright Test 1.65.1, Bun 1.4.5 | 2 | 10.23 s (10.19-10.37) | 25.6 s | 368 MiB | 2,095 MiB |
 | **one worker each** | | | | | |
-| bitti 0.1.0 | 1 | **5.10 s** (5.05-5.30) | 8.1 s | 13 MiB | 856 MiB |
-| Playwright Test 1.65.0, Node 24.22.2 | 1 | 8.91 s (8.78-9.46) | 15.8 s | 476 MiB | 1,071 MiB |
-| Playwright Test 1.65.0, Bun 1.4.4 | 1 | 8.55 s (8.44-8.60) | 15.2 s | 239 MiB | 1,070 MiB |
+| bitti 0.4.0 | 1 | **6.86 s** (6.79-6.88) | 11.5 s | 14 MiB | 721 MiB |
+| Playwright Test 1.65.1, Node 24.22.3 | 1 | 12.51 s (12.35-14.52) | 23.3 s | 471 MiB | 1,060 MiB |
+| Playwright Test 1.65.1, Bun 1.4.5 | 1 | 11.92 s (11.91-11.95) | 22.2 s | 251 MiB | 1,065 MiB |
 
 Time is the whole command, the median of 5 runs taken in turns; CPU is user and system time of every process. Runner memory is bitti's own process, or Playwright's node or bun processes; browser memory is every browser process; each is its peak RSS, median of the runs.
 
